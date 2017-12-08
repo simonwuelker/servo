@@ -2508,7 +2508,7 @@ impl Element {
         self.owner_document().get_allow_fullscreen()
     }
 
-    // https://html.spec.whatwg.org/multipage/#home-subtree
+    /// <https://html.spec.whatwg.org/multipage/#home-subtree>
     pub(crate) fn is_in_same_home_subtree<T>(&self, other: &T) -> bool
     where
         T: DerivedFrom<Element> + DomObject,

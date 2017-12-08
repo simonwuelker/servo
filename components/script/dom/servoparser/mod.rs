@@ -344,7 +344,7 @@ impl ServoParser {
         assert_eq!(script_nesting_level, 0);
 
         self.script_nesting_level.set(script_nesting_level + 1);
-        script.execute(result, can_gc);
+        self.handle_script(script, Some(result));
         self.script_nesting_level.set(script_nesting_level);
 
         if !self.suspended.get() && !self.aborted.get() {
@@ -654,7 +654,7 @@ impl ServoParser {
             let script_nesting_level = self.script_nesting_level.get();
 
             self.script_nesting_level.set(script_nesting_level + 1);
-            script.prepare(can_gc);
+            self.handle_script(&script, None);
             self.script_nesting_level.set(script_nesting_level);
 
             if self.document.has_pending_parsing_blocking_script() {
@@ -667,7 +667,38 @@ impl ServoParser {
         }
     }
 
-    // https://html.spec.whatwg.org/multipage/#the-end
+    fn handle_script(&self, script: &HTMLScriptElement, result: Option<ScriptResult>) {
+        if self.script_nesting_level.get() == 1 {
+            match *self.tokenizer.borrow_mut() {
+                Tokenizer::AsyncHtml(ref mut tok) => {
+                    if result.is_none() {
+                        tok.start_speculative_parsing(&mut *self.network_input.borrow_mut());
+                    }
+                },
+                _ => {},
+            };
+
+            match result {
+                Some(result) => script.execute(result),
+                None => script.prepare(),
+            };
+
+            match *self.tokenizer.borrow_mut() {
+                Tokenizer::AsyncHtml(ref mut tok) => {
+                    tok.end_speculative_parsing(&mut *self.network_input.borrow_mut(),
+                        self.document.has_pending_parsing_blocking_script());
+                },
+                _ => {},
+            };
+        } else {
+            match result {
+                Some(result) => script.execute(result),
+                None => script.prepare(),
+            };
+        }
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/#the-end>
     fn finish(&self, can_gc: CanGc) {
         assert!(!self.suspended.get());
         assert!(self.last_chunk_received.get());
