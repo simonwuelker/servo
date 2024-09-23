@@ -14,7 +14,8 @@ use html5ever::{local_name, namespace_url, ns, LocalName, Prefix};
 use ipc_channel::ipc;
 use ipc_channel::router::ROUTER;
 use js::rust::HandleObject;
-use net_traits::request::{CorsSettings, Destination, Initiator, Referrer, RequestBuilder};
+use net_traits::request::{CredentialsMode, CorsSettings, Destination, Initiator, Referrer, RequestBuilder};
+use net_traits::response::Response;
 use net_traits::{
     CoreResourceMsg, FetchChannels, FetchMetadata, FetchResponseListener, IpcSend, NetworkError,
     ReferrerPolicy, ResourceFetchTiming, ResourceTimingType,
@@ -71,7 +72,7 @@ impl RequestGenerationId {
 /// <https://html.spec.whatwg.org/multipage/#link-processing-options>
 struct LinkProcessingOptions {
     href: String,
-    destination: Option<Destination>,
+    destination: Destination,
     integrity: String,
     link_type: String,
     cross_origin: Option<CorsSettings>,
@@ -233,7 +234,16 @@ impl VirtualMethods for HTMLLinkElement {
                 if self.relations.get().contains(LinkRelations::PREFETCH) {
                     self.fetch_and_process_prefetch_link(&attr.value());
                 }
+
+                if self.relations.get().contains(LinkRelations::PRELOAD) {
+                    self.fetch_and_process_preload_link(&attr.value());
+                }
             },
+            local_name!("as") => {
+                if self.relations.get().contains(LinkRelations::PRELOAD) {
+                    self.fetch_and_process_preload_link(&attr.value());
+                }
+            }
             local_name!("sizes") if self.relations.get().contains(LinkRelations::ICON) => {
                 if let Some(ref href) = get_attr(self.upcast(), &local_name!("href")) {
                     self.handle_favicon_url(href, &Some(attr.value().to_string()));
@@ -283,6 +293,10 @@ impl VirtualMethods for HTMLLinkElement {
                 if relations.contains(LinkRelations::PREFETCH) {
                     self.fetch_and_process_prefetch_link(&href);
                 }
+
+                if self.relations.get().contains(LinkRelations::PRELOAD) {
+                    self.fetch_and_process_preload_link(&href);
+                }
             }
         }
     }
@@ -315,7 +329,7 @@ impl HTMLLinkElement {
 
         let mut options = LinkProcessingOptions {
             href: String::new(),
-            destination: Some(destination),
+            destination: destination,
             integrity: String::new(),
             link_type: String::new(),
             cross_origin: cors_setting_for_element(element),
@@ -346,6 +360,17 @@ impl HTMLLinkElement {
 
         // Step 7. Return options.
         options
+    }
+
+    /// The `fetch and process the linked resource` algorithm for [`rel="preload"`](https://html.spec.whatwg.org/multipage/#link-type-preload)
+    fn fetch_and_process_preload_link(&self, href: &str) {
+        // FIXME: Step 1. Update the source set for el.
+
+        // Step 2. Let options be the result of creating link options from el.
+        let options = self.processing_options();
+
+        // Step 3. Preload options, with the following steps given a response response:  [..]
+        options.preload()
     }
 
     /// The `fetch and process the linked resource` algorithm for [`rel="prefetch"`](https://html.spec.whatwg.org/multipage/#link-type-prefetch)
@@ -688,6 +713,35 @@ impl LinkProcessingOptions {
         // Step 12. Return request.
         Some(builder)
     }
+
+    /// <https://html.spec.whatwg.org/multipage/links.html#preload>
+    fn preload<F: FetchResponseListener>(self, response_listener: Option<F>) {
+        // Step 1. If options's type doesn't match options's destination, then return.
+        if !preload_type_matches(&self.link_type, self.destination) {
+            return;
+        }
+
+        // FIXME: Step 2. If options's destination is "image" and options's source set is not null,
+        //                then set options's href to the result of selecting an image source from options's source set.
+
+        // Step 3. Let request be the result of creating a link request given options.
+        let Some(request) = self.create_link_request() else {
+            // Step 4. If request is null, then return.
+            return;
+        };
+
+        // Step 5. Let unsafeEndTime be 0.
+        let unsafe_end_time = 0;
+
+        // Step 6. Let entry be a new preload entry whose integrity metadata is options's integrity.
+        let entry = PreloadEntry {
+            integrity_metadata: self.integrity,
+            response: None,
+        };
+
+        // Step 7. Let key be the result of creating a preload key given request.
+        let key = PreloadKey::create(&request);
+    }
 }
 
 /// <https://html.spec.whatwg.org/multipage/#translate-a-preload-destination>
@@ -772,5 +826,77 @@ impl PreInvoke for PrefetchContext {
     fn should_invoke(&self) -> bool {
         // Prefetch requests are never aborted.
         true
+    }
+}
+
+/// <https://html.spec.whatwg.org/multipage/links.html#preload-key>
+pub struct PreloadKey {
+    /// <https://html.spec.whatwg.org/multipage/links.html#preload-url>
+    url: ServoUrl,
+
+    /// <https://html.spec.whatwg.org/multipage/links.html#preload-destination>
+    destination: Destination,
+
+    /// <https://html.spec.whatwg.org/multipage/links.html#preload-mode>
+    ///
+    /// We reuse [RequestMode] here, but only a subset of the possible
+    /// modes are actually possible.
+    mode: RequestMode,
+
+    /// <https://html.spec.whatwg.org/multipage/links.html#preload-credentials-mode>
+    credentials_mode: CredentialsMode,
+}
+
+/// <https://html.spec.whatwg.org/multipage/links.html#preload-entry>
+pub struct PreloadEntry {
+    /// <https://html.spec.whatwg.org/multipage/links.html#preload-integrity-metadata>
+    integrity_metadata: String,
+
+    /// <https://html.spec.whatwg.org/multipage/links.html#preload-response>
+    response: Option<Response>,
+
+
+}
+
+impl PreloadKey {
+    /// <https://html.spec.whatwg.org/multipage/links.html#create-a-preload-key>
+    pub fn create(request: &RequestBuilder) -> Self {
+        Self {
+            url: request.url,
+            destination: request.destination,
+            mode: request.mode,
+            credentials_mode: request.credentials_mode,
+        }
+    }
+}
+
+/// <https://html.spec.whatwg.org/multipage/links.html#match-preload-type>
+fn preload_type_matches(preload_type: &str, destination: Destination) -> bool {
+    // Step 1. If type is an empty string, then return true.
+    if preload_type.is_empty() {
+        return true;
+    }
+
+    // Step 2. If destination is "fetch", then return true.
+    // if destination == Destination::Fetch {
+    //     return true;
+    // }
+
+    // Step 3. Let mimeTypeRecord be the result of parsing type.
+    let Ok(mime_type_record) = preload_type.parse::<mime::Mime>() else {
+        // Step 4. If mimeTypeRecord is failure, then return false.
+        return false;
+    };
+
+    // FIXME: Step 5. If mimeTypeRecord is not supported by the user agent, then return false.
+
+    // Step 6: If any of the following are true then return true
+    match destination {
+        // Destination::Audio | Destination::Video if mime_type_record
+        Destination::Style if mime_type_record.essence_str() == "text/css" => true,
+        Destination::Track if mime_type_record.essence_str() == "text/vtt" => true,
+
+        // Step 7. Return false.
+        _ => false
     }
 }
