@@ -16,7 +16,7 @@ use crate::dom::bindings::inheritance::Castable;
 use crate::dom::bindings::reflector::reflect_dom_object_with_proto;
 use crate::dom::bindings::root::DomRoot;
 use crate::dom::dommatrixreadonly::{
-    dommatrixinit_to_matrix, entries_to_matrix, transform_to_matrix, DOMMatrixReadOnly,
+    entries_to_matrix, transform_to_matrix, validate_and_fixup, DOMMatrixReadOnly,
 };
 use crate::dom::globalscope::GlobalScope;
 use crate::dom::window::Window;
@@ -96,7 +96,7 @@ impl DOMMatrixMethods for DOMMatrix {
 
     // https://drafts.fxtf.org/geometry-1/#dom-dommatrix-frommatrix
     fn FromMatrix(global: &GlobalScope, other: &DOMMatrixInit) -> Fallible<DomRoot<Self>> {
-        dommatrixinit_to_matrix(other).map(|(is2D, matrix)| Self::new(global, is2D, matrix))
+        validate_and_fixup(other).map(|(is2D, matrix)| Self::new(global, is2D, matrix))
     }
 
     // https://drafts.fxtf.org/geometry-1/#dom-dommatrix-fromfloat32array

@@ -13,6 +13,7 @@ use crate::dom::bindings::codegen::Bindings::CanvasRenderingContext2DBinding::{
     CanvasDirection, CanvasFillRule, CanvasImageSource, CanvasLineCap, CanvasLineJoin,
     CanvasRenderingContext2DMethods, CanvasTextAlign, CanvasTextBaseline,
 };
+use crate::dom::bindings::codegen::Bindings::DOMMatrixBinding::DOMMatrixInit;
 use crate::dom::bindings::codegen::UnionTypes::StringOrCanvasGradientOrCanvasPattern;
 use crate::dom::bindings::error::{ErrorResult, Fallible};
 use crate::dom::bindings::num::Finite;
@@ -205,6 +206,11 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-settransform
     fn SetTransform(&self, a: f64, b: f64, c: f64, d: f64, e: f64, f: f64) {
         self.canvas_state.set_transform(a, b, c, d, e, f)
+    }
+
+    // https://html.spec.whatwg.org/multipage/#dom-context-2d-settransform-matrix
+    fn SetTransform_(&self, transform: &DOMMatrixInit) {
+        self.canvas_state.set_matrix_transform(transform)
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-resettransform

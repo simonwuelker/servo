@@ -40,6 +40,7 @@ use crate::dom::bindings::codegen::Bindings::CanvasRenderingContext2DBinding::{
     CanvasDirection, CanvasFillRule, CanvasImageSource, CanvasLineCap, CanvasLineJoin,
     CanvasTextAlign, CanvasTextBaseline, ImageDataMethods,
 };
+use crate::dom::bindings::codegen::Bindings::DOMMatrixBinding::DOMMatrixInit;
 use crate::dom::bindings::codegen::UnionTypes::StringOrCanvasGradientOrCanvasPattern;
 use crate::dom::bindings::error::{Error, ErrorResult, Fallible};
 use crate::dom::bindings::inheritance::Castable;
@@ -1568,6 +1569,17 @@ impl CanvasState {
         self.state.borrow_mut().transform =
             Transform2D::new(a as f32, b as f32, c as f32, d as f32, e as f32, f as f32);
         self.update_transform()
+    }
+
+    /// <https://html.spec.whatwg.org/multipage/canvas.html#dom-context-2d-settransform-matrix>
+    pub fn set_matrix_transform(&self, global: &GlobalScope, matrix: &DOMMatrixInit) {
+        // Step 1. Let matrix be the result of creating a DOMMatrix from the 2D dictionary transform.
+        let matrix = DOMMatrix::FromMatrix(global, matrix);
+
+        // Step 2. If one or more of matrix's m11 element, m12 element, m21 element,
+        // m22 element, m41 element, or m42 element are infinite or NaN, then return
+
+        // Step 3. Reset the current transformation matrix to matrix.
     }
 
     /// <https://html.spec.whatwg.org/multipage/#dom-context-2d-resettransform>

@@ -38,7 +38,7 @@ pub struct DOMMatrixReadOnly {
     reflector_: Reflector,
     #[no_trace]
     matrix: DomRefCell<Transform3D<f64>>,
-    is2D: Cell<bool>,
+    is2D: Cell<Is2D>,
 }
 
 #[allow(non_snake_case)]
@@ -158,7 +158,7 @@ impl DOMMatrixReadOnly {
     // https://drafts.fxtf.org/geometry-1/#dom-dommatrix-multiplyself
     pub fn multiply_self(&self, other: &DOMMatrixInit) -> Fallible<()> {
         // Step 1.
-        dommatrixinit_to_matrix(other).map(|(is2D, other_matrix)| {
+        validate_and_fixup(other).map(|(is2D, other_matrix)| {
             // Step 2.
             let mut matrix = self.matrix.borrow_mut();
             *matrix = other_matrix.then(&matrix);
@@ -173,7 +173,7 @@ impl DOMMatrixReadOnly {
     // https://drafts.fxtf.org/geometry-1/#dom-dommatrix-premultiplyself
     pub fn pre_multiply_self(&self, other: &DOMMatrixInit) -> Fallible<()> {
         // Step 1.
-        dommatrixinit_to_matrix(other).map(|(is2D, other_matrix)| {
+        validate_and_fixup(other).map(|(is2D, other_matrix)| {
             // Step 2.
             let mut matrix = self.matrix.borrow_mut();
             *matrix = matrix.then(&other_matrix);
@@ -404,7 +404,7 @@ impl DOMMatrixReadOnlyMethods for DOMMatrixReadOnly {
 
     // https://drafts.fxtf.org/geometry-1/#dom-dommatrixreadonly-frommatrix
     fn FromMatrix(global: &GlobalScope, other: &DOMMatrixInit) -> Fallible<DomRoot<Self>> {
-        dommatrixinit_to_matrix(other).map(|(is2D, matrix)| Self::new(global, is2D, matrix))
+        validate_and_fixup(other).map(|(is2D, matrix)| Self::new(global, is2D, matrix))
     }
 
     // https://drafts.fxtf.org/geometry-1/#dom-dommatrixreadonly-fromfloat32array
@@ -743,55 +743,110 @@ pub fn entries_to_matrix(entries: &[f64]) -> Fallible<(bool, Transform3D<f64>)> 
     }
 }
 
-// https://drafts.fxtf.org/geometry-1/#validate-and-fixup
-pub fn dommatrixinit_to_matrix(dict: &DOMMatrixInit) -> Fallible<(bool, Transform3D<f64>)> {
+/// <https://drafts.fxtf.org/geometry/#matrix-validate-and-fixup-2d>
+pub fn validate_and_fixup_2d(dict: &DOMMatrixInit) -> Fallible<Transform3D<f64>> {
+    // Step 1. If if at least one of the following conditions are true for dict, then throw a TypeError exception and abort these steps.
+    // * a and m11 are both present and SameValueZero(a, m11) is false.
+    if dict
+        .parent
+        .a
+        .zip(dict.parent.m11)
+        .is_some_and(|(a, m11)| a != m11)
+    {
+        return Err(error::Error::Type("Invalid matrix initializer.".to_owned()));
+    }
+    // * b and m12 are both present and SameValueZero(b, m12) is false.
+    if dict
+        .parent
+        .b
+        .zip(dict.parent.m12)
+        .is_some_and(|(b, m12)| b != m12)
+    {
+        return Err(error::Error::Type("Invalid matrix initializer.".to_owned()));
+    }
+    // * c and m21 are both present and SameValueZero(c, m21) is false.
+    if dict
+        .parent
+        .c
+        .zip(dict.parent.m21)
+        .is_some_and(|(c, m21)| c != m21)
+    {
+        return Err(error::Error::Type("Invalid matrix initializer.".to_owned()));
+    }
+    // * d and m22 are both present and SameValueZero(d, m22) is false.
+    if dict
+        .parent
+        .d
+        .zip(dict.parent.m22)
+        .is_some_and(|(d, m22)| d != m22)
+    {
+        return Err(error::Error::Type("Invalid matrix initializer.".to_owned()));
+    }
+    // * e and m41 are both present and SameValueZero(e, m41) is false.
+    if dict
+        .parent
+        .e
+        .zip(dict.parent.m41)
+        .is_some_and(|(e, m41)| e != m41)
+    {
+        return Err(error::Error::Type("Invalid matrix initializer.".to_owned()));
+    }
+    // * f and m42 are both present and SameValueZero(f, m42) is false.
+    if dict
+        .parent
+        .f
+        .zip(dict.parent.m42)
+        .is_some_and(|(f, m42)| f != m42)
+    {
+        return Err(error::Error::Type("Invalid matrix initializer.".to_owned()));
+    }
+
+    // Step 2. If m11 is not present then set it to the value of member a, or value 1 if a is also not present.
+    let m11 = dict.m11.or(dict.parent.a).unwrap_or(1.);
+
+    // Step 3. If m12 is not present then set it to the value of member b, or value 0 if b is also not present.
+    let m12 = dict.m12.or(dict.parent.b).unwrap_or(0.);
+
+    // Step 4. If m21 is not present then set it to the value of member c, or value 0 if c is also not present.
+    let m21 = dict.m12.or(dict.parent.c).unwrap_or(0.);
+
+    // Step 5. If m22 is not present then set it to the value of member d, or value 1 if d is also not present.
+    let m22 = dict.m22.or(dict.parent.d).unwrap_or(1.);
+
+    // Step 6. If m41 is not present then set it to the value of member e, or value 0 if e is also not present.
+    let m41 = dict.m41.or(dict.parent.e).unwrap_or(0.);
+
+    // Step 7. If m42 is not present then set it to the value of member f, or value 0 if f is also not present.
+    let m42 = dict.m42.or(dict.parent.f).unwrap_or(0.);
+
+    let matrix = Transform3D::new(
+        m11, m12, dict.m13, dict.m14, m21, m22, dict.m23, dict.m24, dict.m31, dict.m32, dict.m33,
+        dict.m34, m41, m42, dict.m43, dict.m44,
+    );
+
+    Ok(matrix)
+}
+
+/// <https://drafts.fxtf.org/geometry/#matrix-validate-and-fixup>
+pub fn validate_and_fixup(dict: &DOMMatrixInit) -> Fallible<(bool, Transform3D<f64>)> {
+    // Step 1. Validate and fixup (2D) dict.
+    validate_and_fixup_2d(dict)?;
+
     // Step 1.
-    if dict.parent.a.is_some() &&
-        dict.parent.m11.is_some() &&
-        dict.parent.a.unwrap() != dict.parent.m11.unwrap() ||
-        dict.parent.b.is_some() &&
-            dict.parent.m12.is_some() &&
-            dict.parent.b.unwrap() != dict.parent.m12.unwrap() ||
-        dict.parent.c.is_some() &&
-            dict.parent.m21.is_some() &&
-            dict.parent.c.unwrap() != dict.parent.m21.unwrap() ||
-        dict.parent.d.is_some() &&
-            dict.parent.m22.is_some() &&
-            dict.parent.d.unwrap() != dict.parent.m22.unwrap() ||
-        dict.parent.e.is_some() &&
-            dict.parent.m41.is_some() &&
-            dict.parent.e.unwrap() != dict.parent.m41.unwrap() ||
-        dict.parent.f.is_some() &&
-            dict.parent.m42.is_some() &&
-            dict.parent.f.unwrap() != dict.parent.m42.unwrap() ||
-        dict.is2D.is_some() &&
-            dict.is2D.unwrap() &&
-            (dict.m31 != 0.0 ||
-                dict.m32 != 0.0 ||
-                dict.m13 != 0.0 ||
-                dict.m23 != 0.0 ||
-                dict.m43 != 0.0 ||
-                dict.m14 != 0.0 ||
-                dict.m24 != 0.0 ||
-                dict.m34 != 0.0 ||
-                dict.m33 != 1.0 ||
-                dict.m44 != 1.0)
+    if matches!(dict.is2D, Some(true)) &&
+        (dict.m31 != 0.0 ||
+            dict.m32 != 0.0 ||
+            dict.m13 != 0.0 ||
+            dict.m23 != 0.0 ||
+            dict.m43 != 0.0 ||
+            dict.m14 != 0.0 ||
+            dict.m24 != 0.0 ||
+            dict.m34 != 0.0 ||
+            dict.m33 != 1.0 ||
+            dict.m44 != 1.0)
     {
         Err(error::Error::Type("Invalid matrix initializer.".to_owned()))
     } else {
-        let mut is_2d = dict.is2D;
-        // Step 2.
-        let m11 = dict.parent.m11.unwrap_or(dict.parent.a.unwrap_or(1.0));
-        // Step 3.
-        let m12 = dict.parent.m12.unwrap_or(dict.parent.b.unwrap_or(0.0));
-        // Step 4.
-        let m21 = dict.parent.m21.unwrap_or(dict.parent.c.unwrap_or(0.0));
-        // Step 5.
-        let m22 = dict.parent.m22.unwrap_or(dict.parent.d.unwrap_or(1.0));
-        // Step 6.
-        let m41 = dict.parent.m41.unwrap_or(dict.parent.e.unwrap_or(0.0));
-        // Step 7.
-        let m42 = dict.parent.m42.unwrap_or(dict.parent.f.unwrap_or(0.0));
         // Step 8.
         if is_2d.is_none() &&
             (dict.m31 != 0.0 ||
@@ -807,10 +862,12 @@ pub fn dommatrixinit_to_matrix(dict: &DOMMatrixInit) -> Fallible<(bool, Transfor
         {
             is_2d = Some(false);
         }
-        // Step 9.
+
+        // Step 4. If is2D is still not present, set it to true.
         if is_2d.is_none() {
             is_2d = Some(true);
         }
+
         let matrix = Transform3D::new(
             m11, m12, dict.m13, dict.m14, m21, m22, dict.m23, dict.m24, dict.m31, dict.m32,
             dict.m33, dict.m34, m41, m42, dict.m43, dict.m44,
