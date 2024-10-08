@@ -504,7 +504,6 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-putimagedata
-    #[allow(unsafe_code)]
     fn PutImageData_(
         &self,
         imagedata: &ImageData,
