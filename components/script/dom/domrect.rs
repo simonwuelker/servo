@@ -2,7 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use app_units::Au;
 use dom_struct::dom_struct;
+use euclid::default::Rect;
 use js::rust::HandleObject;
 
 use crate::dom::bindings::codegen::Bindings::DOMRectBinding::DOMRectMethods;
@@ -119,5 +121,17 @@ impl DOMRectMethods for DOMRect {
     // https://drafts.fxtf.org/geometry/#dom-domrect-height
     fn SetHeight(&self, value: f64) {
         self.rect.set_height(value);
+    }
+}
+
+impl From<&Rect<Au>> for DOMRect {
+    #[allow(crown::unrooted_must_root)]
+    fn from(value: &Rect<Au>) -> Self {
+        DOMRect::new_inherited(
+            value.origin.x.to_f64_px(),
+            value.origin.y.to_f64_px(),
+            value.size.width.to_f64_px(),
+            value.size.height.to_f64_px(),
+        )
     }
 }

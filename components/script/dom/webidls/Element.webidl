@@ -88,9 +88,8 @@ interface Element : Node {
 
 // http://dev.w3.org/csswg/cssom-view/#extensions-to-the-element-interface
 partial interface Element {
-  sequence<DOMRect> getClientRects();
-  [NewObject]
-  DOMRect getBoundingClientRect();
+  DOMRectList getClientRects();
+  [NewObject] DOMRect getBoundingClientRect();
 
   undefined scroll(optional ScrollToOptions options = {});
   undefined scroll(unrestricted double x, unrestricted double y);

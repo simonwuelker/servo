@@ -384,6 +384,7 @@ fn get_element_in_view_center_point(element: &Element) -> Option<Point2D<i64>> {
             // returned by calling getClientRects() on element.
             element
                 .GetClientRects(CanGc::note())
+                .elements()
                 .first()
                 .map(|rectangle| {
                     let x = rectangle.X().round() as i64;
