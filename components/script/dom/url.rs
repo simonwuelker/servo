@@ -78,23 +78,6 @@ impl URL {
                 .extend_pairs(pairs);
         }
     }
-
-    /// <https://w3c.github.io/FileAPI/#unicodeSerializationOfBlobURL>
-    fn unicode_serialization_blob_url(origin: &str, id: &Uuid) -> String {
-        // Step 1, 2
-        let mut result = "blob:".to_string();
-
-        // Step 3
-        result.push_str(origin);
-
-        // Step 4
-        result.push('/');
-
-        // Step 5
-        result.push_str(&id.to_string());
-
-        result
-    }
 }
 
 impl URLMethods for URL {
@@ -182,13 +165,7 @@ impl URLMethods for URL {
 
     /// <https://w3c.github.io/FileAPI/#dfn-createObjectURL>
     fn CreateObjectURL(global: &GlobalScope, blob: &Blob) -> DOMString {
-        // XXX: Second field is an unicode-serialized Origin, it is a temporary workaround
-        //      and should not be trusted. See issue https://github.com/servo/servo/issues/11722
-        let origin = get_blob_origin(&global.get_url());
-
-        let id = blob.get_blob_url_id();
-
-        DOMString::from(URL::unicode_serialization_blob_url(&origin, &id))
+        global.add_an_entry_to_the_blob_url_store(blob)
     }
 
     /// <https://w3c.github.io/FileAPI/#dfn-revokeObjectURL>

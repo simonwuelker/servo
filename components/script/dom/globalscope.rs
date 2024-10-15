@@ -40,7 +40,7 @@ use js::rust::{
     MutableHandleValue, ParentRuntime, Runtime,
 };
 use js::{JSCLASS_IS_DOMJSCLASS, JSCLASS_IS_GLOBAL};
-use net_traits::blob_url_store::{get_blob_origin, BlobBuf};
+use net_traits::blob_url_store::{generate_a_new_blob_url, BlobUrlEntry, get_blob_origin, BlobBuf};
 use net_traits::filemanager_thread::{
     FileManagerResult, FileManagerThreadMsg, ReadFileProgress, RelativePos,
 };
@@ -1836,6 +1836,29 @@ impl GlobalScope {
         } else {
             panic!("get_blob_size called on a global not managing any blobs.");
         }
+    }
+
+    /// <https://w3c.github.io/FileAPI/#add-an-entry>
+    pub fn add_an_entry_to_the_blob_url_store(&self, object: &Blob) -> DOMString {
+        // Step 1. Let store be the user agent’s blob URL store.
+        let BlobState::Managed(store) = &mut *self.blob_state.borrow_mut() else {
+            panic!("add_an_entry_to_the_blob_url_store called on a global not managing any blobs");
+        };
+
+        // Step 2. Let url be the result of generating a new blob URL.
+        let url = generate_a_new_blob_url(&get_blob_origin(&self.get_url()), &Uuid::new_v4());
+
+        // Step 3. Let entry be a new blob URL entry consisting of object and the current settings object.
+        // TODO we don't have a settings object.
+        let entry = BlobUrlEntry {
+            object
+        };
+
+        // Step 4. Set store[url] to entry.
+        store.insert(object.id(), entry);
+
+        // Return url
+        DOMString::from(url)
     }
 
     pub fn get_blob_url_id(&self, blob_id: &BlobId) -> Uuid {
