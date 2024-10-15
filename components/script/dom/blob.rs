@@ -89,6 +89,10 @@ impl Blob {
     pub fn get_stream(&self) -> DomRoot<ReadableStream> {
         self.global().get_blob_stream(&self.blob_id)
     }
+
+    pub fn id(&self) -> BlobId {
+        self.blob_id
+    }
 }
 
 impl Serializable for Blob {

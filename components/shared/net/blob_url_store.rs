@@ -38,6 +38,12 @@ pub struct BlobBuf {
     pub bytes: Vec<u8>,
 }
 
+/// <https://w3c.github.io/FileAPI/#blob-url-entry>
+pub struct BlobUrlEntry {
+    /// <https://w3c.github.io/FileAPI/#blob-url-entry-object>
+    object: BlobBuf,
+}
+
 /// Parse URL as Blob URL scheme's definition
 ///
 /// <https://w3c.github.io/FileAPI/#DefinitionOfScheme>
@@ -76,4 +82,27 @@ pub fn get_blob_origin(url: &ServoUrl) -> FileOrigin {
     } else {
         url.origin().ascii_serialization()
     }
+}
+
+/// <https://w3c.github.io/FileAPI/#unicodeBlobURL>
+pub fn generate_a_new_blob_url(origin: &FileOrigin, id: &Uuid) -> String {
+    // Step 1. Let result be the empty string.
+    // Step 2. Append the string "blob:" to result.
+    let mut result = "blob:".to_string();
+
+    // Step 3. Let settings be the current settings object
+    // Step 4. Let origin be settings’s origin.
+    // Step 5. Let serialized be the ASCII serialization of origin.
+    // Step 6. If serialized is "null", set it to an implementation-defined value.
+    // Step 7. Append serialized to result.
+    result.push_str(origin);
+
+    // Step 8. Append U+0024 SOLIDUS (/) to result.
+    result.push('/');
+
+    // Step 9. Generate a UUID [RFC4122] as a string and append it to result.
+    result.push_str(&id.to_string());
+
+    // Step 10. Return result.
+    result
 }
