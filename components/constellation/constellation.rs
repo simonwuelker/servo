@@ -2611,8 +2611,6 @@ where
         }
         self.shutting_down = true;
 
-        self.mem_profiler_chan.send(mem::ProfilerMsg::Exit);
-
         // Tell all BHMs to exit,
         // and to ensure their monitored components exit
         // even when currently hanging(on JS or sync XHR).
@@ -2797,6 +2795,9 @@ where
                 warn!("Exit WebGL thread failed ({:?})", e);
             }
         }
+
+        debug!("Exiting profiler thread");
+        self.mem_profiler_chan.send(mem::ProfilerMsg::Exit);
 
         debug!("Asking compositor to complete shutdown.");
         self.compositor_proxy.send(CompositorMsg::ShutdownComplete);
