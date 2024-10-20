@@ -1848,46 +1848,47 @@ impl GlobalScope {
 
     pub fn get_blob_url_id(&self, blob_id: &BlobId) -> Uuid {
         let mut blob_state = self.blob_state.borrow_mut();
-        if let BlobState::Managed(blobs_map) = &mut *blob_state {
-            let parent = {
+
+        let BlobState::Managed(blobs_map) = &mut *blob_state else {
+            panic!("get_blob_url_id called on a global not managing any blobs.");
+        };
+
+        let parent = {
+            let blob_info = blobs_map
+                .get_mut(blob_id)
+                .expect("get_blob_url_id called for a unknown blob.");
+
+            // Keep track of blobs with outstanding URLs.
+            blob_info.has_url = true;
+
+            match blob_info.blob_impl.blob_data() {
+                BlobData::Sliced(ref parent, ref rel_pos) => Some((*parent, rel_pos.clone())),
+                _ => None,
+            }
+        };
+        match parent {
+            Some((parent_id, rel_pos)) => {
+                let parent_info = blobs_map
+                    .get_mut(&parent_id)
+                    .expect("Parent of blob whose url is requested is unknown.");
+                let parent_file_id = self.promote(parent_info, /* set_valid is */ false);
+                let parent_size = match parent_info.blob_impl.blob_data() {
+                    BlobData::File(ref f) => f.get_size(),
+                    BlobData::Memory(ref v) => v.len() as u64,
+                    BlobData::Sliced(_, _) => panic!("Blob ancestry should be only one level."),
+                };
+                let parent_size = rel_pos.to_abs_range(parent_size as usize).len() as u64;
                 let blob_info = blobs_map
                     .get_mut(blob_id)
-                    .expect("get_blob_url_id called for a unknown blob.");
-
-                // Keep track of blobs with outstanding URLs.
-                blob_info.has_url = true;
-
-                match blob_info.blob_impl.blob_data() {
-                    BlobData::Sliced(ref parent, ref rel_pos) => Some((*parent, rel_pos.clone())),
-                    _ => None,
-                }
-            };
-            match parent {
-                Some((parent_id, rel_pos)) => {
-                    let parent_info = blobs_map
-                        .get_mut(&parent_id)
-                        .expect("Parent of blob whose url is requested is unknown.");
-                    let parent_file_id = self.promote(parent_info, /* set_valid is */ false);
-                    let parent_size = match parent_info.blob_impl.blob_data() {
-                        BlobData::File(ref f) => f.get_size(),
-                        BlobData::Memory(ref v) => v.len() as u64,
-                        BlobData::Sliced(_, _) => panic!("Blob ancestry should be only one level."),
-                    };
-                    let parent_size = rel_pos.to_abs_range(parent_size as usize).len() as u64;
-                    let blob_info = blobs_map
-                        .get_mut(blob_id)
-                        .expect("Blob whose url is requested is unknown.");
-                    self.create_sliced_url_id(blob_info, &parent_file_id, &rel_pos, parent_size)
-                },
-                None => {
-                    let blob_info = blobs_map
-                        .get_mut(blob_id)
-                        .expect("Blob whose url is requested is unknown.");
-                    self.promote(blob_info, /* set_valid is */ true)
-                },
-            }
-        } else {
-            panic!("get_blob_url_id called on a global not managing any blobs.");
+                    .expect("Blob whose url is requested is unknown.");
+                self.create_sliced_url_id(blob_info, &parent_file_id, &rel_pos, parent_size)
+            },
+            None => {
+                let blob_info = blobs_map
+                    .get_mut(blob_id)
+                    .expect("Blob whose url is requested is unknown.");
+                self.promote(blob_info, /* set_valid is */ true)
+            },
         }
     }
 
