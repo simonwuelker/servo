@@ -5,7 +5,10 @@
 // https://html.spec.whatwg.org/multipage/#htmlmediaelement
 
 enum CanPlayTypeResult { "" /* empty string */, "maybe", "probably" };
-typedef (MediaStream /*or MediaSource */ or Blob) MediaProvider;
+
+// NOTE: The spec uses MediaSource instead of MediaSourceHandle, because
+// it hasn't been updated. See https://w3c.github.io/media-source/#htmlmediaelement-extensions-srcobject
+typedef (MediaStream or MediaSourceHandle or Blob) MediaProvider;
 
 [Exposed=Window, Abstract]
 interface HTMLMediaElement : HTMLElement {

@@ -1763,6 +1763,7 @@ impl GlobalScope {
                     BlobData::Sliced(_, _) => panic!("Blob ancestry should be only one level."),
                 };
                 let parent_size = rel_pos.to_abs_range(parent_size as usize).len() as u64;
+
                 let blob_info = blob_state
                     .get_mut(blob_id)
                     .expect("Blob whose url is requested is unknown.");

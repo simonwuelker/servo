@@ -432,6 +432,8 @@ pub(crate) mod mediametadata;
 pub(crate) mod mediaquerylist;
 pub(crate) mod mediaquerylistevent;
 pub(crate) mod mediasession;
+pub(crate) mod mediasource;
+pub(crate) mod mediasourcehandle;
 pub(crate) mod mediastream;
 pub(crate) mod mediastreamaudiodestinationnode;
 pub(crate) mod mediastreamaudiosourcenode;
@@ -530,6 +532,8 @@ pub(crate) mod serviceworkerregistration;
 #[allow(dead_code)]
 pub(crate) mod servoparser;
 pub(crate) mod shadowroot;
+pub(crate) mod sourcebuffer;
+pub(crate) mod sourcebufferlist;
 pub(crate) mod staticrange;
 pub(crate) mod stereopannernode;
 pub(crate) mod storage;
@@ -608,6 +612,7 @@ pub(crate) mod webgluniformlocation;
 pub(crate) mod webglvertexarrayobject;
 pub(crate) mod webglvertexarrayobjectoes;
 pub(crate) mod websocket;
+
 #[cfg(feature = "webxr")]
 mod webxr;
 #[cfg(feature = "webxr")]
