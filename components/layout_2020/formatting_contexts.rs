@@ -16,6 +16,7 @@ use crate::flexbox::FlexContainer;
 use crate::flow::BlockFormattingContext;
 use crate::fragment_tree::{BaseFragmentInfo, BoxFragment, Fragment, FragmentFlags};
 use crate::geom::LogicalSides;
+use crate::grid::GridFormattingContext;
 use crate::positioned::PositioningContext;
 use crate::replaced::ReplacedContent;
 use crate::sizing::{self, InlineContentSizesResult};
@@ -54,6 +55,7 @@ pub(crate) struct ReplacedFormattingContext {
 pub(crate) enum NonReplacedFormattingContextContents {
     Flow(BlockFormattingContext),
     Flex(FlexContainer),
+    Grid(GridFormattingContext),
     Table(Table),
     // Other layout modes go here
 }
@@ -129,6 +131,16 @@ impl IndependentFormattingContext {
                             non_replaced_contents,
                             propagated_text_decoration_line,
                         ))
+                    },
+                    DisplayInside::Grid => {
+                        let grid_container = GridFormattingContext::construct(
+                            context,
+                            node_and_style_info,
+                            non_replaced_contents,
+                            propagated_text_decoration_line,
+                        );
+
+                        NonReplacedFormattingContextContents::Grid(grid_container)
                     },
                     DisplayInside::Table => {
                         let table_grid_style = context
@@ -261,6 +273,14 @@ impl NonReplacedFormattingContext {
                 containing_block_for_children,
                 containing_block,
             ),
+            NonReplacedFormattingContextContents::Grid(grid_formatting_context) => {
+                grid_formatting_context.layout(
+                    layout_context,
+                    positioning_context,
+                    containing_block_for_children,
+                    containing_block,
+                )
+            },
             NonReplacedFormattingContextContents::Table(table) => table.layout(
                 layout_context,
                 positioning_context,
@@ -328,6 +348,9 @@ impl NonReplacedFormattingContextContents {
                 .contents
                 .inline_content_sizes(layout_context, containing_block_for_children),
             Self::Flex(inner) => {
+                inner.inline_content_sizes(layout_context, containing_block_for_children)
+            },
+            Self::Grid(inner) => {
                 inner.inline_content_sizes(layout_context, containing_block_for_children)
             },
             Self::Table(table) => {

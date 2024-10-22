@@ -203,6 +203,11 @@ impl BoxTree {
                         },
                         _ => return None,
                     },
+                    LayoutBox::GridLevel(grid_level_box) => {
+                        // FIXME
+                        _ = grid_level_box;
+                        return None;
+                    },
                 };
             Some((primary_style.clone(), display_inside, update_point))
         }
