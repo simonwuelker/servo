@@ -5,9 +5,9 @@
 use std::borrow::Cow;
 
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use style::values::specified::text::TextDecorationLine;
+use style::values::specified::TextDecorationLine;
 
-use super::{FlexContainer, FlexItemBox, FlexLevelBox};
+use super::{GridFormattingContext, GridItemBox};
 use crate::cell::ArcRefCell;
 use crate::context::LayoutContext;
 use crate::dom::{BoxSlot, LayoutBox, NodeExt};
@@ -18,10 +18,9 @@ use crate::formatting_contexts::{
     IndependentFormattingContext, NonReplacedFormattingContext,
     NonReplacedFormattingContextContents,
 };
-use crate::positioned::AbsolutelyPositionedBox;
 use crate::style_ext::DisplayGeneratingBox;
 
-impl FlexContainer {
+impl GridFormattingContext {
     pub fn construct<'dom>(
         context: &LayoutContext,
         info: &NodeAndStyleInfo<impl NodeExt<'dom>>,
@@ -30,7 +29,7 @@ impl FlexContainer {
     ) -> Self {
         let text_decoration_line =
             propagated_text_decoration_line | info.style.clone_text_decoration_line();
-        let mut builder = FlexContainerBuilder {
+        let mut builder = GridFormattingContextBuilder {
             context,
             info,
             text_decoration_line,
@@ -43,18 +42,22 @@ impl FlexContainer {
     }
 }
 
-/// <https://drafts.csswg.org/css-flexbox/#flex-items>
-struct FlexContainerBuilder<'a, 'dom, Node> {
+/// <https://drafts.csswg.org/css-grid/#grid-items>
+struct GridFormattingContextBuilder<'a, 'dom, Node> {
     context: &'a LayoutContext<'a>,
     info: &'a NodeAndStyleInfo<Node>,
     text_decoration_line: TextDecorationLine,
-    contiguous_text_runs: Vec<FlexTextRun<'dom, Node>>,
-    /// To be run in parallel with rayon in `finish`
-    jobs: Vec<FlexLevelJob<'dom, Node>>,
+    contiguous_text_runs: Vec<GridTextRun<'dom, Node>>,
+    jobs: Vec<GridLevelJob<'dom, Node>>,
     has_text_runs: bool,
 }
 
-enum FlexLevelJob<'dom, Node> {
+struct GridTextRun<'dom, Node> {
+    info: NodeAndStyleInfo<Node>,
+    text: Cow<'dom, str>,
+}
+
+enum GridLevelJob<'dom, Node> {
     /// Or pseudo-element
     Element {
         info: NodeAndStyleInfo<Node>,
@@ -62,20 +65,16 @@ enum FlexLevelJob<'dom, Node> {
         contents: Contents,
         box_slot: BoxSlot<'dom>,
     },
-    TextRuns(Vec<FlexTextRun<'dom, Node>>),
+    TextRuns(Vec<GridTextRun<'dom, Node>>),
 }
 
-struct FlexTextRun<'dom, Node> {
-    info: NodeAndStyleInfo<Node>,
-    text: Cow<'dom, str>,
-}
-
-impl<'a, 'dom, Node: 'dom> TraversalHandler<'dom, Node> for FlexContainerBuilder<'a, 'dom, Node>
+impl<'a, 'dom, Node: 'dom> TraversalHandler<'dom, Node>
+    for GridFormattingContextBuilder<'a, 'dom, Node>
 where
     Node: NodeExt<'dom>,
 {
     fn handle_text(&mut self, info: &NodeAndStyleInfo<Node>, text: Cow<'dom, str>) {
-        self.contiguous_text_runs.push(FlexTextRun {
+        self.contiguous_text_runs.push(GridTextRun {
             info: info.clone(),
             text,
         })
@@ -94,7 +93,7 @@ where
         // (That is, are they wrapped in the same anonymous flex item, or each its own?)
         self.wrap_any_text_in_anonymous_block_container();
 
-        self.jobs.push(FlexLevelJob::Element {
+        self.jobs.push(GridLevelJob::Element {
             info: info.clone(),
             display,
             contents,
@@ -103,33 +102,20 @@ where
     }
 }
 
-/// <https://drafts.csswg.org/css-text/#white-space>
-fn is_only_document_white_space(text: &str) -> bool {
-    // FIXME: is this the right definition? See
-    // https://github.com/w3c/csswg-drafts/issues/5146
-    // https://github.com/w3c/csswg-drafts/issues/5147
-    text.bytes()
-        .all(|byte| matches!(byte, b' ' | b'\n' | b'\t'))
-}
-
-impl<'a, 'dom, Node: 'dom> FlexContainerBuilder<'a, 'dom, Node>
+impl<'a, 'dom, Node> GridFormattingContextBuilder<'a, 'dom, Node>
 where
     Node: NodeExt<'dom>,
 {
     fn wrap_any_text_in_anonymous_block_container(&mut self) {
         let runs = std::mem::take(&mut self.contiguous_text_runs);
-        if runs
-            .iter()
-            .all(|run| is_only_document_white_space(&run.text))
-        {
-            // There is no text run, or they all only contain document white space characters
-        } else {
-            self.jobs.push(FlexLevelJob::TextRuns(runs));
+        let contains_non_whitespace = !runs.iter().all(GridTextRun::has_only_document_white_space);
+        if contains_non_whitespace {
+            self.jobs.push(GridLevelJob::TextRuns(runs));
             self.has_text_runs = true;
         }
     }
 
-    fn finish(mut self) -> FlexContainer {
+    fn finish(mut self) -> GridFormattingContext {
         self.wrap_any_text_in_anonymous_block_container();
 
         let anonymous_style = if self.has_text_runs {
@@ -147,10 +133,10 @@ where
             None
         };
 
-        let mut children = std::mem::take(&mut self.jobs)
+        let mut children: Vec<_> = std::mem::take(&mut self.jobs)
             .into_par_iter()
             .filter_map(|job| match job {
-                FlexLevelJob::TextRuns(runs) => {
+                GridLevelJob::TextRuns(runs) => {
                     let mut inline_formatting_context_builder =
                         InlineFormattingContextBuilder::new();
                     for flex_text_run in runs.into_iter() {
@@ -161,8 +147,8 @@ where
                     let inline_formatting_context = inline_formatting_context_builder.finish(
                         self.context,
                         self.text_decoration_line,
-                        true,  /* has_first_formatted_line */
-                        false, /* is_single_line_text_box */
+                        true,
+                        false,
                         self.info.style.writing_mode.to_bidi_level(),
                     )?;
 
@@ -179,13 +165,14 @@ where
                         ),
                     };
 
-                    Some(ArcRefCell::new(FlexLevelBox::FlexItem(FlexItemBox {
-                        independent_formatting_context: IndependentFormattingContext::NonReplaced(
-                            non_replaced,
-                        ),
-                    })))
+                    let independent_formatting_context =
+                        IndependentFormattingContext::NonReplaced(non_replaced);
+
+                    Some(ArcRefCell::new(GridItemBox {
+                        independent_formatting_context,
+                    }))
                 },
-                FlexLevelJob::Element {
+                GridLevelJob::Element {
                     info,
                     display,
                     contents,
@@ -196,42 +183,42 @@ where
                         DisplayGeneratingBox::LayoutInternal(_) => display.display_inside(),
                     };
                     let box_ = if info.style.get_box().position.is_absolutely_positioned() {
-                        // https://drafts.csswg.org/css-flexbox/#abspos-items
-                        ArcRefCell::new(FlexLevelBox::OutOfFlowAbsolutelyPositionedBox(
-                            ArcRefCell::new(AbsolutelyPositionedBox::construct(
-                                self.context,
-                                &info,
-                                display_inside,
-                                contents,
-                            )),
-                        ))
+                        todo!()
                     } else {
-                        ArcRefCell::new(FlexLevelBox::FlexItem(FlexItemBox {
-                            independent_formatting_context: IndependentFormattingContext::construct(
+                        let independent_formatting_context =
+                            IndependentFormattingContext::construct(
                                 self.context,
                                 &info,
                                 display_inside,
                                 contents,
                                 self.text_decoration_line,
-                            ),
-                        }))
+                            );
+
+                        ArcRefCell::new(GridItemBox {
+                            independent_formatting_context,
+                        })
                     };
-                    box_slot.set(LayoutBox::FlexLevel(box_.clone()));
+                    box_slot.set(LayoutBox::GridLevel(box_.clone()));
                     Some(box_)
                 },
             })
-            .collect::<Vec<_>>();
+            .collect();
 
-        // https://drafts.csswg.org/css-flexbox/#order-modified-document-order
-        children.sort_by_key(|child| match &*child.borrow() {
-            FlexLevelBox::FlexItem(item) => item.style().clone_order(),
+        // https://drafts.csswg.org/css-display-4/#order-modified-document-order
+        children.sort_by_key(|child| (&*child.borrow()).style().clone_order());
 
-            // “Absolutely-positioned children of a flex container are treated
-            //  as having order: 0 for the purpose of determining their painting order
-            //  relative to flex items.”
-            FlexLevelBox::OutOfFlowAbsolutelyPositionedBox(_) => 0,
-        });
+        GridFormattingContext::new(self.info.style.clone(), children)
+    }
+}
 
-        FlexContainer::new(&self.info.style, children)
+impl<'dom, Node> GridTextRun<'dom, Node> {
+    /// <https://drafts.csswg.org/css-text/#white-space>
+    fn has_only_document_white_space(&self) -> bool {
+        // FIXME: is this the right definition? See
+        // https://github.com/w3c/csswg-drafts/issues/5146
+        // https://github.com/w3c/csswg-drafts/issues/5147
+        self.text
+            .bytes()
+            .all(|byte| matches!(byte, b' ' | b'\n' | b'\t'))
     }
 }

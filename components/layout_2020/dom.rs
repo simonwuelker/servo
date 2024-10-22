@@ -26,6 +26,7 @@ use crate::flow::inline::inline_box::InlineBox;
 use crate::flow::inline::InlineItem;
 use crate::flow::BlockLevelBox;
 use crate::geom::PhysicalSize;
+use crate::grid::GridItemBox;
 use crate::replaced::{CanvasInfo, CanvasSource};
 
 /// The data that is stored in each DOM node that is used by layout.
@@ -44,6 +45,7 @@ pub(super) enum LayoutBox {
     InlineBox(ArcRefCell<InlineBox>),
     InlineLevel(ArcRefCell<InlineItem>),
     FlexLevel(ArcRefCell<FlexLevelBox>),
+    GridLevel(ArcRefCell<GridItemBox>),
 }
 
 /// A wrapper for [`InnerDOMLayoutData`]. This is necessary to give the entire data
