@@ -70,6 +70,7 @@ use super::bindings::trace::{HashMapTracedValues, RootedTraceableBox};
 use crate::dom::bindings::cell::{DomRefCell, RefMut};
 use crate::dom::bindings::codegen::Bindings::BroadcastChannelBinding::BroadcastChannelMethods;
 use crate::dom::bindings::codegen::Bindings::EventSourceBinding::EventSource_Binding::EventSourceMethods;
+use crate::dom::bindings::codegen::Bindings::ImageBitmapBinding::ImageBitmap_Binding::ImageBitmapMethods;
 use crate::dom::bindings::codegen::Bindings::ImageBitmapBinding::{
     ImageBitmapOptions, ImageBitmapSource,
 };
@@ -2871,7 +2872,27 @@ impl GlobalScope {
                 }
                 p
             },
+            ImageBitmapSource::ImageBitmap(ref source_bitmap) => {
+                let image_bitmap =
+                    ImageBitmap::new(self, source_bitmap.Width(), source_bitmap.Height()).unwrap();
+
+                // Step 1. Set imageBitmap's bitmap data to a copy of image's bitmap data,
+                // cropped to the source rectangle with formatting.
+                // TODO: crop the source data
+                // TODO: The spec doesn't seem to tell us what to do if the image data is detached
+                image_bitmap.set_bitmap_data(source_bitmap.bitmap_data().unwrap_or_default());
+
+                // Step 2. Set the origin-clean flag of imageBitmap's bitmap to the same value as
+                // the origin-clean flag of image's bitmap.
+                image_bitmap.set_origin_clean(source_bitmap.origin_is_clean());
+
+                // Step 3. Run this step in parallel:
+                // Step 3.1 Resolve p with imageBitmap.
+                p.resolve_native(&image_bitmap);
+                p
+            },
             _ => {
+                // TODO
                 p.reject_error(Error::NotSupported);
                 p
             },

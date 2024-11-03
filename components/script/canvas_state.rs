@@ -257,7 +257,7 @@ impl CanvasState {
         self.origin_clean.set(false)
     }
 
-    // https://html.spec.whatwg.org/multipage/#the-image-argument-is-not-origin-clean
+    /// <https://html.spec.whatwg.org/multipage/#the-image-argument-is-not-origin-clean>
     fn is_origin_clean(&self, image: CanvasImageSource) -> bool {
         match image {
             CanvasImageSource::HTMLCanvasElement(canvas) => canvas.origin_is_clean(),
@@ -266,6 +266,7 @@ impl CanvasState {
                 image.same_origin(GlobalScope::entry().origin())
             },
             CanvasImageSource::CSSStyleValue(_) => true,
+            CanvasImageSource::ImageBitmap(bitmap) => bitmap.origin_is_clean(),
         }
     }
 
@@ -418,6 +419,10 @@ impl CanvasState {
                 self.fetch_and_draw_image_data(
                     htmlcanvas, url, None, sx, sy, sw, sh, dx, dy, dw, dh,
                 )
+            },
+            CanvasImageSource::ImageBitmap(_) => {
+                // TODO
+                return Err(Error::NotSupported);
             },
         };
 
@@ -923,6 +928,10 @@ impl CanvasState {
                 .and_then(|url| self.fetch_image_data(url, None))
                 .map(|data| (data.0.to_vec(), data.1))
                 .ok_or(Error::InvalidState)?,
+            CanvasImageSource::ImageBitmap(_) => {
+                // TODO
+                return Err(Error::NotSupported);
+            },
         };
 
         if repetition.is_empty() {

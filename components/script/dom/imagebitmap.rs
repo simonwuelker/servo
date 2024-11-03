@@ -23,7 +23,11 @@ pub struct ImageBitmap {
     ///
     /// If this is `None`, then the bitmap data has been released by calling
     /// [`close`](https://html.spec.whatwg.org/multipage/#dom-imagebitmap-close)
+    ///
+    /// <https://html.spec.whatwg.org/multipage/#concept-imagebitmap-bitmap-data>
     bitmap_data: DomRefCell<Option<Vec<u8>>>,
+
+    /// <https://html.spec.whatwg.org/multipage/#concept-canvas-origin-clean>
     origin_clean: Cell<bool>,
 }
 
@@ -52,6 +56,14 @@ impl ImageBitmap {
 
     pub fn set_origin_clean(&self, origin_is_clean: bool) {
         self.origin_clean.set(origin_is_clean);
+    }
+
+    pub fn bitmap_data(&self) -> Option<Vec<u8>> {
+        self.bitmap_data.borrow().clone()
+    }
+
+    pub fn origin_is_clean(&self) -> bool {
+        self.origin_clean.get()
     }
 
     /// Return the value of the [`[[Detached]]`](https://html.spec.whatwg.org/multipage/#detached)
