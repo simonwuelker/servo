@@ -2814,6 +2814,7 @@ impl GlobalScope {
         is_js_evaluation_allowed
     }
 
+    #[allow(unsafe_code)]
     pub fn create_image_bitmap(
         &self,
         image: ImageBitmapSource,
@@ -2851,7 +2852,6 @@ impl GlobalScope {
                     image_bitmap.set_origin_clean(canvas.origin_is_clean());
                     p.resolve_native(&(image_bitmap));
                 }
-                p
             },
             ImageBitmapSource::OffscreenCanvas(ref canvas) => {
                 // https://html.spec.whatwg.org/multipage/#check-the-usability-of-the-image-argument
@@ -2870,7 +2870,6 @@ impl GlobalScope {
                     image_bitmap.set_origin_clean(canvas.origin_is_clean());
                     p.resolve_native(&(image_bitmap));
                 }
-                p
             },
             ImageBitmapSource::ImageBitmap(ref source_bitmap) => {
                 let image_bitmap =
@@ -2889,14 +2888,32 @@ impl GlobalScope {
                 // Step 3. Run this step in parallel:
                 // Step 3.1 Resolve p with imageBitmap.
                 p.resolve_native(&image_bitmap);
-                p
+            },
+            ImageBitmapSource::ImageData(ref image_data) => {
+                let size = image_data.get_size();
+                let image_bitmap = ImageBitmap::new(self, size.width, size.height).unwrap();
+
+                // Step 1. Let buffer be image's data attribute value's [[ViewedArrayBuffer]] internal slot.
+                // TODO: Step 2. If IsDetachedBuffer(buffer) is true, then return a promise rejected with an
+                // "InvalidStateError" DOMException.
+
+                // Step 3. Set imageBitmap's bitmap data to image's image data, cropped to the source
+                // rectangle with formatting.
+                // TODO: crop the source data
+                image_bitmap.set_bitmap_data(unsafe { image_data.as_slice() }.to_owned());
+
+                // Step 4. Run this step in parallel:
+                // Step 4.1 Resolve p with imageBitmap.
+                p.resolve_native(&image_bitmap);
             },
             _ => {
                 // TODO
                 p.reject_error(Error::NotSupported);
-                p
             },
-        }
+        };
+
+        // Step 7. Return p.
+        p
     }
 
     pub fn fire_timer(&self, handle: TimerEventId, can_gc: CanGc) {
