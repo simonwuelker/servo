@@ -2618,12 +2618,11 @@ where
         }
         self.shutting_down = true;
 
-        self.mem_profiler_chan.send(mem::ProfilerMsg::Exit);
-
         // Tell all BHMs to exit,
         // and to ensure their monitored components exit
         // even when currently hanging(on JS or sync XHR).
         // This must be done before starting the process of closing all pipelines.
+        debug!("Closing background hang monitors.");
         for chan in &self.background_monitor_control_senders {
             let (exit_ipc_sender, exit_ipc_receiver) =
                 ipc::channel().expect("Failed to create IPC channel!");
@@ -2667,6 +2666,7 @@ where
         }
 
         // In case there are browsing contexts which weren't attached, we close them.
+        debug!("Closing unattached browsing contexts.");
         let browsing_context_ids: Vec<BrowsingContextId> =
             self.browsing_contexts.keys().cloned().collect();
         for browsing_context_id in browsing_context_ids {
@@ -2678,6 +2678,7 @@ where
         }
 
         // In case there are pipelines which weren't attached to the pipeline tree, we close them.
+        debug!("Closing unattached pipelines.");
         let pipeline_ids: Vec<PipelineId> = self.pipelines.keys().cloned().collect();
         for pipeline_id in pipeline_ids {
             debug!("{}: Removing detached pipeline", pipeline_id);
@@ -2788,6 +2789,9 @@ where
 
         debug!("Exiting the system font service thread.");
         self.system_font_service.exit();
+
+        debug!("Exiting Memory Profiler thread.");
+        self.mem_profiler_chan.send(mem::ProfilerMsg::Exit);
 
         // Receive exit signals from threads.
         if let Err(e) = core_ipc_receiver.recv() {
