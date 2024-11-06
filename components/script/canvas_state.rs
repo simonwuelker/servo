@@ -265,7 +265,6 @@ impl CanvasState {
             CanvasImageSource::HTMLImageElement(image) => {
                 image.same_origin(GlobalScope::entry().origin())
             },
-            CanvasImageSource::CSSStyleValue(_) => true,
         }
     }
 
@@ -409,14 +408,6 @@ impl CanvasState {
                     dy,
                     dw,
                     dh,
-                )
-            },
-            CanvasImageSource::CSSStyleValue(ref value) => {
-                let url = value
-                    .get_url(self.base_url.clone())
-                    .ok_or(Error::InvalidState)?;
-                self.fetch_and_draw_image_data(
-                    htmlcanvas, url, None, sx, sy, sw, sh, dx, dy, dw, dh,
                 )
             },
         };
@@ -918,11 +909,6 @@ impl CanvasState {
                     .unwrap_or_else(|| vec![0; size.area() as usize * 4]);
                 (data, size)
             },
-            CanvasImageSource::CSSStyleValue(ref value) => value
-                .get_url(self.base_url.clone())
-                .and_then(|url| self.fetch_image_data(url, None))
-                .map(|data| (data.0.to_vec(), data.1))
-                .ok_or(Error::InvalidState)?,
         };
 
         if repetition.is_empty() {
