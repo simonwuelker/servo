@@ -17,7 +17,7 @@ use js::jsapi::{JSObject, JS_NewObject};
 use js::jsval::ObjectValue;
 use js::rust::MutableHandleObject;
 use js::typedarray::ArrayBufferU8;
-use ring::{digest, pbkdf2};
+use ring::{digest, hkdf, pbkdf2};
 use servo_rand::{RngCore, ServoRng};
 
 use crate::dom::bindings::buffer_source::create_buffer_source;
@@ -27,7 +27,7 @@ use crate::dom::bindings::codegen::Bindings::CryptoKeyBinding::{
 };
 use crate::dom::bindings::codegen::Bindings::SubtleCryptoBinding::{
     AesCbcParams, AesCtrParams, AesDerivedKeyParams, AesKeyAlgorithm, AesKeyGenParams, Algorithm,
-    AlgorithmIdentifier, JsonWebKey, KeyAlgorithm, KeyFormat, Pbkdf2Params, SubtleCryptoMethods,
+    AlgorithmIdentifier, JsonWebKey, KeyAlgorithm, KeyFormat, Pbkdf2Params, SubtleCryptoMethods, HkdfParams
 };
 use crate::dom::bindings::codegen::UnionTypes::{
     ArrayBufferViewOrArrayBuffer, ArrayBufferViewOrArrayBufferOrJsonWebKey,
@@ -761,6 +761,37 @@ impl From<AesKeyGenParams> for SubtleAesKeyGenParams {
     }
 }
 
+/// <https://w3c.github.io/webcrypto/#hkdf-params>
+#[derive(Clone, Debug)]
+pub struct SubtleHkdfParams {
+    /// <https://w3c.github.io/webcrypto/#dfn-HkdfParams-hash>
+    hash: Box<NormalizedAlgorithm>,
+
+    /// <https://w3c.github.io/webcrypto/#dfn-HkdfParams-salt>
+    salt: Vec<u8>,
+
+    /// <https://w3c.github.io/webcrypto/#dfn-HkdfParams-info>
+    info: Vec<u8>,
+}
+
+impl SubtleHkdfParams {
+    fn new(cx: JSContext, params: RootedTraceableBox<HkdfParams>) -> Fallible<Self> {
+        let hash = Box::new(normalize_algorithm(cx, &params.hash, "digest")?);
+        let salt = match &params.salt {
+            ArrayBufferViewOrArrayBuffer::ArrayBufferView(view) => view.to_vec(),
+            ArrayBufferViewOrArrayBuffer::ArrayBuffer(buffer) => buffer.to_vec(),
+        };
+        let info = match &params.info {
+            ArrayBufferViewOrArrayBuffer::ArrayBufferView(view) => view.to_vec(),
+            ArrayBufferViewOrArrayBuffer::ArrayBuffer(buffer) => buffer.to_vec(),
+        };
+
+        let params = Self { hash, salt, info };
+
+        Ok(params)
+    }
+}
+
 /// <https://w3c.github.io/webcrypto/#dfn-Pbkdf2Params>
 #[derive(Clone, Debug)]
 pub struct SubtlePbkdf2Params {
@@ -825,6 +856,7 @@ enum ImportKeyAlgorithm {
 /// [`normalize_algorithm`]: https://w3c.github.io/webcrypto/#algorithm-normalization-normalize-an-algorithm
 enum DeriveBitsAlgorithm {
     Pbkdf2(SubtlePbkdf2Params),
+    Hkdf(SubtleHkdfParams),
 }
 
 /// A normalized algorithm returned by [`normalize_algorithm`] with operation `"encrypt"` or `"decrypt"`
@@ -960,6 +992,10 @@ fn normalize_algorithm_for_derive_bits(
         let params = value_from_js_object!(Pbkdf2Params, cx, value);
         let subtle_params = SubtlePbkdf2Params::new(cx, params)?;
         DeriveBitsAlgorithm::Pbkdf2(subtle_params)
+    } else if algorithm.name.str().eq_ignore_ascii_case(ALG_HKDF) {
+        let params = value_from_js_object!(HkdfParams, cx, value);
+        let subtle_params = SubtleHkdfParams::new(cx, params)?;
+        DeriveBitsAlgorithm::Hkdf(subtle_params)
     } else {
         return Err(Error::NotSupported);
     };
@@ -1506,6 +1542,56 @@ impl SubtlePbkdf2Params {
     }
 }
 
+impl SubtleHkdfParams {
+    /// <https://w3c.github.io/webcrypto/#hkdf-operations>
+    fn derive_bits(&self, key: &CryptoKey, length: Option<u32>) -> Result<Vec<u8>, Error> {
+        // Step 1. If length is null or zero, or is not a multiple of 8, then throw an OperationError.
+        let Some(length) = length else {
+            return Err(Error::Operation);
+        };
+        if length == 0 || length % 8 != 0 {
+            return Err(Error::Operation);
+        };
+
+        // Step 3. Let keyDerivationKey be the secret represented by [[handle]] internal slot of key.
+        let key_derivation_key = key.handle().as_bytes();
+
+        // Step 4. Let result be the result of performing the HKDF extract and then the HKDF expand step described
+        // in Section 2 of [RFC5869] using:
+        // * the hash member of normalizedAlgorithm as Hash,
+        // * keyDerivationKey as the input keying material, IKM,
+        // * the contents of the salt member of normalizedAlgorithm as salt,
+        // * the contents of the info member of normalizedAlgorithm as info,
+        // * length divided by 8 as the value of L,
+        let mut result = vec![0; length as usize / 8];
+        let algorithm = match self.hash {
+            DigestAlgorithm::Sha1 => hkdf::HKDF_SHA1_FOR_LEGACY_USE_ONLY,
+            DigestAlgorithm::Sha256 => hkdf::HKDF_SHA256,
+            DigestAlgorithm::Sha384 => hkdf::HKDF_SHA384,
+            DigestAlgorithm::Sha512 => hkdf::HKDF_SHA512,
+            _ => return Err(Error::NotSupported),
+        };
+        let salt = hkdf::Salt::new(algorithm, &self.salt);
+        let info = self.info.as_slice();
+        let pseudo_random_key = salt.extract(key_derivation_key);
+
+        let Ok(output_key_material) =
+            pseudo_random_key.expand(std::slice::from_ref(&info), algorithm)
+        else {
+            // Step 5. If the key derivation operation fails, then throw an OperationError.
+            return Err(Error::Operation);
+        };
+
+        if output_key_material.fill(&mut result).is_err() {
+            return Err(Error::Operation);
+        };
+
+        // Step 6. Return the result of creating an ArrayBuffer containing result.
+        // NOTE: The ArrayBuffer is created by the caller
+        Ok(result)
+    }
+}
+
 /// <https://w3c.github.io/webcrypto/#aes-ctr-operations>
 fn get_key_length_for_aes(length: u16) -> Result<u16, Error> {
     // Step 1. If the length member of normalizedDerivedKeyAlgorithm is not 128, 192 or 256,
@@ -1564,6 +1650,7 @@ impl DeriveBitsAlgorithm {
     fn derive_bits(&self, key: &CryptoKey, length: Option<u32>) -> Result<Vec<u8>, Error> {
         match self {
             Self::Pbkdf2(pbkdf2_params) => pbkdf2_params.derive_bits(key, length),
+            Self::Hkdf(hkdf_params) => hkdf_params.derive_bits(key, length),
         }
     }
 }
