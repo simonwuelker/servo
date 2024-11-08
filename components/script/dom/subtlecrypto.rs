@@ -817,6 +817,7 @@ enum ImportKeyAlgorithm {
     AesCbc,
     AesCtr,
     Pbkdf2,
+    Hkdf,
 }
 
 /// A normalized algorithm returned by [`normalize_algorithm`] with operation `"deriveBits"`
@@ -1305,6 +1306,60 @@ impl SubtleCrypto {
         }
     }
 
+    /// <https://w3c.github.io/webcrypto/#hkdf-operations>
+    #[allow(unsafe_code)]
+    fn import_key_hkdf(
+        &self,
+        format: KeyFormat,
+        data: &[u8],
+        extractable: bool,
+        usages: Vec<KeyUsage>,
+    ) -> Result<DomRoot<CryptoKey>, Error> {
+        // Step 1. Let keyData be the key data to be imported.
+        // Step 2.  If format is "raw":
+        if format == KeyFormat::Raw {
+            // Step 1. If usages contains a value that is not "deriveKey" or "deriveBits", then throw a SyntaxError.
+            if usages
+                .iter()
+                .any(|usage| !matches!(usage, KeyUsage::DeriveKey | KeyUsage::DeriveBits))
+            {
+                return Err(Error::Syntax);
+            }
+
+            // Step 2. If extractable is not false, then throw a SyntaxError.
+            if extractable {
+                return Err(Error::Syntax);
+            }
+
+            // Step 3. Let key be a new CryptoKey representing the key data provided in keyData.
+            // Step 4. Set the [[type]] internal slot of key to "secret".
+            // Step 5.  Let algorithm be a new KeyAlgorithm object.
+            // Step 6. Set the name attribute of algorithm to "HKDF".
+            // Step 7. Set the [[algorithm]] internal slot of key to algorithm.
+            let name = DOMString::from(ALG_HKDF);
+            let cx = GlobalScope::get_cx();
+            rooted!(in(*cx) let mut algorithm_object = unsafe {JS_NewObject(*cx, ptr::null()) });
+            assert!(!algorithm_object.is_null());
+            KeyAlgorithm::from_name(name.clone(), algorithm_object.handle_mut(), cx);
+
+            let key = CryptoKey::new(
+                &self.global(),
+                KeyType::Secret,
+                extractable,
+                name,
+                algorithm_object.handle(),
+                usages,
+                Handle::Hkdf(data.to_vec()),
+            );
+
+            // Step 8. Return key.
+            Ok(key)
+        } else {
+            // throw a NotSupportedError.
+            Err(Error::NotSupported)
+        }
+    }
+
     /// <https://w3c.github.io/webcrypto/#pbkdf2-operations>
     #[allow(unsafe_code)]
     fn import_key_pbkdf2(
@@ -1500,6 +1555,7 @@ impl ImportKeyAlgorithm {
                 subtle.import_key_aes(format, secret, extractable, key_usages, ALG_AES_CTR)
             },
             Self::Pbkdf2 => subtle.import_key_pbkdf2(format, secret, extractable, key_usages),
+            Self::Hkdf => subtle.import_key_hkdf(format, secret, extractable, key_usages),
         }
     }
 }
