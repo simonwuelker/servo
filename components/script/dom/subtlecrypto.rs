@@ -17,7 +17,8 @@ use js::jsapi::{JSObject, JS_NewObject};
 use js::jsval::ObjectValue;
 use js::rust::MutableHandleObject;
 use js::typedarray::ArrayBufferU8;
-use ring::{digest, hkdf, hmac, pbkdf2};
+use ring::aead::BoundKey;
+use ring::{aead, digest, hkdf, hmac, pbkdf2};
 use servo_rand::{RngCore, ServoRng};
 
 use crate::dom::bindings::buffer_source::create_buffer_source;
@@ -1467,6 +1468,102 @@ impl SubtleCrypto {
         Ok(())
     }
 
+    /// <https://w3c.github.io/webcrypto/#aes-gcm-operations>
+    fn encrypt_aes_gcm(
+        &self,
+        params: &SubtleAesGcmParams,
+        key: &CryptoKey,
+        plaintext: &[u8],
+        cx: JSContext,
+        handle: MutableHandleObject,
+    ) -> Result<(), Error> {
+        // Step 1. If plaintext has a length greater than 2^39 - 256 bytes, then throw an OperationError.
+        if plaintext.len() > (2 << 39) - 256 {
+            return Err(Error::Operation);
+        }
+
+        // Step 2. If the iv member of normalizedAlgorithm has a length greater than 2^64 - 1 bytes,
+        // then throw an OperationError.
+        if params.iv.len() > u64::MAX as usize {
+            return Err(Error::Operation);
+        }
+
+        // Step 3. If the additionalData member of normalizedAlgorithm is present and has a length greater than 2^64 - 1
+        // bytes, then throw an OperationError.
+        if params
+            .additional_data
+            .as_ref()
+            .is_some_and(|data| data.len() > u64::MAX as usize)
+        {
+            return Err(Error::Operation);
+        }
+
+        // Step 4.
+        let tag_length = match params.tag_length {
+            // If the tagLength member of normalizedAlgorithm is not present:
+            None => {
+                // Let tagLength be 128.
+                128
+            },
+            // If the tagLength member of normalizedAlgorithm is one of 32, 64, 96, 104, 112, 120 or 128:
+            Some(length) if matches!(length, 32 | 64 | 96 | 104 | 112 | 120 | 128) => {
+                // Let tagLength be equal to the tagLength member of normalizedAlgorithm
+                length
+            },
+            // Otherwise:
+            _ => {
+                // throw an OperationError.
+                return Err(Error::Operation);
+            },
+        };
+
+        // Step 5. Let additionalData be the contents of the additionalData member of normalizedAlgorithm if present
+        // or the empty octet string otherwise.
+        let additional_data = params
+            .additional_data
+            .as_ref()
+            .map(|data| aead::Aad::from(data.as_slice()))
+            .unwrap_or(aead::Aad::from(&[]));
+
+        // Step 6. Let C and T be the outputs that result from performing the Authenticated Encryption Function
+        // described in Section 7.1 of [NIST-SP800-38D] using AES as the block cipher, the contents of the iv member
+        // of normalizedAlgorithm as the IV input parameter, the contents of additionalData as the A input parameter,
+        // tagLength as the t pre-requisite and the contents of plaintext as the input plaintext.
+        // Step 7. Let ciphertext be equal to C | T, where '|' denotes concatenation.
+        // NOTE: Ring does Step 7 for us
+
+        // Setup ring keys
+        let algorithm = match key.handle().as_bytes().len() {
+            16 => &aead::AES_128_GCM,
+            32 => &aead::AES_256_GCM,
+            _ => return Err(Error::NotSupported),
+        };
+        let key = aead::UnboundKey::new(algorithm, key.handle().as_bytes())
+            .expect("Unexpected key length");
+        let iv: [u8; aead::NONCE_LEN] = params
+            .iv
+            .as_slice()
+            .try_into()
+            .map_err(|_| Error::Operation)?;
+        let nonce_sequence = InitializedNonceSequence::new(iv);
+        let mut sealing_key = aead::SealingKey::new(key, nonce_sequence);
+
+        // Perform the actual encryption
+        let mut ciphertext = plaintext.to_vec();
+        let tag = sealing_key
+            .seal_in_place_separate_tag(additional_data, &mut ciphertext)
+            .map_err(|_| Error::Operation)?;
+
+        // Step 7. Let ciphertext be equal to C | T, where '|' denotes concatenation.
+        ciphertext.extend_from_slice(&tag.as_ref()[..tag_length as usize / 8]);
+
+        // Step 8. Return the result of creating an ArrayBuffer containing ciphertext.
+        create_buffer_source::<ArrayBufferU8>(cx, &ciphertext, handle)
+            .expect("failed to create buffer source for exported key.");
+
+        Ok(())
+    }
+
     /// <https://w3c.github.io/webcrypto/#aes-cbc-operations>
     /// <https://w3c.github.io/webcrypto/#aes-ctr-operations>
     #[allow(unsafe_code)]
@@ -2095,7 +2192,7 @@ impl EncryptionAlgorithm {
         match self {
             Self::AesCbc(params) => subtle.encrypt_aes_cbc(params, key, data, cx, result),
             Self::AesCtr(params) => subtle.encrypt_decrypt_aes_ctr(params, key, data, cx, result),
-            Self::AesGcm(params) => todo!(),
+            Self::AesGcm(params) => subtle.encrypt_aes_gcm(params, key, data, cx, result),
         }
     }
 
@@ -2195,4 +2292,36 @@ fn verify_hmac(
     // Step 2. Return true if mac is equal to signature and false otherwise.
     let is_valid = mac.as_ref() == signature;
     Ok(is_valid)
+}
+
+/// Represents the highest possible nonce value that can
+/// be returned by a [NonceSequence](aead::NonceSequence) implementation
+const MAX_AEAD_NONCE: u128 = 2_u128 << (aead::NONCE_LEN * 8);
+
+/// Represents a infinite sequence of nonces
+///
+/// Only the lower 12 bytes are used.
+#[derive(Copy, Clone)]
+struct InitializedNonceSequence(u128);
+
+impl InitializedNonceSequence {
+    fn new(iv: [u8; aead::NONCE_LEN]) -> Self {
+        let mut bytes = [0u8; 16];
+        bytes[4..].copy_from_slice(&iv);
+
+        Self(u128::from_be_bytes(bytes))
+    }
+}
+
+impl aead::NonceSequence for InitializedNonceSequence {
+    fn advance(&mut self) -> Result<aead::Nonce, ring::error::Unspecified> {
+        // Compute current nonce
+        let bytes = self.0.to_be_bytes()[4..].try_into().unwrap();
+        let nonce = aead::Nonce::assume_unique_for_key(bytes);
+
+        // Advance counter
+        self.0 = (self.0 + 1) % MAX_AEAD_NONCE;
+
+        Ok(nonce)
+    }
 }
