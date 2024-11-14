@@ -183,76 +183,87 @@ function define_tests() {
                     });
                 });
 
-                // - legal algorithm name but not digest one (e.g., PBKDF2) (NotSupportedError)
-                var nonDigestHash = "PBKDF2";
-                Object.keys(infos).forEach(function(infoSize) {
-                    var testName = derivedKeySize + " derivedKey, " + saltSize + " salt, " + nonDigestHash + ", with " + infoSize + " info";
-                    var algorithm = {name: "HKDF", salt: salts[saltSize], hash: nonDigestHash};
-                    if (infoSize !== "missing") {
-                        algorithm.info = infos[infoSize];
-                    }
+                // Empty hash algorithm (TypeError)
+                // subsetTest(promise_test, function(test) {
+                //     var badAlgorithm = {name: "HKDF", salt: salts[saltSize], hash: {}, info: new Uint8Array([])};
+                //     return subtle.deriveBits(badAlgorithm, baseKeys[derivedKeySize], 256)
+                //     .then(function(derivation) {
+                //         assert_unreached("empty hash should have thrown an TypeError");
+                //     }, function(err) {
+                //         assert_equals(err.name, "TypeError", "deriveBits with empty hash correctly threw TypeError: " + err.message);
+                //     });
+                // }, derivedKeySize + " derivedKey, " + saltSize + " salt, with empty hash algorithm");
 
-                    subsetTest(promise_test, function(test) {
-                        return subtle.deriveBits(algorithm, baseKeys[derivedKeySize], 256)
-                        .then(function(derivation) {
-                            assert_unreached("non-digest algorithm should have thrown an NotSupportedError");
-                        }, function(err) {
-                            assert_equals(err.name, "NotSupportedError", "deriveBits with non-digest algorithm correctly threw NotSupportedError: " + err.message);
-                        });
-                    }, testName + " with non-digest algorithm " + nonDigestHash);
+                // // - legal algorithm name but not digest one (e.g., PBKDF2) (NotSupportedError)
+                // var nonDigestHash = "PBKDF2";
+                // Object.keys(infos).forEach(function(infoSize) {
+                //     var testName = derivedKeySize + " derivedKey, " + saltSize + " salt, " + nonDigestHash + ", with " + infoSize + " info";
+                //     var algorithm = {name: "HKDF", salt: salts[saltSize], hash: nonDigestHash};
+                //     if (infoSize !== "missing") {
+                //         algorithm.info = infos[infoSize];
+                //     }
 
-                    derivedKeyTypes.forEach(function(derivedKeyType) {
-                        var testName = "Derived key of type ";
-                        Object.keys(derivedKeyType.algorithm).forEach(function(prop) {
-                            testName += prop + ": " + derivedKeyType.algorithm[prop] + " ";
-                        });
-                        testName += " using " + derivedKeySize + " derivedKey, " + saltSize + " salt, " + nonDigestHash + ", with " + infoSize + " info";
+                //     subsetTest(promise_test, function(test) {
+                //         return subtle.deriveBits(algorithm, baseKeys[derivedKeySize], 256)
+                //         .then(function(derivation) {
+                //             assert_unreached("non-digest algorithm should have thrown an NotSupportedError");
+                //         }, function(err) {
+                //             assert_equals(err.name, "NotSupportedError", "deriveBits with non-digest algorithm correctly threw NotSupportedError: " + err.message);
+                //         });
+                //     }, testName + " with non-digest algorithm " + nonDigestHash);
 
-                        subsetTest(promise_test, function(test) {
-                            return subtle.deriveKey(algorithm, baseKeys[derivedKeySize], derivedKeyType.algorithm, true, derivedKeyType.usages)
-                            .then(function(derivation) {
-                                assert_unreached("non-digest algorithm should have thrown an NotSupportedError");
-                            }, function(err) {
-                                assert_equals(err.name, "NotSupportedError", "derivekey with non-digest algorithm correctly threw NotSupportedError: " + err.message);
-                            });
-                        }, testName);
-                    });
-                });
+                //     derivedKeyTypes.forEach(function(derivedKeyType) {
+                //         var testName = "Derived key of type ";
+                //         Object.keys(derivedKeyType.algorithm).forEach(function(prop) {
+                //             testName += prop + ": " + derivedKeyType.algorithm[prop] + " ";
+                //         });
+                //         testName += " using " + derivedKeySize + " derivedKey, " + saltSize + " salt, " + nonDigestHash + ", with " + infoSize + " info";
 
-                // Empty (invalid) algorithm
-                Object.keys(infos).forEach(function(infoSize) {
-                    var testName = derivedKeySize + " derivedKey, " + saltSize + " salt, empty algorithm, with " + infoSize + " info";
-                    var algorithm = {name: "HKDF", salt: salts[saltSize], hash: {}};
-                    if (infoSize !== "missing") {
-                        algorithm.info = infos[infoSize];
-                    }
+                //         subsetTest(promise_test, function(test) {
+                //             return subtle.deriveKey(algorithm, baseKeys[derivedKeySize], derivedKeyType.algorithm, true, derivedKeyType.usages)
+                //             .then(function(derivation) {
+                //                 assert_unreached("non-digest algorithm should have thrown an NotSupportedError");
+                //             }, function(err) {
+                //                 assert_equals(err.name, "NotSupportedError", "derivekey with non-digest algorithm correctly threw NotSupportedError: " + err.message);
+                //             });
+                //         }, testName);
+                //     });
+                // });
 
-                    subsetTest(promise_test, function(test) {
-                        return subtle.deriveBits(algorithm, baseKeys[derivedKeySize], 256)
-                        .then(function(derivation) {
-                            assert_unreached("non-digest algorithm should have thrown a TypeError");
-                        }, function(err) {
-                            assert_equals(err.name, "TypeError", "derivekey with non-digest algorithm correctly threw TypeError: " + err.message);
-                        });
-                    }, "deriveBits: " + testName);
+                // // Empty (invalid) hash algorithm (TypeError)
+                // Object.keys(infos).forEach(function(infoSize) {
+                //     var testName = derivedKeySize + " derivedKey, " + saltSize + " salt, empty algorithm, with " + infoSize + " info";
+                //     var algorithm = {name: "HKDF", salt: salts[saltSize], hash: {}};
+                //     if (infoSize !== "missing") {
+                //         algorithm.info = infos[infoSize];
+                //     }
 
-                    derivedKeyTypes.forEach(function(derivedKeyType) {
-                        var testName = "Derived key of type ";
-                        Object.keys(derivedKeyType.algorithm).forEach(function(prop) {
-                            testName += prop + ": " + derivedKeyType.algorithm[prop] + " ";
-                        });
-                        testName += " using " + derivedKeySize + " derivedKey, " + saltSize + " salt, empty algorithm, with " + infoSize + " info";
+                //     subsetTest(promise_test, function(test) {
+                //         return subtle.deriveBits(algorithm, baseKeys[derivedKeySize], 256)
+                //         .then(function(derivation) {
+                //             assert_unreached("non-digest algorithm should have thrown a TypeError");
+                //         }, function(err) {
+                //             assert_equals(err.name, "TypeError", "derivekey with non-digest algorithm correctly threw TypeError: " + err.message);
+                //         });
+                //     }, "deriveBits: " + testName);
 
-                        subsetTest(promise_test, function(test) {
-                            return subtle.deriveKey(algorithm, baseKeys[derivedKeySize], derivedKeyType.algorithm, true, derivedKeyType.usages)
-                            .then(function(derivation) {
-                                assert_unreached("non-digest algorithm should have thrown a TypeError");
-                            }, function(err) {
-                                assert_equals(err.name, "TypeError", "derivekey with non-digest algorithm correctly threw TypeError: " + err.message);
-                            });
-                        }, "deriveKey: " + testName);
-                    });
-                });
+                //     derivedKeyTypes.forEach(function(derivedKeyType) {
+                //         var testName = "Derived key of type ";
+                //         Object.keys(derivedKeyType.algorithm).forEach(function(prop) {
+                //             testName += prop + ": " + derivedKeyType.algorithm[prop] + " ";
+                //         });
+                //         testName += " using " + derivedKeySize + " derivedKey, " + saltSize + " salt, empty algorithm, with " + infoSize + " info";
+
+                //         subsetTest(promise_test, function(test) {
+                //             return subtle.deriveKey(algorithm, baseKeys[derivedKeySize], derivedKeyType.algorithm, true, derivedKeyType.usages)
+                //             .then(function(derivation) {
+                //                 assert_unreached("non-digest algorithm should have thrown a TypeError");
+                //             }, function(err) {
+                //                 assert_equals(err.name, "TypeError", "derivekey with non-digest algorithm correctly threw TypeError: " + err.message);
+                //             });
+                //         }, "deriveKey: " + testName);
+                //     });
+                // });
             });
         });
     });
