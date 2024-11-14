@@ -949,6 +949,30 @@ impl From<RootedTraceableBox<AesGcmParams>> for SubtleAesGcmParams {
     }
 }
 
+impl SubtleAesGcmParams {
+    /// Used to create either a [SealingKey](aead::SealingKey) (for encryption) or a
+    /// [OpeningKey](aead::OpeningKey) (for decryption)
+    fn create_ring_key<K>(&self, key: &CryptoKey) -> Result<K, Error>
+    where K: BoundKey<InitializedNonceSequence> {
+        let algorithm = match key.handle().as_bytes().len() {
+            16 => &aead::AES_128_GCM,
+            32 => &aead::AES_256_GCM,
+            _ => return Err(Error::NotSupported),
+        };
+        let key = aead::UnboundKey::new(algorithm, key.handle().as_bytes())
+            .expect("Unexpected key length");
+        let iv: [u8; aead::NONCE_LEN] = self
+            .iv
+            .as_slice()
+            .try_into()
+            .map_err(|_| Error::Operation)?;
+        let nonce_sequence = InitializedNonceSequence::new(iv);
+        let ring_key = K::new(key, nonce_sequence);
+
+        Ok(ring_key)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct SubtleAesKeyGenParams {
     pub name: String,
@@ -1533,24 +1557,7 @@ impl SubtleCrypto {
         // tagLength as the t pre-requisite and the contents of plaintext as the input plaintext.
         // Step 7. Let ciphertext be equal to C | T, where '|' denotes concatenation.
         // NOTE: Ring does Step 7 for us
-
-        // Setup ring keys
-        let algorithm = match key.handle().as_bytes().len() {
-            16 => &aead::AES_128_GCM,
-            32 => &aead::AES_256_GCM,
-            _ => return Err(Error::NotSupported),
-        };
-        let key = aead::UnboundKey::new(algorithm, key.handle().as_bytes())
-            .expect("Unexpected key length");
-        let iv: [u8; aead::NONCE_LEN] = params
-            .iv
-            .as_slice()
-            .try_into()
-            .map_err(|_| Error::Operation)?;
-        let nonce_sequence = InitializedNonceSequence::new(iv);
-        let mut sealing_key = aead::SealingKey::new(key, nonce_sequence);
-
-        // Perform the actual encryption
+        let mut sealing_key: aead::SealingKey<_> = params.create_ring_key(key)?;
         let mut ciphertext = plaintext.to_vec();
         let tag = sealing_key
             .seal_in_place_separate_tag(additional_data, &mut ciphertext)
@@ -1561,9 +1568,100 @@ impl SubtleCrypto {
 
         // Step 8. Return the result of creating an ArrayBuffer containing ciphertext.
         create_buffer_source::<ArrayBufferU8>(cx, &ciphertext, handle)
-            .expect("failed to create buffer source for exported key.");
+            .expect("failed to create buffer source for encrypted ciphertext");
 
         Ok(())
+    }
+
+    /// <https://w3c.github.io/webcrypto/#aes-gcm-operations>
+    fn decrypt_aes_gcm(
+        &self,
+        params: &SubtleAesGcmParams,
+        key: &CryptoKey,
+        ciphertext: &[u8],
+        cx: JSContext,
+        handle: MutableHandleObject,
+    ) -> Result<(), Error> {
+        // Step 1.
+        // FIXME: ring doesn't allow us to supply our own tag length
+        let tag_length = match params.tag_length {
+            // If the tagLength member of normalizedAlgorithm is not present:
+            None => {
+                // Let tagLength be 128.
+                128
+            },
+            // If the tagLength member of normalizedAlgorithm is one of 32, 64, 96, 104, 112, 120 or 128:
+            Some(length) if matches!(length, 32 | 64 | 96 | 104 | 112 | 120 | 128) => {
+                // Let tagLength be equal to the tagLength member of normalizedAlgorithm
+                length as usize
+            },
+            // Otherwise:
+            _ => {
+                // throw an OperationError.
+                return Err(Error::Operation);
+            },
+        };
+
+        // Step 2. If ciphertext has a length less than tagLength bits, then throw an OperationError.
+        if ciphertext.len() < tag_length / 8 {
+            return Err(Error::Operation);
+        }
+
+        // Step 3. If the iv member of normalizedAlgorithm has a length greater than 2^64 - 1 bytes,
+        // then throw an OperationError.
+        if params.iv.len() > u64::MAX as usize {
+            return Err(Error::Operation);
+        }
+
+        // Step 4. If the additionalData member of normalizedAlgorithm is present and has a length greater than 2^64 - 1
+        // bytes, then throw an OperationError.
+        if params
+            .additional_data
+            .as_ref()
+            .is_some_and(|data| data.len() > u64::MAX as usize)
+        {
+            return Err(Error::Operation);
+        }
+
+        // Step 5. Let tag be the last tagLength bits of ciphertext.
+        // Step 6. Let actualCiphertext be the result of removing the last tagLength bits from ciphertext.
+        // NOTE: ring splits the ciphertext for us.
+
+        // Step 7. Let additionalData be the contents of the additionalData member of normalizedAlgorithm if present or
+        // the empty octet string otherwise.
+        let additional_data = params
+            .additional_data
+            .as_ref()
+            .map(|data| aead::Aad::from(data.as_slice()))
+            .unwrap_or(aead::Aad::from(&[]));
+
+        // Step 8.  Perform the Authenticated Decryption Function described in Section 7.2 of [NIST-SP800-38D] using AES
+        // as the block cipher, the contents of the iv member of normalizedAlgorithm as the IV input parameter, the
+        // contents of additionalData as the A input parameter, tagLength as the t pre-requisite, the contents of
+        // actualCiphertext as the input ciphertext, C and the contents of tag as the authentication tag, T.
+        let mut key: aead::OpeningKey<_> = params.create_ring_key(key)?;
+        let mut ciphertext = ciphertext.to_vec();
+        let plaintext = match key.open_in_place(additional_data, &mut ciphertext) {
+            // If the result of the algorithm is the indication of inauthenticity, "FAIL":
+            // NOTE: The ring docs don't mention this, but ring will return a Unspecified error if authentication
+            // fails. (https://github.com/briansmith/ring/blob/befdc87ac7cbca615ab5d68724f4355434d3a620/src/aead/algorithm.rs#L101-L108)
+            Err(ring::error::Unspecified) => {
+                // throw an OperationError
+                return Err(Error::Operation);
+            }
+            // Otherwise:
+            Ok(plaintext) => {
+                // Let plaintext be the output P of the Authenticated Decryption Function.
+                plaintext
+            }
+        };
+
+        // Step 9. Return the result of creating an ArrayBuffer containing plaintext.
+        create_buffer_source::<ArrayBufferU8>(cx, &plaintext, handle)
+            .expect("failed to create buffer source for decrypted plaintext");
+
+        Ok(())
+
     }
 
     /// <https://w3c.github.io/webcrypto/#aes-cbc-operations>
@@ -2213,7 +2311,7 @@ impl EncryptionAlgorithm {
         match self {
             Self::AesCbc(params) => subtle.decrypt_aes_cbc(params, key, data, cx, result),
             Self::AesCtr(params) => subtle.encrypt_decrypt_aes_ctr(params, key, data, cx, result),
-            Self::AesGcm(params) => todo!(),
+            Self::AesGcm(params) => subtle.decrypt_aes_gcm(params, key, data, cx, result),
         }
     }
 }
