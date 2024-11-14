@@ -953,7 +953,9 @@ impl SubtleAesGcmParams {
     /// Used to create either a [SealingKey](aead::SealingKey) (for encryption) or a
     /// [OpeningKey](aead::OpeningKey) (for decryption)
     fn create_ring_key<K>(&self, key: &CryptoKey) -> Result<K, Error>
-    where K: BoundKey<InitializedNonceSequence> {
+    where
+        K: BoundKey<InitializedNonceSequence>,
+    {
         let algorithm = match key.handle().as_bytes().len() {
             16 => &aead::AES_128_GCM,
             32 => &aead::AES_256_GCM,
@@ -1185,7 +1187,8 @@ fn normalize_algorithm_for_get_key_length(
 
             let name = algorithm.name.str();
             let normalized_algorithm = if name.eq_ignore_ascii_case(ALG_AES_CBC) ||
-                name.eq_ignore_ascii_case(ALG_AES_CTR) || name.eq_ignore_ascii_case(ALG_AES_GCM)
+                name.eq_ignore_ascii_case(ALG_AES_CTR) ||
+                name.eq_ignore_ascii_case(ALG_AES_GCM)
             {
                 let params = value_from_js_object!(AesDerivedKeyParams, cx, value);
                 GetKeyLengthAlgorithm::Aes(params.length)
@@ -1650,12 +1653,12 @@ impl SubtleCrypto {
             Err(ring::error::Unspecified) => {
                 // throw an OperationError
                 return Err(Error::Operation);
-            }
+            },
             // Otherwise:
             Ok(plaintext) => {
                 // Let plaintext be the output P of the Authenticated Decryption Function.
                 plaintext
-            }
+            },
         };
 
         // Step 9. Return the result of creating an ArrayBuffer containing plaintext.
@@ -1663,7 +1666,6 @@ impl SubtleCrypto {
             .expect("failed to create buffer source for decrypted plaintext");
 
         Ok(())
-
     }
 
     /// <https://w3c.github.io/webcrypto/#aes-cbc-operations>
@@ -2406,7 +2408,7 @@ const MAX_AEAD_NONCE: u128 = 2_u128 << (aead::NONCE_LEN * 8);
 /// Represents a infinite sequence of nonces
 ///
 /// Only the lower 12 bytes are used.
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 struct InitializedNonceSequence(u128);
 
 impl InitializedNonceSequence {
