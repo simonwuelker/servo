@@ -213,9 +213,38 @@ function define_tests() {
                             });
                         }, testName);
                     });
-
                 });
 
+                // Call deriveBits() with empty algorithm object
+                [1, 1000, 100000].forEach(function(iterations) {
+                    var testName = passwordSize + " password, " + saltSize + " salt, empty hash algorithm, with " + iterations + " iterations";
+
+                    subsetTest(promise_test, function(test) {
+                        return subtle.deriveBits({name: "PBKDF2", salt: salts[saltSize], hash: {}, iterations: parseInt(iterations)}, baseKeys[passwordSize], 256)
+                        .then(function(derivation) {
+                            assert_unreached("empty algorithm should have thrown a TypeError");
+                        }, function(err) {
+                            assert_equals(err.name, "TypeError", "deriveBits with non-digest algorithm correctly threw TypeError: " + err.message);
+                        });
+                    }, "deriveBits: " + testName);
+
+                    derivedKeyTypes.forEach(function(derivedKeyType) {
+                        var testName = "Derived key of type ";
+                        Object.keys(derivedKeyType.algorithm).forEach(function(prop) {
+                            testName += prop + ": " + derivedKeyType.algorithm[prop] + " ";
+                        });
+                        testName += " using " + passwordSize + " password, " + saltSize + " salt, empty hash algorithm, with " + iterations + " iterations";
+
+                        subsetTest(promise_test, function(test) {
+                            return subtle.deriveKey({name: "PBKDF2", salt: salts[saltSize], hash: {}, iterations: parseInt(iterations)}, baseKeys[passwordSize], derivedKeyType.algorithm, true, derivedKeyType.usages)
+                            .then(function(derivation) {
+                                assert_unreached("empty algorithm should have thrown a TypeError");
+                            }, function(err) {
+                                assert_equals(err.name, "TypeError", "derivekey with non-digest algorithm correctly threw TypeError: " + err.message);
+                            });
+                        }, "deriveKey:" + testName);
+                    });
+                });
             });
         });
     });

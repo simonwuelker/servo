@@ -118,6 +118,18 @@
         });
     });
 
+    // Call digest() with empty algorithm object
+    Object.keys(sourceData).forEach(function(size) {
+        promise_test(function(test) {
+            var promise = subtle.digest({}, sourceData[size])
+            .then(function(result) {
+                assert_unreached("digest() should not have worked for empty algorithm object");
+            }, function(err) {});
+
+            return promise;
+        }, "empty algorithm object with " + size);
+    });
+
 
     done();
 

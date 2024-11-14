@@ -150,7 +150,7 @@ function run_test(algorithmNames) {
         {name: "HMAC", hash: "MD5"},
         {name: "RSA", hash: "SHA-256", modulusLength: 2048, publicExponent: new Uint8Array([1,0,1])},
         {name: "RSA-PSS", hash: "SHA", modulusLength: 2048, publicExponent: new Uint8Array([1,0,1])},
-        {name: "EC", namedCurve: "P521"}
+        {name: "EC", namedCurve: "P521"},
     ];
 
 
@@ -165,6 +165,14 @@ function run_test(algorithmNames) {
             });
         });
     });
+
+    // Empty algorithm should fail with TypeError
+    allValidUsages(["decrypt", "sign", "deriveBits"], true, []) // Small search space, shouldn't matter because should fail before used
+        .forEach(function(usages) {
+            [false, true, "RED", 7].forEach(function(extractable){
+                testError({}, extractable, usages, "TypeError", "Empty algorithm");
+            });
+        });
 
 
     // Algorithms normalize okay, but usages bad (though not empty).

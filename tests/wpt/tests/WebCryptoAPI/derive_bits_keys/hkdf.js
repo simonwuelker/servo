@@ -217,9 +217,42 @@ function define_tests() {
                             });
                         }, testName);
                     });
-
                 });
 
+                // Empty (invalid) algorithm
+                Object.keys(infos).forEach(function(infoSize) {
+                    var testName = derivedKeySize + " derivedKey, " + saltSize + " salt, empty algorithm, with " + infoSize + " info";
+                    var algorithm = {name: "HKDF", salt: salts[saltSize], hash: {}};
+                    if (infoSize !== "missing") {
+                        algorithm.info = infos[infoSize];
+                    }
+
+                    subsetTest(promise_test, function(test) {
+                        return subtle.deriveBits(algorithm, baseKeys[derivedKeySize], 256)
+                        .then(function(derivation) {
+                            assert_unreached("non-digest algorithm should have thrown a TypeError");
+                        }, function(err) {
+                            assert_equals(err.name, "TypeError", "derivekey with non-digest algorithm correctly threw TypeError: " + err.message);
+                        });
+                    }, "deriveBits: " + testName);
+
+                    derivedKeyTypes.forEach(function(derivedKeyType) {
+                        var testName = "Derived key of type ";
+                        Object.keys(derivedKeyType.algorithm).forEach(function(prop) {
+                            testName += prop + ": " + derivedKeyType.algorithm[prop] + " ";
+                        });
+                        testName += " using " + derivedKeySize + " derivedKey, " + saltSize + " salt, empty algorithm, with " + infoSize + " info";
+
+                        subsetTest(promise_test, function(test) {
+                            return subtle.deriveKey(algorithm, baseKeys[derivedKeySize], derivedKeyType.algorithm, true, derivedKeyType.usages)
+                            .then(function(derivation) {
+                                assert_unreached("non-digest algorithm should have thrown a TypeError");
+                            }, function(err) {
+                                assert_equals(err.name, "TypeError", "derivekey with non-digest algorithm correctly threw TypeError: " + err.message);
+                            });
+                        }, "deriveKey: " + testName);
+                    });
+                });
             });
         });
     });
