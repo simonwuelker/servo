@@ -1362,13 +1362,15 @@ fn normalize_algorithm_for_generate_key(
     let algorithm = value_from_js_object!(Algorithm, cx, value);
 
     let name = algorithm.name.str();
-    let normalized_algorithm =
-        if name.eq_ignore_ascii_case(ALG_AES_CBC) || name.eq_ignore_ascii_case(ALG_AES_CTR) {
-            let params = value_from_js_object!(AesKeyGenParams, cx, value);
-            KeyGenerationAlgorithm::Aes(params.into())
-        } else {
-            return Err(Error::NotSupported);
-        };
+    let normalized_algorithm = if name.eq_ignore_ascii_case(ALG_AES_CBC) ||
+        name.eq_ignore_ascii_case(ALG_AES_CTR) ||
+        name.eq_ignore_ascii_case(ALG_AES_GCM)
+    {
+        let params = value_from_js_object!(AesKeyGenParams, cx, value);
+        KeyGenerationAlgorithm::Aes(params.into())
+    } else {
+        return Err(Error::NotSupported);
+    };
 
     Ok(normalized_algorithm)
 }
