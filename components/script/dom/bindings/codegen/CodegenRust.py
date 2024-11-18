@@ -2830,7 +2830,10 @@ class CGConstructorEnabled(CGAbstractMethod):
         pref = iface.getExtendedAttribute("Pref")
         if pref:
             assert isinstance(pref, list) and len(pref) == 1
-            conditions.append(f'pref!({pref[0]})')
+            if "crypto" in str(pref[0]):
+                conditions.append(f'dbg!(pref!({pref[0]}))')
+            else:
+                conditions.append(f'pref!({pref[0]})')
 
         func = iface.getExtendedAttribute("Func")
         if func:
