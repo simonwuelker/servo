@@ -21,6 +21,7 @@ use super::{
 };
 use crate::cell::ArcRefCell;
 use crate::context::LayoutContext;
+use crate::lists::CounterCascadeState;
 use crate::dom::{BoxSlot, NodeExt};
 use crate::dom_traversal::{Contents, NodeAndStyleInfo, NonReplacedContents, TraversalHandler};
 use crate::flow::{BlockContainerBuilder, BlockFormattingContext};
@@ -961,8 +962,13 @@ where
                 &self.info.style,
             );
         let anonymous_info = self.info.new_anonymous(anonymous_style);
-        let mut builder =
-            BlockContainerBuilder::new(context, &anonymous_info, self.text_decoration_line);
+        let mut builder = BlockContainerBuilder::new(
+            context,
+            &anonymous_info,
+            self.text_decoration_line,
+            // FIXME
+            CounterCascadeState::default(),
+        );
 
         for cell_content in self.current_anonymous_cell_content.drain(..) {
             match cell_content {
