@@ -764,8 +764,7 @@ impl BackgroundHangMonitorExitSignal for BHMExitSignal {
     }
 }
 
-#[allow(unsafe_code)]
-unsafe extern "C" fn interrupt_callback(_cx: *mut UnsafeJSContext) -> bool {
+extern "C" fn interrupt_callback(_cx: *mut UnsafeJSContext) -> bool {
     let res = ScriptThread::can_continue_running();
     if !res {
         ScriptThread::prepare_for_shutdown();
