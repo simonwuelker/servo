@@ -1371,10 +1371,7 @@ impl ScriptThread {
 
     /// Check if we are closing.
     fn can_continue_running_inner(&self) -> bool {
-        if self.closing.load(Ordering::SeqCst) {
-            return false;
-        }
-        true
+        !self.closing.load(Ordering::SeqCst)
     }
 
     /// We are closing, ensure no script can run and potentially hang.
