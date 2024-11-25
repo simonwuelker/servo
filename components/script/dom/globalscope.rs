@@ -97,6 +97,7 @@ use crate::dom::crypto::Crypto;
 use crate::dom::dedicatedworkerglobalscope::{
     DedicatedWorkerControlMsg, DedicatedWorkerGlobalScope,
 };
+use crate::dom::mediasource::MediaSource;
 use crate::dom::errorevent::ErrorEvent;
 use crate::dom::event::{Event, EventBubbles, EventCancelable, EventStatus};
 use crate::dom::eventsource::EventSource;
@@ -407,6 +408,12 @@ enum FileListenerState {
 }
 
 #[derive(JSTraceable, MallocSizeOf)]
+pub enum BlobEntryContent {
+    Blob(BlobInfo),
+    MediaSource(WeakRef<MediaSource>),
+}
+
+#[derive(JSTraceable, MallocSizeOf)]
 /// A holder of a weak reference for a DOM blob or file.
 pub enum BlobTracker {
     /// A weak ref to a DOM file.
@@ -423,16 +430,22 @@ pub struct BlobInfo {
     /// The data and logic backing the DOM object.
     #[no_trace]
     blob_impl: BlobImpl,
-    /// Whether this blob has an outstanding URL,
+}
+
+/// The info pertaining to an entry in the blob store
+#[derive(JSTraceable, MallocSizeOf)]
+pub struct BlobStoreEntry {
+    /// Whether this blob entry has an outstanding URL,
     /// <https://w3c.github.io/FileAPI/#url>.
     has_url: bool,
+    content: BlobEntryContent,
 }
 
 /// State representing whether this global is currently managing blobs.
 #[derive(JSTraceable, MallocSizeOf)]
 pub enum BlobState {
     /// A map of managed blobs.
-    Managed(HashMapTracedValues<BlobId, BlobInfo>),
+    Managed(HashMapTracedValues<BlobId, BlobStoreEntry>),
     /// This global is not managing any blobs at this time.
     UnManaged,
 }
@@ -1574,23 +1587,24 @@ impl GlobalScope {
         let bytes = self
             .get_blob_bytes(blob_id)
             .expect("Could not read bytes from blob as part of serialization steps.");
-        let type_string = self.get_blob_type_string(blob_id);
+
+        let blob_state = self.blob_state.borrow();
+        let blob_info = blob_state.get_blob(blob_id);
 
         // Note: the new BlobImpl is a clone, but with it's own BlobId.
-        BlobImpl::new_from_bytes(bytes, type_string)
+        BlobImpl::new_from_bytes(bytes, blob_info.blob_impl.type_string())
     }
 
-    fn track_blob_info(&self, blob_info: BlobInfo, blob_id: BlobId) {
+    fn track_blob_info(&self, entry: BlobStoreEntry, blob_id: BlobId) {
         let mut blob_state = self.blob_state.borrow_mut();
-
         match &mut *blob_state {
             BlobState::UnManaged => {
                 let mut blobs_map = HashMapTracedValues::new();
-                blobs_map.insert(blob_id, blob_info);
+                blobs_map.insert(blob_id, entry);
                 *blob_state = BlobState::Managed(blobs_map);
             },
             BlobState::Managed(blobs_map) => {
-                blobs_map.insert(blob_id, blob_info);
+                blobs_map.insert(blob_id, entry);
             },
         }
     }
@@ -1602,10 +1616,13 @@ impl GlobalScope {
         let blob_info = BlobInfo {
             blob_impl,
             tracker: BlobTracker::Blob(WeakRef::new(dom_blob)),
+        };
+        let entry = BlobStoreEntry {
+            content: BlobEntryContent::Blob(blob_info),
             has_url: false,
         };
 
-        self.track_blob_info(blob_info, blob_id);
+        self.track_blob_info(entry, blob_id);
     }
 
     /// Start tracking a file
@@ -1615,26 +1632,40 @@ impl GlobalScope {
         let blob_info = BlobInfo {
             blob_impl,
             tracker: BlobTracker::File(WeakRef::new(file)),
+        };
+        let entry = BlobStoreEntry {
+            content: BlobEntryContent::Blob(blob_info),
             has_url: false,
+        };
+
+        self.track_blob_info(entry, blob_id);
+    }
+
+    /// Start tracking a `MediaSource` object
+    pub fn track_mediasource(&self, media_source: &MediaSource, blob_id: BlobId) {
+        let content = BlobEntryContent::MediaSource(
+            WeakRef::new(media_source),
+        );
+        let blob_info = BlobStoreEntry {
+            has_url: false,
+            content,
         };
 
         self.track_blob_info(blob_info, blob_id);
     }
 
     /// Clean-up any file or blob that is unreachable from script,
-    /// unless it has an oustanding blob url.
+    /// unless it has an outstanding blob url.
     /// <https://w3c.github.io/FileAPI/#lifeTime>
     fn perform_a_blob_garbage_collection_checkpoint(&self) {
         let mut blob_state = self.blob_state.borrow_mut();
         if let BlobState::Managed(blobs_map) = &mut *blob_state {
-            blobs_map.0.retain(|_id, blob_info| {
-                let garbage_collected = match &blob_info.tracker {
-                    BlobTracker::File(weak) => weak.root().is_none(),
-                    BlobTracker::Blob(weak) => weak.root().is_none(),
-                };
-                if garbage_collected && !blob_info.has_url {
-                    if let BlobData::File(ref f) = blob_info.blob_impl.blob_data() {
-                        self.decrement_file_ref(f.get_id());
+            blobs_map.0.retain(|_id, entry| {
+                if entry.content.garbage_collected() && !entry.has_url {
+                    if let BlobEntryContent::Blob(info) = &entry.content {
+                        if let BlobData::File(f) = info.blob_impl.blob_data() {
+                            self.decrement_file_ref(f.get_id());
+                        }
                     }
                     false
                 } else {
@@ -1652,9 +1683,11 @@ impl GlobalScope {
     pub fn clean_up_all_file_resources(&self) {
         let mut blob_state = self.blob_state.borrow_mut();
         if let BlobState::Managed(blobs_map) = &mut *blob_state {
-            blobs_map.drain().for_each(|(_id, blob_info)| {
-                if let BlobData::File(ref f) = blob_info.blob_impl.blob_data() {
-                    self.decrement_file_ref(f.get_id());
+            blobs_map.drain().for_each(|(_id, entry)| {
+                if let BlobEntryContent::Blob(info) = &entry.content {
+                    if let BlobData::File(ref f) = info.blob_impl.blob_data() {
+                        self.decrement_file_ref(f.get_id());
+                    }
                 }
             });
         }
@@ -1676,16 +1709,11 @@ impl GlobalScope {
     pub fn get_blob_bytes(&self, blob_id: &BlobId) -> Result<Vec<u8>, ()> {
         let parent = {
             let blob_state = self.blob_state.borrow();
-            if let BlobState::Managed(blobs_map) = &*blob_state {
-                let blob_info = blobs_map
-                    .get(blob_id)
-                    .expect("get_blob_bytes for an unknown blob.");
-                match blob_info.blob_impl.blob_data() {
-                    BlobData::Sliced(ref parent, ref rel_pos) => Some((*parent, rel_pos.clone())),
-                    _ => None,
-                }
-            } else {
-                panic!("get_blob_bytes called on a global not managing any blobs.");
+            let blob = blob_state.get_blob(blob_id);
+
+            match blob.blob_impl.blob_data() {
+                BlobData::Sliced(ref parent, ref rel_pos) => Some((*parent, rel_pos.clone())),
+                _ => None,
             }
         };
 
@@ -1701,32 +1729,27 @@ impl GlobalScope {
     /// Get bytes from a non-sliced blob
     fn get_blob_bytes_non_sliced(&self, blob_id: &BlobId) -> Result<Vec<u8>, ()> {
         let blob_state = self.blob_state.borrow();
-        if let BlobState::Managed(blobs_map) = &*blob_state {
-            let blob_info = blobs_map
-                .get(blob_id)
-                .expect("get_blob_bytes_non_sliced called for a unknown blob.");
-            match blob_info.blob_impl.blob_data() {
-                BlobData::File(ref f) => {
-                    let (buffer, is_new_buffer) = match f.get_cache() {
-                        Some(bytes) => (bytes, false),
-                        None => {
-                            let bytes = self.read_file(f.get_id())?;
-                            (bytes, true)
-                        },
-                    };
+        let blob = blob_state.get_blob(blob_id);
 
-                    // Cache
-                    if is_new_buffer {
-                        f.cache_bytes(buffer.clone());
-                    }
+        match blob.blob_impl.blob_data() {
+            BlobData::File(ref f) => {
+                let (buffer, is_new_buffer) = match f.get_cache() {
+                    Some(bytes) => (bytes, false),
+                    None => {
+                        let bytes = self.read_file(f.get_id())?;
+                        (bytes, true)
+                    },
+                };
 
-                    Ok(buffer)
-                },
-                BlobData::Memory(ref s) => Ok(s.clone()),
-                BlobData::Sliced(_, _) => panic!("This blob doesn't have a parent."),
-            }
-        } else {
-            panic!("get_blob_bytes_non_sliced called on a global not managing any blobs.");
+                // Cache
+                if is_new_buffer {
+                    f.cache_bytes(buffer.clone());
+                }
+
+                Ok(buffer)
+            },
+            BlobData::Memory(ref s) => Ok(s.clone()),
+            BlobData::Sliced(_, _) => panic!("This blob doesn't have a parent."),
         }
     }
 
@@ -1739,16 +1762,10 @@ impl GlobalScope {
     fn get_blob_bytes_or_file_id(&self, blob_id: &BlobId) -> BlobResult {
         let parent = {
             let blob_state = self.blob_state.borrow();
-            if let BlobState::Managed(blobs_map) = &*blob_state {
-                let blob_info = blobs_map
-                    .get(blob_id)
-                    .expect("get_blob_bytes_or_file_id for an unknown blob.");
-                match blob_info.blob_impl.blob_data() {
-                    BlobData::Sliced(ref parent, ref rel_pos) => Some((*parent, rel_pos.clone())),
-                    _ => None,
-                }
-            } else {
-                panic!("get_blob_bytes_or_file_id called on a global not managing any blobs.");
+            let blob_info = &blob_state.get_blob(blob_id);
+            match blob_info.blob_impl.blob_data() {
+                BlobData::Sliced(ref parent, ref rel_pos) => Some((*parent, rel_pos.clone())),
+                _ => None,
             }
         };
 
@@ -1773,94 +1790,29 @@ impl GlobalScope {
     /// TODO: merge with `get_blob_bytes` by way of broader integration with blob streams.
     fn get_blob_bytes_non_sliced_or_file_id(&self, blob_id: &BlobId) -> BlobResult {
         let blob_state = self.blob_state.borrow();
-        if let BlobState::Managed(blobs_map) = &*blob_state {
-            let blob_info = blobs_map
-                .get(blob_id)
-                .expect("get_blob_bytes_non_sliced_or_file_id called for a unknown blob.");
-            match blob_info.blob_impl.blob_data() {
-                BlobData::File(ref f) => match f.get_cache() {
-                    Some(bytes) => BlobResult::Bytes(bytes.clone()),
-                    None => BlobResult::File(f.get_id(), f.get_size() as usize),
-                },
-                BlobData::Memory(ref s) => BlobResult::Bytes(s.clone()),
-                BlobData::Sliced(_, _) => panic!("This blob doesn't have a parent."),
-            }
-        } else {
-            panic!(
-                "get_blob_bytes_non_sliced_or_file_id called on a global not managing any blobs."
-            );
+        let blob_info = blob_state.get_blob(blob_id);
+        match blob_info.blob_impl.blob_data() {
+            BlobData::File(ref f) => match f.get_cache() {
+                Some(bytes) => BlobResult::Bytes(bytes.clone()),
+                None => BlobResult::File(f.get_id(), f.get_size() as usize),
+            },
+            BlobData::Memory(ref s) => BlobResult::Bytes(s.clone()),
+            BlobData::Sliced(_, _) => panic!("This blob doesn't have a parent."),
         }
+
     }
 
     /// Get a copy of the type_string of a blob.
     pub fn get_blob_type_string(&self, blob_id: &BlobId) -> String {
         let blob_state = self.blob_state.borrow();
-        if let BlobState::Managed(blobs_map) = &*blob_state {
-            let blob_info = blobs_map
-                .get(blob_id)
-                .expect("get_blob_type_string called for a unknown blob.");
-            blob_info.blob_impl.type_string()
-        } else {
-            panic!("get_blob_type_string called on a global not managing any blobs.");
-        }
+        blob_state.get_blob(blob_id).blob_impl.type_string()
     }
 
     /// <https://w3c.github.io/FileAPI/#dfn-size>
     pub fn get_blob_size(&self, blob_id: &BlobId) -> u64 {
         let blob_state = self.blob_state.borrow();
-        if let BlobState::Managed(blobs_map) = &*blob_state {
-            let parent = {
-                let blob_info = blobs_map
-                    .get(blob_id)
-                    .expect("get_blob_size called for a unknown blob.");
-                match blob_info.blob_impl.blob_data() {
-                    BlobData::Sliced(ref parent, ref rel_pos) => Some((*parent, rel_pos.clone())),
-                    _ => None,
-                }
-            };
-            match parent {
-                Some((parent_id, rel_pos)) => {
-                    let parent_info = blobs_map
-                        .get(&parent_id)
-                        .expect("Parent of blob whose size is unknown.");
-                    let parent_size = match parent_info.blob_impl.blob_data() {
-                        BlobData::File(ref f) => f.get_size(),
-                        BlobData::Memory(ref v) => v.len() as u64,
-                        BlobData::Sliced(_, _) => panic!("Blob ancestry should be only one level."),
-                    };
-                    rel_pos.to_abs_range(parent_size as usize).len() as u64
-                },
-                None => {
-                    let blob_info = blobs_map.get(blob_id).expect("Blob whose size is unknown.");
-                    match blob_info.blob_impl.blob_data() {
-                        BlobData::File(ref f) => f.get_size(),
-                        BlobData::Memory(ref v) => v.len() as u64,
-                        BlobData::Sliced(_, _) => panic!(
-                            "It was previously checked that this blob does not have a parent."
-                        ),
-                    }
-                },
-            }
-        } else {
-            panic!("get_blob_size called on a global not managing any blobs.");
-        }
-    }
-
-    pub fn get_blob_url_id(&self, blob_id: &BlobId) -> Uuid {
-        let mut blob_state = self.blob_state.borrow_mut();
-
-        let BlobState::Managed(blobs_map) = &mut *blob_state else {
-            panic!("get_blob_url_id called on a global not managing any blobs.");
-        };
-
         let parent = {
-            let blob_info = blobs_map
-                .get_mut(blob_id)
-                .expect("get_blob_url_id called for a unknown blob.");
-
-            // Keep track of blobs with outstanding URLs.
-            blob_info.has_url = true;
-
+            let blob_info = blob_state.get_blob(blob_id);
             match blob_info.blob_impl.blob_data() {
                 BlobData::Sliced(ref parent, ref rel_pos) => Some((*parent, rel_pos.clone())),
                 _ => None,
@@ -1868,26 +1820,69 @@ impl GlobalScope {
         };
         match parent {
             Some((parent_id, rel_pos)) => {
-                let parent_info = blobs_map
-                    .get_mut(&parent_id)
-                    .expect("Parent of blob whose url is requested is unknown.");
-                let parent_file_id = self.promote(parent_info, /* set_valid is */ false);
+                let parent_info = blob_state.get_blob(&parent_id);
                 let parent_size = match parent_info.blob_impl.blob_data() {
                     BlobData::File(ref f) => f.get_size(),
                     BlobData::Memory(ref v) => v.len() as u64,
                     BlobData::Sliced(_, _) => panic!("Blob ancestry should be only one level."),
                 };
-                let parent_size = rel_pos.to_abs_range(parent_size as usize).len() as u64;
-                let blob_info = blobs_map
+                rel_pos.to_abs_range(parent_size as usize).len() as u64
+            },
+            None => {
+                let blob_info = blob_state.get_blob(blob_id);
+                match blob_info.blob_impl.blob_data() {
+                    BlobData::File(ref f) => f.get_size(),
+                    BlobData::Memory(ref v) => v.len() as u64,
+                    BlobData::Sliced(_, _) => panic!(
+                        "It was previously checked that this blob does not have a parent."
+                    ),
+                }
+            },
+        }
+
+    }
+
+    pub fn get_blob_url_id(&self, blob_id: &BlobId) -> Uuid {
+        let mut blob_state = self.blob_state.borrow_mut();
+        let parent = {
+            let BlobState::Managed(blobs_map) = &mut *blob_state else {
+                panic!("get_blob_url_id called on a global not managing any blobs.");
+            };
+            let blob_entry = blobs_map
                     .get_mut(blob_id)
                     .expect("Blob whose url is requested is unknown.");
+
+            // Keep track of blobs with outstanding URLs.
+            blob_entry.has_url = true;
+
+            if let BlobEntryContent::Blob(blob_info) = &blob_entry.content {
+                match blob_info.blob_impl.blob_data() {
+                    BlobData::Sliced(ref parent, ref rel_pos) => Some((*parent, rel_pos.clone())),
+                    _ => None,
+                }
+            } else {
+                // FIXME
+                return Uuid::new_v4();
+            }
+
+        };
+
+        match parent {
+            Some((parent_id, rel_pos)) => {
+                let parent_entry = blob_state.get_blob_mut(&parent_id);
+                let parent_file_id = self.promote(parent_entry, false);
+                let parent_size = match parent_entry.blob_impl.blob_data() {
+                    BlobData::File(ref f) => f.get_size(),
+                    BlobData::Memory(ref v) => v.len() as u64,
+                    BlobData::Sliced(_, _) => panic!("Blob ancestry should be only one level."),
+                };
+                let parent_size = rel_pos.to_abs_range(parent_size as usize).len() as u64;
+                let blob_info = blob_state.get_blob_mut(blob_id);
                 self.create_sliced_url_id(blob_info, &parent_file_id, &rel_pos, parent_size)
             },
             None => {
-                let blob_info = blobs_map
-                    .get_mut(blob_id)
-                    .expect("Blob whose url is requested is unknown.");
-                self.promote(blob_info, /* set_valid is */ true)
+                let blob_entry = blob_state.get_blob_mut(&blob_id);
+                self.promote(blob_entry,true)
             },
         }
     }
@@ -3462,4 +3457,50 @@ unsafe fn global_scope_from_global_static(global: *mut JSObject) -> DomRoot<Glob
         0
     );
     root_from_object_static(global).unwrap()
+}
+
+impl BlobState {
+    fn get_blob<'a>(&'a self, blob_id: &BlobId) -> &'a BlobInfo {
+        let BlobState::Managed(blobs_map) = self  else {
+            panic!("accessing blob on a global not managing any blobs.");
+        };
+        let blob_entry = blobs_map
+            .get(blob_id)
+            .expect("get_blob_size called for a unknown blob.");
+
+        let BlobEntryContent::Blob(blob) = &blob_entry.content else {
+            panic!("get_blob called with id of a mediasource blob");
+        };
+
+        blob
+    }
+
+    fn get_blob_mut<'a>(&'a mut self, blob_id: &BlobId) -> &'a mut BlobInfo {
+        let BlobState::Managed(blobs_map) = self  else {
+            panic!("accessing blob on a global not managing any blobs.");
+        };
+        let blob_entry = blobs_map
+            .get_mut(blob_id)
+            .expect("get_blob_size called for a unknown blob.");
+
+        let BlobEntryContent::Blob(blob) = &mut blob_entry.content else {
+            panic!("get_blob called with id of a mediasource blob");
+        };
+
+        blob
+    }
+}
+
+impl BlobEntryContent {
+    fn garbage_collected(&self) -> bool {
+        match self {
+            Self::Blob(blob_info) => {
+                match &blob_info.tracker {
+                    BlobTracker::File(file) => file.root().is_none(),
+                    BlobTracker::Blob(blob) => blob.root().is_none(),
+                }
+            },
+            Self::MediaSource(dom_object) => dom_object.root().is_none(),
+        }
+    }
 }
