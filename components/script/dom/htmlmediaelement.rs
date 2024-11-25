@@ -66,6 +66,7 @@ use crate::dom::bindings::codegen::InheritTypes::{
 use crate::dom::bindings::codegen::UnionTypes::{
     MediaStreamOrMediaSourceHandleOrBlob, VideoTrackOrAudioTrackOrTextTrack,
 };
+use crate::dom::bindings::codegen::UnionTypes::BlobOrMediaSource;
 use crate::dom::bindings::error::{Error, ErrorResult, Fallible};
 use crate::dom::bindings::inheritance::Castable;
 use crate::dom::bindings::num::Finite;
@@ -973,7 +974,7 @@ impl HTMLMediaElement {
                 if let Some(ref src_object) = *self.src_object.borrow() {
                     match src_object {
                         SrcObject::Blob(blob) => {
-                            let blob_url = URL::CreateObjectURL(&self.global(), blob);
+                            let blob_url = URL::CreateObjectURL(&self.global(), BlobOrMediaSource::Blob(DomRoot::from_ref(&*blob)));
                             *self.blob_url.borrow_mut() =
                                 Some(ServoUrl::parse(&blob_url).expect("infallible"));
                             self.fetch_request(None, None);
@@ -997,6 +998,7 @@ impl HTMLMediaElement {
                         },
                         SrcObject::MediaSourceHandle(media_source_handle) => {
                             // TODO
+                            log::error!("not implemented: media source handle as src for Media Element");
                         },
                     }
                 }
@@ -2138,7 +2140,7 @@ impl HTMLMediaElementMethods<crate::DomTypeHolder> for HTMLMediaElement {
         }
     }
 
-    /// <https://html.spec.whatwg.org/multipage/#dom-media-srcobject>
+    // https://html.spec.whatwg.org/multipage/#dom-media-srcobject
     fn GetSrcObject(&self) -> Option<MediaStreamOrMediaSourceHandleOrBlob> {
         (*self.src_object.borrow())
             .as_ref()

@@ -4,6 +4,7 @@
 
 use std::default::Default;
 
+use base::id::BlobId;
 use dom_struct::dom_struct;
 use js::rust::HandleObject;
 use net_traits::blob_url_store::{get_blob_origin, parse_blob_url};
@@ -19,7 +20,7 @@ use crate::dom::bindings::error::{Error, ErrorResult, Fallible};
 use crate::dom::bindings::reflector::{reflect_dom_object_with_proto, DomGlobal, Reflector};
 use crate::dom::bindings::root::{DomRoot, MutNullableDom};
 use crate::dom::bindings::str::{DOMString, USVString};
-use crate::dom::blob::Blob;
+use crate::dom::bindings::codegen::UnionTypes::BlobOrMediaSource;
 use crate::dom::globalscope::GlobalScope;
 use crate::dom::urlhelper::UrlHelper;
 use crate::dom::urlsearchparams::URLSearchParams;
@@ -181,12 +182,22 @@ impl URLMethods<crate::DomTypeHolder> for URL {
     }
 
     /// <https://w3c.github.io/FileAPI/#dfn-createObjectURL>
-    fn CreateObjectURL(global: &GlobalScope, blob: &Blob) -> DOMString {
+    fn CreateObjectURL(global: &GlobalScope, blob_or_mediasource: BlobOrMediaSource) -> DOMString {
         // XXX: Second field is an unicode-serialized Origin, it is a temporary workaround
         //      and should not be trusted. See issue https://github.com/servo/servo/issues/11722
         let origin = get_blob_origin(&global.get_url());
 
-        let id = blob.get_blob_url_id();
+
+        let id = match blob_or_mediasource {
+            BlobOrMediaSource::Blob(blob) => blob.get_blob_url_id(),
+            BlobOrMediaSource::MediaSource(media_source) => {
+                // Blobs are inserted into storage when they are constructed,
+                // media elements are inserted here
+                let blob_id = BlobId::new();
+                global.track_mediasource(&media_source, blob_id);
+                global.get_blob_url_id(&blob_id)
+            }
+        };
 
         DOMString::from(URL::unicode_serialization_blob_url(&origin, &id))
     }
