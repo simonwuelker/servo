@@ -21,7 +21,6 @@ use super::{
 };
 use crate::cell::ArcRefCell;
 use crate::context::LayoutContext;
-use crate::lists::CounterCascadeState;
 use crate::dom::{BoxSlot, NodeExt};
 use crate::dom_traversal::{Contents, NodeAndStyleInfo, NonReplacedContents, TraversalHandler};
 use crate::flow::{BlockContainerBuilder, BlockFormattingContext};
@@ -30,6 +29,7 @@ use crate::formatting_contexts::{
     NonReplacedFormattingContextContents,
 };
 use crate::fragment_tree::BaseFragmentInfo;
+use crate::lists::CounterSet;
 use crate::style_ext::{DisplayGeneratingBox, DisplayLayoutInternal};
 
 /// A reference to a slot and its coordinates in the table
@@ -73,18 +73,20 @@ impl<'dom, Node> AnonymousTableContent<'dom, Node> {
 }
 
 impl Table {
-    pub(crate) fn construct<'dom>(
+    pub(crate) fn construct<'dom, Node>(
         context: &LayoutContext,
-        info: &NodeAndStyleInfo<impl NodeExt<'dom>>,
+        info: &NodeAndStyleInfo<Node>,
         grid_style: Arc<ComputedValues>,
         contents: NonReplacedContents,
         propagated_text_decoration_line: TextDecorationLine,
-    ) -> Self {
+        counters: &mut CounterSet<Node>
+    ) -> Self
+    where Node: NodeExt<'dom> {
         let text_decoration_line =
             propagated_text_decoration_line | info.style.clone_text_decoration_line();
         let mut traversal =
             TableBuilderTraversal::new(context, info, grid_style, text_decoration_line);
-        contents.traverse(context, info, &mut traversal);
+        contents.traverse(context, info, &mut traversal, counters);
         traversal.finish()
     }
 
@@ -769,6 +771,7 @@ where
                         self.context,
                         info,
                         self,
+                        &mut CounterSet::default(), // FIXME
                     );
                     self.finish_anonymous_row_if_needed();
 
@@ -786,10 +789,12 @@ where
 
                     let mut row_builder =
                         TableRowBuilder::new(self, info, self.current_text_decoration_line);
+
                     NonReplacedContents::try_from(contents).unwrap().traverse(
                         context,
                         info,
                         &mut row_builder,
+                        &mut CounterSet::default(), // FIXME
                     );
                     row_builder.finish();
 
@@ -825,6 +830,7 @@ where
                         self.context,
                         info,
                         &mut column_group_builder,
+                        &mut CounterSet::default(), // FIXME
                     );
 
                     let first_column = self.builder.table.columns.len();
@@ -962,13 +968,8 @@ where
                 &self.info.style,
             );
         let anonymous_info = self.info.new_anonymous(anonymous_style);
-        let mut builder = BlockContainerBuilder::new(
-            context,
-            &anonymous_info,
-            self.text_decoration_line,
-            // FIXME
-            CounterCascadeState::default(),
-        );
+        let mut builder =
+            BlockContainerBuilder::new(context, &anonymous_info, self.text_decoration_line);
 
         for cell_content in self.current_anonymous_cell_content.drain(..) {
             match cell_content {

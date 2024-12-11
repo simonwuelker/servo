@@ -28,6 +28,7 @@ use crate::geom::{
     AuOrAuto, LengthPercentageOrAuto, LogicalRect, LogicalSides, LogicalVec2, PhysicalPoint,
     PhysicalRect, PhysicalVec, Size, ToLogical, ToLogicalWithContainingBlock,
 };
+use crate::lists::CounterSet;
 use crate::sizing::ContentSizes;
 use crate::style_ext::{ComputedValuesExt, DisplayInside};
 use crate::{ConstraintSpace, ContainingBlock, DefiniteContainingBlock, SizeConstraint};
@@ -60,12 +61,14 @@ impl AbsolutelyPositionedBox {
         Self { context }
     }
 
-    pub fn construct<'dom>(
+    pub fn construct<'dom, Node>(
         context: &LayoutContext,
-        node_info: &NodeAndStyleInfo<impl NodeExt<'dom>>,
+        node_info: &NodeAndStyleInfo<Node>,
         display_inside: DisplayInside,
         contents: Contents,
-    ) -> Self {
+        counters: &mut CounterSet<Node>,
+    ) -> Self
+    where Node: NodeExt<'dom>{
         Self {
             context: IndependentFormattingContext::construct(
                 context,
@@ -74,6 +77,7 @@ impl AbsolutelyPositionedBox {
                 contents,
                 // Text decorations are not propagated to any out-of-flow descendants.
                 TextDecorationLine::NONE,
+                counters
             ),
         }
     }

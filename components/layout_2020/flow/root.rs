@@ -27,6 +27,7 @@ use crate::flow::{BlockContainer, BlockFormattingContext, BlockLevelBox};
 use crate::formatting_contexts::IndependentFormattingContext;
 use crate::fragment_tree::FragmentTree;
 use crate::geom::{LogicalVec2, PhysicalPoint, PhysicalRect, PhysicalSize};
+use crate::lists::CounterSet;
 use crate::positioned::{AbsolutelyPositionedBox, PositioningContext};
 use crate::replaced::ReplacedContent;
 use crate::style_ext::{ComputedValuesExt, Display, DisplayGeneratingBox, DisplayInside};
@@ -226,7 +227,12 @@ impl BoxTree {
                     .map_or_else(|| NonReplacedContents::OfElement.into(), Contents::Replaced);
                 let info = NodeAndStyleInfo::new(dirty_node, Arc::clone(&primary_style));
                 let out_of_flow_absolutely_positioned_box = ArcRefCell::new(
-                    AbsolutelyPositionedBox::construct(context, &info, display_inside, contents),
+                    AbsolutelyPositionedBox::construct(context,
+                        &info,
+                         display_inside,
+                         contents,
+                         &mut CounterSet::default(), // FIXME
+                        ),
                 );
                 match update_point {
                     UpdatePoint::AbsolutelyPositionedBlockLevelBox(block_level_box) => {
@@ -294,7 +300,7 @@ fn construct_for_root_element<'dom>(
         .map_or_else(|| NonReplacedContents::OfElement.into(), Contents::Replaced);
     let root_box = if box_style.position.is_absolutely_positioned() {
         BlockLevelBox::OutOfFlowAbsolutelyPositionedBox(ArcRefCell::new(
-            AbsolutelyPositionedBox::construct(context, &info, display_inside, contents),
+            AbsolutelyPositionedBox::construct(context, &info, display_inside, contents, &mut CounterSet::default()),
         ))
     } else if box_style.float.is_floating() {
         BlockLevelBox::OutOfFlowFloatBox(FloatBox::construct(
@@ -302,6 +308,7 @@ fn construct_for_root_element<'dom>(
             &info,
             display_inside,
             contents,
+            &mut CounterSet::default(),
         ))
     } else {
         let propagated_text_decoration_line = info.style.clone_text_decoration_line();
@@ -311,6 +318,7 @@ fn construct_for_root_element<'dom>(
             display_inside,
             contents,
             propagated_text_decoration_line,
+            &mut CounterSet::default()
         ))
     };
 

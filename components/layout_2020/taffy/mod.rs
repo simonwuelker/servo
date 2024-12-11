@@ -18,6 +18,7 @@ use crate::dom::{LayoutBox, NodeExt};
 use crate::dom_traversal::{NodeAndStyleInfo, NonReplacedContents};
 use crate::formatting_contexts::IndependentFormattingContext;
 use crate::fragment_tree::Fragment;
+use crate::lists::CounterSet;
 use crate::positioned::{AbsolutelyPositionedBox, PositioningContext};
 
 #[derive(Debug, Serialize)]
@@ -28,16 +29,23 @@ pub(crate) struct TaffyContainer {
 }
 
 impl TaffyContainer {
-    pub fn construct<'dom>(
+    pub fn construct<'dom, Node>(
         context: &LayoutContext,
-        info: &NodeAndStyleInfo<impl NodeExt<'dom>>,
+        info: &NodeAndStyleInfo<Node>,
         contents: NonReplacedContents,
         propagated_text_decoration_line: TextDecorationLine,
-    ) -> Self {
+        counters: &mut CounterSet<Node>,
+    ) -> Self
+    where Node: NodeExt<'dom> {
         let text_decoration_line =
             propagated_text_decoration_line | info.style.clone_text_decoration_line();
         let mut builder = ModernContainerBuilder::new(context, info, text_decoration_line);
-        contents.traverse(context, info, &mut builder);
+        contents.traverse(
+            context,
+            info,
+            &mut builder,
+            counters
+        );
         let items = builder.finish();
 
         let children = items

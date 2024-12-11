@@ -16,6 +16,7 @@ use style::values::generics::counters::{Content, ContentItem};
 use crate::context::LayoutContext;
 use crate::dom::{BoxSlot, LayoutBox, NodeExt};
 use crate::fragment_tree::{BaseFragmentInfo, FragmentFlags, Tag};
+use crate::lists::CounterSet;
 use crate::replaced::ReplacedContent;
 use crate::style_ext::{Display, DisplayGeneratingBox, DisplayInside, DisplayOutside};
 
@@ -160,14 +161,22 @@ where
     );
 }
 
-fn traverse_children_of<'dom, Node>(
+fn traverse_children_of<'dom, 'counter, Node>(
     parent_element: Node,
     context: &LayoutContext,
     handler: &mut impl TraversalHandler<'dom, Node>,
+    counters: &'counter CounterSet<'counter, Node>,
 ) where
     Node: NodeExt<'dom>,
 {
-    traverse_pseudo_element(WhichPseudoElement::Before, parent_element, context, handler);
+    let mut counter_state = CounterSet::new(counters);
+    traverse_pseudo_element(
+        WhichPseudoElement::Before,
+        parent_element,
+        context,
+        handler,
+        counter_state.next_sibling(),
+    );
 
     let is_text_input_element = matches!(
         parent_element.type_id(),
@@ -201,18 +210,30 @@ fn traverse_children_of<'dom, Node>(
                 let info = NodeAndStyleInfo::new(child, child.style(context));
                 handler.handle_text(&info, child.to_threadsafe().node_text_content());
             } else if child.is_element() {
-                traverse_element(child, context, handler);
+                traverse_element(
+                    child,
+                    context,
+                    handler,
+                    counter_state.next_sibling(),
+                );
             }
         }
     }
 
-    traverse_pseudo_element(WhichPseudoElement::After, parent_element, context, handler);
+    traverse_pseudo_element(
+        WhichPseudoElement::After,
+        parent_element,
+        context,
+        handler,
+        counter_state.next_sibling(),
+    );
 }
 
-fn traverse_element<'dom, Node>(
+fn traverse_element<'dom, 'counter, Node>(
     element: Node,
     context: &LayoutContext,
     handler: &mut impl TraversalHandler<'dom, Node>,
+    counters: &mut CounterSet<'counter, Node>,
 ) where
     Node: NodeExt<'dom>,
 {
@@ -227,7 +248,7 @@ fn traverse_element<'dom, Node>(
                 element.unset_all_boxes()
             } else {
                 element.element_box_slot().set(LayoutBox::DisplayContents);
-                traverse_children_of(element, context, handler)
+                traverse_children_of(element, context, handler, counters)
             }
         },
         Display::GeneratingBox(display) => {
@@ -236,16 +257,18 @@ fn traverse_element<'dom, Node>(
             let display = display.used_value_for_contents(&contents);
             let box_slot = element.element_box_slot();
             let info = NodeAndStyleInfo::new(element, style);
+            counters.update(&info);
             handler.handle_element(&info, display, contents, box_slot);
         },
     }
 }
 
-fn traverse_pseudo_element<'dom, Node>(
+fn traverse_pseudo_element<'dom, 'a, 'b, Node>(
     which: WhichPseudoElement,
     element: Node,
     context: &LayoutContext,
     handler: &mut impl TraversalHandler<'dom, Node>,
+    counters: &'a mut  CounterSet<'b, Node>,
 ) where
     Node: NodeExt<'dom>,
 {
@@ -254,13 +277,17 @@ fn traverse_pseudo_element<'dom, Node>(
         match Display::from(info.style.get_box().display) {
             Display::None => element.unset_pseudo_element_box(which),
             Display::Contents => {
-                let items = generate_pseudo_element_content(&info.style, element, context);
+                counters.update(&info);
+                let items =
+                    generate_pseudo_element_content(&info.style, element, context, counters);
                 let box_slot = element.pseudo_element_box_slot(which);
                 box_slot.set(LayoutBox::DisplayContents);
-                traverse_pseudo_element_contents(&info, context, handler, items);
+                traverse_pseudo_element_contents(&info, context, handler, items, counters);
             },
             Display::GeneratingBox(display) => {
-                let items = generate_pseudo_element_content(&info.style, element, context);
+                counters.update(&info);
+                let items =
+                    generate_pseudo_element_content(&info.style, element, context, counters);
                 let box_slot = element.pseudo_element_box_slot(which);
                 let contents = NonReplacedContents::OfPseudoElement(items).into();
                 handler.handle_element(&info, display, contents, box_slot);
@@ -276,6 +303,7 @@ fn traverse_pseudo_element_contents<'dom, Node>(
     context: &LayoutContext,
     handler: &mut impl TraversalHandler<'dom, Node>,
     items: Vec<PseudoElementContentItem>,
+    counters: &mut CounterSet<Node>,
 ) where
     Node: NodeExt<'dom>,
 {
@@ -306,6 +334,7 @@ fn traverse_pseudo_element_contents<'dom, Node>(
                         Display::GeneratingBox(display_inline)
                 );
                 let info = info.new_replacing_style(item_style.clone());
+                counters.update(&info);
                 handler.handle_element(
                     &info,
                     display_inline,
@@ -345,11 +374,12 @@ impl std::convert::TryFrom<Contents> for NonReplacedContents {
 }
 
 impl NonReplacedContents {
-    pub(crate) fn traverse<'dom, Node>(
+    pub(crate) fn traverse<'dom, 'counter, Node>(
         self,
         context: &LayoutContext,
         info: &NodeAndStyleInfo<Node>,
         handler: &mut impl TraversalHandler<'dom, Node>,
+        counters: &mut CounterSet<'counter, Node>, // counters on the element itself
     ) where
         Node: NodeExt<'dom>,
     {
@@ -360,10 +390,13 @@ impl NonReplacedContents {
                 return;
             },
         };
+        counters.update(info);
         match self {
-            NonReplacedContents::OfElement => traverse_children_of(node, context, handler),
+            NonReplacedContents::OfElement => {
+                traverse_children_of(node, context, handler, counters)
+            },
             NonReplacedContents::OfPseudoElement(items) => {
-                traverse_pseudo_element_contents(info, context, handler, items)
+                traverse_pseudo_element_contents(info, context, handler, items, counters)
             },
         }
     }
@@ -396,6 +429,7 @@ fn generate_pseudo_element_content<'dom, Node>(
     pseudo_element_style: &ComputedValues,
     element: Node,
     context: &LayoutContext,
+    counters: &mut CounterSet<Node>,
 ) -> Vec<PseudoElementContentItem>
 where
     Node: NodeExt<'dom>,
@@ -426,7 +460,11 @@ where
                             vec.push(PseudoElementContentItem::Replaced(replaced_content));
                         }
                     },
-                    ContentItem::Counter(_, _) |
+                    ContentItem::Counter(ident, style) => {
+                        let counter_text =
+                            counters.resolve_counter(ident.0.as_ref(), *style, element);
+                        vec.push(PseudoElementContentItem::Text(counter_text));
+                    },
                     ContentItem::Counters(_, _, _) |
                     ContentItem::OpenQuote |
                     ContentItem::CloseQuote |

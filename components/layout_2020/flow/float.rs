@@ -28,6 +28,7 @@ use crate::dom_traversal::{Contents, NodeAndStyleInfo};
 use crate::formatting_contexts::IndependentFormattingContext;
 use crate::fragment_tree::{BoxFragment, CollapsedMargin};
 use crate::geom::{LogicalRect, LogicalVec2, ToLogical};
+use crate::lists::CounterSet;
 use crate::positioned::{relative_adjustement, PositioningContext};
 use crate::style_ext::{DisplayInside, PaddingBorderMargin};
 use crate::ContainingBlock;
@@ -895,12 +896,14 @@ impl FloatBandLink {
 
 impl FloatBox {
     /// Creates a new float box.
-    pub fn construct<'dom>(
+    pub fn construct<'dom, Node>(
         context: &LayoutContext,
-        info: &NodeAndStyleInfo<impl NodeExt<'dom>>,
+        info: &NodeAndStyleInfo<Node>,
         display_inside: DisplayInside,
         contents: Contents,
-    ) -> Self {
+        counters: &mut CounterSet<Node>
+    ) -> Self
+    where Node: NodeExt<'dom> {
         Self {
             contents: IndependentFormattingContext::construct(
                 context,
@@ -909,6 +912,7 @@ impl FloatBox {
                 contents,
                 // Text decorations are not propagated to any out-of-flow descendants
                 TextDecorationLine::NONE,
+                counters
             ),
         }
     }

@@ -18,6 +18,7 @@ use crate::formatting_contexts::{
     IndependentFormattingContext, NonReplacedFormattingContext,
     NonReplacedFormattingContextContents,
 };
+use crate::lists::CounterSet;
 use crate::style_ext::DisplayGeneratingBox;
 
 /// <https://drafts.csswg.org/css-flexbox/#flex-items>
@@ -209,6 +210,7 @@ where
                         } else {
                             self.text_decoration_line
                         },
+                        &mut CounterSet::default() // FIXME
                     );
 
                     if is_abspos {

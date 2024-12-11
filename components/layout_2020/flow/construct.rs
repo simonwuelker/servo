@@ -19,7 +19,6 @@ use super::inline::InlineFormattingContext;
 use super::OutsideMarker;
 use crate::cell::ArcRefCell;
 use crate::context::LayoutContext;
-use crate::lists::{CounterCascadeState, CounterSet};
 use crate::dom::{BoxSlot, LayoutBox, NodeExt};
 use crate::dom_traversal::{
     Contents, NodeAndStyleInfo, NonReplacedContents, PseudoElementContentItem, TraversalHandler,
@@ -27,6 +26,7 @@ use crate::dom_traversal::{
 use crate::flow::float::FloatBox;
 use crate::flow::{BlockContainer, BlockFormattingContext, BlockLevelBox};
 use crate::formatting_contexts::IndependentFormattingContext;
+use crate::lists::CounterSet;
 use crate::positioned::AbsolutelyPositionedBox;
 use crate::style_ext::{ComputedValuesExt, DisplayGeneratingBox, DisplayInside, DisplayOutside};
 use crate::table::{AnonymousTableContent, Table};
@@ -109,7 +109,7 @@ enum IntermediateBlockContainer {
 ///
 /// This builder starts from the first child of a given DOM node
 /// and does a preorder traversal of all of its inclusive siblings.
-pub(crate) struct BlockContainerBuilder<'dom, 'style, Node> {
+pub(crate) struct BlockContainerBuilder<'dom, 'style, 'counters, Node> {
     context: &'style LayoutContext<'style>,
 
     /// This NodeAndStyleInfo contains the root node, the corresponding pseudo
@@ -149,8 +149,8 @@ pub(crate) struct BlockContainerBuilder<'dom, 'style, Node> {
     /// are found outside of a table.
     anonymous_table_content: Vec<AnonymousTableContent<'dom, Node>>,
 
-    /// The counters found on the most-recently processed element
-    counters: CounterCascadeState,
+    /// The counters defined on the parent element
+    counters: &'counters mut CounterSet<'counters, Node>
 }
 
 impl BlockContainer {
@@ -160,17 +160,13 @@ impl BlockContainer {
         contents: NonReplacedContents,
         propagated_text_decoration_line: TextDecorationLine,
         is_list_item: bool,
+        counters: &mut CounterSet<Node>
     ) -> BlockContainer
     where
         Node: NodeExt<'dom>,
     {
-        let mut builder = BlockContainerBuilder::new(
-            context,
-            info,
-            propagated_text_decoration_line,
-            // FIXME: This should be propagated
-            CounterCascadeState::default(),
-        );
+        let mut builder =
+            BlockContainerBuilder::new(context, info, propagated_text_decoration_line, counters);
 
         if is_list_item {
             if let Some(marker_contents) = crate::lists::make_marker(context, info) {
@@ -185,12 +181,12 @@ impl BlockContainer {
             }
         }
 
-        contents.traverse(context, info, &mut builder);
+        contents.traverse(context, info, &mut builder, counters);
         builder.finish()
     }
 }
 
-impl<'dom, 'style, Node> BlockContainerBuilder<'dom, 'style, Node>
+impl<'dom, 'style, 'counters, Node> BlockContainerBuilder<'dom, 'style, 'counters, Node>
 where
     Node: NodeExt<'dom>,
 {
@@ -198,7 +194,7 @@ where
         context: &'style LayoutContext,
         info: &'style NodeAndStyleInfo<Node>,
         propagated_text_decoration_line: TextDecorationLine,
-        counters: CounterCascadeState,
+        counters: &'counters mut CounterSet<'counters, Node>,
     ) -> Self {
         let text_decoration_line =
             propagated_text_decoration_line | info.style.clone_text_decoration_line();
@@ -212,7 +208,7 @@ where
             anonymous_style: None,
             anonymous_table_content: Vec::new(),
             inline_formatting_context_builder: InlineFormattingContextBuilder::new(),
-            counters,
+            counters
         }
     }
 
@@ -324,7 +320,7 @@ where
     }
 }
 
-impl<'dom, Node> TraversalHandler<'dom, Node> for BlockContainerBuilder<'dom, '_, Node>
+impl<'dom, Node> TraversalHandler<'dom, Node> for BlockContainerBuilder<'dom, '_, '_, Node>
 where
     Node: NodeExt<'dom>,
 {
@@ -338,7 +334,6 @@ where
         match display {
             DisplayGeneratingBox::OutsideInside { outside, inside } => {
                 self.finish_anonymous_table_if_needed();
-                self.update_counters(&*info.style);
 
                 match outside {
                     DisplayOutside::Inline => {
@@ -392,7 +387,7 @@ where
     }
 }
 
-impl<'dom, Node> BlockContainerBuilder<'dom, '_, Node>
+impl<'dom, Node> BlockContainerBuilder<'dom, '_, '_, Node>
 where
     Node: NodeExt<'dom>,
 {
@@ -432,26 +427,6 @@ where
         });
     }
 
-    /// Update the counter state for an element, given the elements style
-    fn update_counters(&mut self, info: &NodeAndStyleInfo<Node>) {
-        // Existing counters are inherited from previous elements.
-        let mut counter = self.counters.inherit_counters();
-
-        // New counters are instantiated (counter-reset).
-        for new_counter in &*info.style.clone_counter_reset() {
-            counter.counters
-        }
-
-        // Counter values are incremented (counter-increment).
-        for counter_increment in &*info.style.clone_counter_increment() {
-
-        }
-
-        // Counter values are explicitly set (counter-set).
-
-        // Counter values are used (counter()/counters()).
-    }
-
     fn handle_inline_level_element(
         &mut self,
         info: &NodeAndStyleInfo<Node>,
@@ -471,6 +446,7 @@ where
                     contents,
                     // Text decorations are not propagated to atomic inline-level descendants.
                     TextDecorationLine::NONE,
+                    self.counters.next_sibling()
                 ),
             );
             box_slot.set(LayoutBox::InlineLevel(atomic));
@@ -492,9 +468,12 @@ where
         }
 
         // `unwrap` doesn’t panic here because `is_replaced` returned `false`.
-        NonReplacedContents::try_from(contents)
-            .unwrap()
-            .traverse(self.context, info, self);
+        NonReplacedContents::try_from(contents).unwrap().traverse(
+            self.context,
+            info,
+            self,
+            &mut CounterSet::default(),
+        );
 
         self.finish_anonymous_table_if_needed();
 
@@ -583,6 +562,7 @@ where
                     info,
                     display_inside,
                     contents,
+                    self.counters.next_sibling()
                 ));
             box_slot.set(LayoutBox::InlineLevel(inline_level_box));
             return;
@@ -614,6 +594,7 @@ where
                         info,
                         display_inside,
                         contents,
+                        self.counters.next_sibling()
                     ));
             box_slot.set(LayoutBox::InlineLevel(inline_level_box));
             return;

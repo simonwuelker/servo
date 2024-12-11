@@ -17,6 +17,7 @@ use crate::flexbox::FlexContainer;
 use crate::flow::BlockFormattingContext;
 use crate::fragment_tree::{BaseFragmentInfo, BoxFragment, Fragment, FragmentFlags};
 use crate::geom::LogicalSides;
+use crate::lists::CounterSet;
 use crate::positioned::PositioningContext;
 use crate::replaced::ReplacedContent;
 use crate::sizing::{self, InlineContentSizesResult};
@@ -108,13 +109,15 @@ pub(crate) struct IndependentLayoutResult {
 }
 
 impl IndependentFormattingContext {
-    pub fn construct<'dom, Node: NodeExt<'dom>>(
+    pub fn construct<'dom, Node>(
         context: &LayoutContext,
         node_and_style_info: &NodeAndStyleInfo<Node>,
         display_inside: DisplayInside,
         contents: Contents,
         propagated_text_decoration_line: TextDecorationLine,
-    ) -> Self {
+        counters: &mut CounterSet<Node>
+    ) -> Self
+    where Node: NodeExt<'dom> {
         match contents {
             Contents::NonReplaced(non_replaced_contents) => {
                 let mut base_fragment_info: BaseFragmentInfo = node_and_style_info.into();
@@ -137,6 +140,7 @@ impl IndependentFormattingContext {
                             node_and_style_info,
                             non_replaced_contents,
                             propagated_text_decoration_line,
+                            counters
                         ))
                     },
                     DisplayInside::Flex => {
@@ -145,6 +149,7 @@ impl IndependentFormattingContext {
                             node_and_style_info,
                             non_replaced_contents,
                             propagated_text_decoration_line,
+                            counters
                         ))
                     },
                     DisplayInside::Table => {
@@ -163,6 +168,7 @@ impl IndependentFormattingContext {
                             table_grid_style,
                             non_replaced_contents,
                             propagated_text_decoration_line,
+                            counters
                         ))
                     },
                 };
