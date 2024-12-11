@@ -22,6 +22,7 @@ use crate::dom::{LayoutBox, NodeExt};
 use crate::dom_traversal::{NodeAndStyleInfo, NonReplacedContents};
 use crate::formatting_contexts::{IndependentFormattingContext, IndependentLayout};
 use crate::fragment_tree::BaseFragmentInfo;
+use crate::lists::{CounterCascadeState, CounterSet};
 use crate::positioned::{AbsolutelyPositionedBox, PositioningContext};
 use crate::ContainingBlock;
 
@@ -110,7 +111,8 @@ impl FlexContainer {
             propagated_text_decoration_line | info.style.clone_text_decoration_line();
 
         let mut builder = ModernContainerBuilder::new(context, info, text_decoration_line);
-        contents.traverse(context, info, &mut builder);
+        let mut counter_state = CounterSet::default(); // FIXME
+        contents.traverse(context, info, &mut builder, &mut counter_state);
         let items = builder.finish();
 
         let children = items

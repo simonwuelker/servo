@@ -21,7 +21,6 @@ use super::{
 };
 use crate::cell::ArcRefCell;
 use crate::context::LayoutContext;
-use crate::lists::CounterCascadeState;
 use crate::dom::{BoxSlot, NodeExt};
 use crate::dom_traversal::{Contents, NodeAndStyleInfo, NonReplacedContents, TraversalHandler};
 use crate::flow::{BlockContainerBuilder, BlockFormattingContext};
@@ -30,6 +29,7 @@ use crate::formatting_contexts::{
     NonReplacedFormattingContextContents,
 };
 use crate::fragment_tree::BaseFragmentInfo;
+use crate::lists::{CounterCascadeState, CounterSet};
 use crate::style_ext::{DisplayGeneratingBox, DisplayLayoutInternal};
 
 /// A reference to a slot and its coordinates in the table
@@ -84,7 +84,7 @@ impl Table {
             propagated_text_decoration_line | info.style.clone_text_decoration_line();
         let mut traversal =
             TableBuilderTraversal::new(context, info, grid_style, text_decoration_line);
-        contents.traverse(context, info, &mut traversal);
+        contents.traverse(context, info, &mut traversal, &mut CounterSet::default());
         traversal.finish()
     }
 
@@ -769,6 +769,7 @@ where
                         self.context,
                         info,
                         self,
+                        &mut CounterSet::default(), // FIXME
                     );
                     self.finish_anonymous_row_if_needed();
 
@@ -786,10 +787,12 @@ where
 
                     let mut row_builder =
                         TableRowBuilder::new(self, info, self.current_text_decoration_line);
+
                     NonReplacedContents::try_from(contents).unwrap().traverse(
                         context,
                         info,
                         &mut row_builder,
+                        &mut CounterSet::default(), // FIXME
                     );
                     row_builder.finish();
 
@@ -825,6 +828,7 @@ where
                         self.context,
                         info,
                         &mut column_group_builder,
+                        &mut CounterSet::default(), // FIXME
                     );
 
                     let first_column = self.builder.table.columns.len();
@@ -962,13 +966,8 @@ where
                 &self.info.style,
             );
         let anonymous_info = self.info.new_anonymous(anonymous_style);
-        let mut builder = BlockContainerBuilder::new(
-            context,
-            &anonymous_info,
-            self.text_decoration_line,
-            // FIXME
-            CounterCascadeState::default(),
-        );
+        let mut builder =
+            BlockContainerBuilder::new(context, &anonymous_info, self.text_decoration_line);
 
         for cell_content in self.current_anonymous_cell_content.drain(..) {
             match cell_content {

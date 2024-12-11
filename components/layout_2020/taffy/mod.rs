@@ -18,6 +18,7 @@ use crate::dom::{LayoutBox, NodeExt};
 use crate::dom_traversal::{NodeAndStyleInfo, NonReplacedContents};
 use crate::formatting_contexts::IndependentFormattingContext;
 use crate::fragment_tree::Fragment;
+use crate::lists::CounterSet;
 use crate::positioned::{AbsolutelyPositionedBox, PositioningContext};
 
 #[derive(Debug, Serialize)]
@@ -37,7 +38,12 @@ impl TaffyContainer {
         let text_decoration_line =
             propagated_text_decoration_line | info.style.clone_text_decoration_line();
         let mut builder = ModernContainerBuilder::new(context, info, text_decoration_line);
-        contents.traverse(context, info, &mut builder);
+        contents.traverse(
+            context,
+            info,
+            &mut builder,
+            &mut CounterSet::default(), // FIXME
+        );
         let items = builder.finish();
 
         let children = items
