@@ -467,6 +467,11 @@ impl Node {
             }
         }
     }
+
+    pub fn root_is_shadow_root(&self) -> bool {
+        self.GetRootNode(&GetRootNodeOptions::empty())
+            .is::<ShadowRoot>()
+    }
 }
 
 pub struct QuerySelectorIterator {
