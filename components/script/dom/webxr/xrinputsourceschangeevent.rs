@@ -83,7 +83,7 @@ impl XRInputSourcesChangeEvent {
         );
         {
             let event = changeevent.upcast::<Event>();
-            event.init_event(type_, bubbles, cancelable);
+            event.initialize(type_, bubbles, cancelable);
         }
         let _ac = enter_realm(global);
         let cx = GlobalScope::get_cx();

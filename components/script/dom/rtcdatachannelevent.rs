@@ -62,7 +62,7 @@ impl RTCDataChannelEvent {
         );
         {
             let event = event.upcast::<Event>();
-            event.init_event(type_, bubbles, cancelable);
+            event.initialize(type_, bubbles, cancelable);
         }
         event
     }

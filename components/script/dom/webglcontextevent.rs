@@ -110,7 +110,7 @@ impl WebGLContextEvent {
 
         {
             let parent = event.upcast::<Event>();
-            parent.init_event(type_, bool::from(bubbles), bool::from(cancelable));
+            parent.initialize(type_, bool::from(bubbles), bool::from(cancelable));
         }
 
         event

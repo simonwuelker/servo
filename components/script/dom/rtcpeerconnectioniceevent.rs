@@ -67,7 +67,7 @@ impl RTCPeerConnectionIceEvent {
             can_gc,
         );
         let evt = e.upcast::<Event>();
-        evt.init_event(ty, false, false); // XXXManishearth bubbles/cancelable?
+        evt.initialize(ty, false, false); // XXXManishearth bubbles/cancelable?
         evt.set_trusted(trusted);
         e
     }

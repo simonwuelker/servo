@@ -127,7 +127,7 @@ impl StorageEvent {
         );
         {
             let event = ev.upcast::<Event>();
-            event.init_event(type_, bool::from(bubbles), bool::from(cancelable));
+            event.initialize(type_, bool::from(bubbles), bool::from(cancelable));
         }
         ev
     }
@@ -209,7 +209,7 @@ impl StorageEventMethods<crate::DomTypeHolder> for StorageEvent {
         storageArea: Option<&Storage>,
     ) {
         self.event
-            .init_event(Atom::from(type_), bubbles, cancelable);
+            .initialize(Atom::from(type_), bubbles, cancelable);
         *self.key.borrow_mut() = key;
         *self.old_value.borrow_mut() = oldValue;
         *self.new_value.borrow_mut() = newValue;

@@ -91,7 +91,7 @@ impl ErrorEvent {
         let ev = ErrorEvent::new_uninitialized(global, proto, can_gc);
         {
             let event = ev.upcast::<Event>();
-            event.init_event(type_, bool::from(bubbles), bool::from(cancelable));
+            event.initialize(type_, bool::from(bubbles), bool::from(cancelable));
             *ev.message.borrow_mut() = message;
             *ev.filename.borrow_mut() = filename;
             ev.lineno.set(lineno);

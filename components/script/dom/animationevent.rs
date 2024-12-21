@@ -62,7 +62,7 @@ impl AnimationEvent {
         );
         {
             let event = ev.upcast::<Event>();
-            event.init_event(type_, init.parent.bubbles, init.parent.cancelable);
+            event.initialize(type_, init.parent.bubbles, init.parent.cancelable);
         }
         ev
     }

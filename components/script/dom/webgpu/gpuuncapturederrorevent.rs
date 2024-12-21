@@ -55,7 +55,7 @@ impl GPUUncapturedErrorEvent {
             proto,
             can_gc,
         );
-        ev.event.init_event(
+        ev.event.initialize(
             Atom::from(type_),
             init.parent.bubbles,
             init.parent.cancelable,

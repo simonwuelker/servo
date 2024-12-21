@@ -189,7 +189,7 @@ impl MessageEvent {
         );
         {
             let event = ev.upcast::<Event>();
-            event.init_event(type_, bubbles, cancelable);
+            event.initialize(type_, bubbles, cancelable);
         }
         ev
     }
@@ -340,6 +340,6 @@ impl MessageEventMethods<crate::DomTypeHolder> for MessageEvent {
             .collect();
         self.frozen_ports.clear();
         self.event
-            .init_event(Atom::from(type_), bubbles, cancelable);
+            .initialize(Atom::from(type_), bubbles, cancelable);
     }
 }

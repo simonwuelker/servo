@@ -80,7 +80,7 @@ impl CustomEvent {
         }
 
         self.detail.set(detail.get());
-        event.init_event(type_, can_bubble, cancelable);
+        event.initialize(type_, can_bubble, cancelable);
     }
 }
 

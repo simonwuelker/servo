@@ -111,7 +111,7 @@ impl ExtendableMessageEvent {
         let ev = reflect_dom_object_with_proto(ev, global, proto, can_gc);
         {
             let event = ev.upcast::<Event>();
-            event.init_event(type_, bubbles, cancelable);
+            event.initialize(type_, bubbles, cancelable);
         }
         ev.data.set(data.get());
 

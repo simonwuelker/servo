@@ -61,7 +61,7 @@ impl FormDataEvent {
 
         {
             let event = ev.upcast::<Event>();
-            event.init_event(type_, bool::from(can_bubble), bool::from(cancelable));
+            event.initialize(type_, bool::from(can_bubble), bool::from(cancelable));
         }
         ev
     }

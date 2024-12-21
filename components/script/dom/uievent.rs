@@ -100,7 +100,7 @@ impl UIEvent {
     ) {
         // 1. Initialize the base Event attributes:
         self.event
-            .init_event(type_.into(), bool::from(bubbles), bool::from(cancelable));
+            .initialize(type_.into(), bool::from(bubbles), bool::from(cancelable));
         self.event.set_target(target_);
         // 2. Initialize view/detail:
         if let Some(target_) = target_ {
@@ -167,7 +167,7 @@ impl UIEventMethods<crate::DomTypeHolder> for UIEvent {
             return;
         }
 
-        event.init_event(Atom::from(type_), can_bubble, cancelable);
+        event.initialize(Atom::from(type_), can_bubble, cancelable);
         self.view.set(view);
         self.detail.set(detail);
     }

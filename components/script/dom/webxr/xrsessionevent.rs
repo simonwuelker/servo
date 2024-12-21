@@ -62,7 +62,7 @@ impl XRSessionEvent {
         );
         {
             let event = trackevent.upcast::<Event>();
-            event.init_event(type_, bubbles, cancelable);
+            event.initialize(type_, bubbles, cancelable);
         }
         trackevent
     }

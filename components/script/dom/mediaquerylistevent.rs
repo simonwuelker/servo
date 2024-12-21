@@ -74,7 +74,7 @@ impl MediaQueryListEvent {
         let ev = MediaQueryListEvent::new_initialized(global, proto, media, matches, can_gc);
         {
             let event = ev.upcast::<Event>();
-            event.init_event(type_, bubbles, cancelable);
+            event.initialize(type_, bubbles, cancelable);
         }
         ev
     }

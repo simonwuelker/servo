@@ -61,7 +61,7 @@ impl XRLayerEventMethods<crate::DomTypeHolder> for XRLayerEvent {
         let type_ = Atom::from(type_);
         let bubbles = init.parent.bubbles;
         let cancelable = init.parent.cancelable;
-        event.event.init_event(type_, bubbles, cancelable);
+        event.event.initialize(type_, bubbles, cancelable);
         event
     }
 

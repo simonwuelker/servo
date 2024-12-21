@@ -106,23 +106,38 @@ impl Event {
         can_gc: CanGc,
     ) -> DomRoot<Event> {
         let event = Event::new_uninitialized_with_proto(global, proto, can_gc);
-        event.init_event(type_, bool::from(bubbles), bool::from(cancelable));
+        event.initialize(type_, bool::from(bubbles), bool::from(cancelable));
         event
     }
 
-    pub fn init_event(&self, type_: Atom, bubbles: bool, cancelable: bool) {
+    /// <https://dom.spec.whatwg.org/#concept-event-initialize>
+    pub fn initialize(&self, type_: Atom, bubbles: bool, cancelable: bool) {
+        // TODO: The spec doesn't tell us about this step. Why is it necessary?
         if self.dispatching.get() {
             return;
         }
 
+        // Step 1. Set event’s initialized flag.
         self.initialized.set(true);
+
+        // Step 2. Unset event’s stop propagation flag, stop immediate propagation flag, and canceled flag.
         self.stop_propagation.set(false);
         self.stop_immediate.set(false);
         self.canceled.set(EventDefault::Allowed);
+
+        // Step 3. Set event’s isTrusted attribute to false.
         self.trusted.set(false);
+
+        // Step 4. Set event’s target to null.
         self.target.set(None);
+
+        // Step 5. Set event’s type attribute to type.
         *self.type_.borrow_mut() = type_;
+
+        // Step 6. Set event’s bubbles attribute to bubbles.
         self.bubbles.set(bubbles);
+
+        // Step 7. Set event’s cancelable attribute to cancelable.
         self.cancelable.set(cancelable);
     }
 
@@ -512,7 +527,7 @@ impl EventMethods<crate::DomTypeHolder> for Event {
 
     /// <https://dom.spec.whatwg.org/#dom-event-initevent>
     fn InitEvent(&self, type_: DOMString, bubbles: bool, cancelable: bool) {
-        self.init_event(Atom::from(type_), bubbles, cancelable)
+        self.initialize(Atom::from(type_), bubbles, cancelable)
     }
 
     /// <https://dom.spec.whatwg.org/#dom-event-istrusted>

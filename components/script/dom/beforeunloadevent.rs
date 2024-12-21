@@ -50,7 +50,7 @@ impl BeforeUnloadEvent {
         let ev = BeforeUnloadEvent::new_uninitialized(window);
         {
             let event = ev.upcast::<Event>();
-            event.init_event(type_, bool::from(bubbles), bool::from(cancelable));
+            event.initialize(type_, bool::from(bubbles), bool::from(cancelable));
         }
         ev
     }

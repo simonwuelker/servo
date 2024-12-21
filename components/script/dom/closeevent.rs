@@ -69,7 +69,7 @@ impl CloseEvent {
         let ev = reflect_dom_object_with_proto(event, global, proto, can_gc);
         {
             let event = ev.upcast::<Event>();
-            event.init_event(type_, bool::from(bubbles), bool::from(cancelable));
+            event.initialize(type_, bool::from(bubbles), bool::from(cancelable));
         }
         ev
     }

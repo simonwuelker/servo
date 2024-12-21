@@ -75,7 +75,7 @@ impl BluetoothAdvertisingEvent {
         );
         {
             let event = ev.upcast::<Event>();
-            event.init_event(type_, bool::from(bubbles), bool::from(cancelable));
+            event.initialize(type_, bool::from(bubbles), bool::from(cancelable));
         }
         ev
     }
