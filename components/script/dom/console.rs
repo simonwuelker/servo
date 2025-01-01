@@ -107,12 +107,7 @@ fn stringify_handle_value(message: HandleValue) -> DOMString {
                 return DOMString::from("/* invalid */");
             }
             let mut ids = IdVector::new(cx);
-            if !GetPropertyKeys(
-                cx,
-                obj.handle(),
-                jsapi::JSITER_OWNONLY | jsapi::JSITER_SYMBOLS,
-                ids.handle_mut(),
-            ) {
+            if !GetPropertyKeys(cx, obj.handle(), jsapi::JSITER_SYMBOLS, ids.handle_mut()) {
                 return DOMString::from("/* invalid */");
             }
             let truncate = ids.len() > MAX_LOG_CHILDREN;
