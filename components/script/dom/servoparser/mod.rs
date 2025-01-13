@@ -152,13 +152,9 @@ impl ServoParser {
         self.can_write()
     }
 
-    pub(crate) fn parse_html_document(
-        document: &Document,
-        input: Option<DOMString>,
-        url: ServoUrl,
-        can_gc: CanGc,
-    ) {
-        let parser = if pref!(dom.servoparser.async_html_tokenizer.enabled) {
+    /// Create a parser for an html document
+    pub(crate) fn new_html(document: &Document, url: ServoUrl) -> DomRoot<Self> {
+        if pref!(dom.servoparser.async_html_tokenizer.enabled) {
             ServoParser::new(
                 document,
                 Tokenizer::AsyncHtml(self::async_html::Tokenizer::new(document, url, None)),
@@ -175,7 +171,25 @@ impl ServoParser {
                 )),
                 ParserKind::Normal,
             )
-        };
+        }
+    }
+
+    /// Create a parser for an xml document
+    pub(crate) fn new_xml(document: &Document, url: ServoUrl) -> DomRoot<Self> {
+        Self::new(
+            document,
+            Tokenizer::Xml(self::xml::Tokenizer::new(document, url)),
+            ParserKind::Normal,
+        )
+    }
+
+    pub(crate) fn parse_html_document(
+        document: &Document,
+        input: Option<DOMString>,
+        url: ServoUrl,
+        can_gc: CanGc,
+    ) {
+        let parser = Self::new_html(document, url);
 
         // Set as the document's current parser and initialize with `input`, if given.
         if let Some(input) = input {
@@ -272,11 +286,7 @@ impl ServoParser {
         url: ServoUrl,
         can_gc: CanGc,
     ) {
-        let parser = ServoParser::new(
-            document,
-            Tokenizer::Xml(self::xml::Tokenizer::new(document, url)),
-            ParserKind::Normal,
-        );
+        let parser = Self::new_xml(document, url);
 
         // Set as the document's current parser and initialize with `input`, if given.
         if let Some(input) = input {
