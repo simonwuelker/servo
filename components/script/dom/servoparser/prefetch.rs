@@ -5,7 +5,7 @@
 use std::cell::{Cell, RefCell};
 
 use base::id::PipelineId;
-use html5ever::buffer_queue::BufferQueue;
+use html5ever::buffer_queue::StrBufferQueue;
 use html5ever::tokenizer::states::RawKind;
 use html5ever::tokenizer::{
     Tag, TagKind, Token, TokenSink, TokenSinkResult, Tokenizer as HtmlTokenizer, TokenizerResult,
@@ -58,7 +58,7 @@ impl Tokenizer {
         Tokenizer { inner }
     }
 
-    pub(crate) fn feed(&self, input: &BufferQueue) {
+    pub(crate) fn feed(&self, input: &StrBufferQueue) {
         while let TokenizerResult::Script(PrefetchHandle) = self.inner.feed(input) {}
     }
 }

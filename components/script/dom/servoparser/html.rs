@@ -7,7 +7,7 @@
 use std::cell::Cell;
 use std::io;
 
-use html5ever::buffer_queue::BufferQueue;
+use html5ever::buffer_queue::StrBufferQueue;
 use html5ever::serialize::TraversalScope::IncludeNode;
 use html5ever::serialize::{AttrRef, Serialize, Serializer, TraversalScope};
 use html5ever::tokenizer::{Tokenizer as HtmlTokenizer, TokenizerOpts, TokenizerResult};
@@ -80,7 +80,7 @@ impl Tokenizer {
         Tokenizer { inner }
     }
 
-    pub(crate) fn feed(&self, input: &BufferQueue) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
+    pub(crate) fn feed(&self, input: &StrBufferQueue) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
         match self.inner.feed(input) {
             TokenizerResult::Done => TokenizerResult::Done,
             TokenizerResult::Script(script) => {

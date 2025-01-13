@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::thread;
 
 use crossbeam_channel::{unbounded, Receiver, Sender};
-use html5ever::buffer_queue::BufferQueue;
+use html5ever::buffer_queue::StrBufferQueue;
 use html5ever::tendril::fmt::UTF8;
 use html5ever::tendril::{SendTendril, StrTendril, Tendril};
 use html5ever::tokenizer::{Tokenizer as HtmlTokenizer, TokenizerOpts, TokenizerResult};
@@ -171,8 +171,8 @@ enum ToHtmlTokenizerMsg {
     SetPlainTextState,
 }
 
-fn create_buffer_queue(mut buffers: VecDeque<SendTendril<UTF8>>) -> BufferQueue {
-    let buffer_queue = BufferQueue::default();
+fn create_buffer_queue(mut buffers: VecDeque<SendTendril<UTF8>>) -> StrBufferQueue {
+    let buffer_queue = StrBufferQueue::default();
     while let Some(st) = buffers.pop_front() {
         buffer_queue.push_back(StrTendril::from(st));
     }
@@ -286,7 +286,7 @@ impl Tokenizer {
 
     pub(crate) fn feed(
         &self,
-        input: &BufferQueue,
+        input: &StrBufferQueue,
         can_gc: CanGc,
     ) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
         let mut send_tendrils = VecDeque::new();
