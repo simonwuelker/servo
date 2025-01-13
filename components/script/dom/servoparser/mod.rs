@@ -13,7 +13,7 @@ use content_security_policy::{self as csp, CspList};
 use dom_struct::dom_struct;
 use embedder_traits::resources::{self, Resource};
 use encoding_rs::Encoding;
-use html5ever::buffer_queue::BufferQueue;
+use html5ever::buffer_queue::StrBufferQueue;
 use html5ever::tendril::fmt::UTF8;
 use html5ever::tendril::{ByteTendril, StrTendril, TendrilSink};
 use html5ever::tokenizer::TokenizerResult;
@@ -111,11 +111,11 @@ pub(crate) struct ServoParser {
     /// Input received from network.
     #[ignore_malloc_size_of = "Defined in html5ever"]
     #[no_trace]
-    network_input: BufferQueue,
+    network_input: StrBufferQueue,
     /// Input received from script. Used only to support document.write().
     #[ignore_malloc_size_of = "Defined in html5ever"]
     #[no_trace]
-    script_input: BufferQueue,
+    script_input: StrBufferQueue,
     /// The tokenizer of this parser.
     tokenizer: Tokenizer,
     /// Whether to expect any further input from the associated network request.
@@ -134,7 +134,7 @@ pub(crate) struct ServoParser {
     prefetch_tokenizer: prefetch::Tokenizer,
     #[ignore_malloc_size_of = "Defined in html5ever"]
     #[no_trace]
-    prefetch_input: BufferQueue,
+    prefetch_input: StrBufferQueue,
 }
 
 pub(crate) struct ElementAttribute {
@@ -372,7 +372,7 @@ impl ServoParser {
         // and process, with nothing pushed to the parser script input.
         assert!(self.script_input.is_empty());
 
-        let input = BufferQueue::default();
+        let input = StrBufferQueue::default();
         for chunk in text {
             input.push_back(String::from(chunk).into());
         }
@@ -435,8 +435,8 @@ impl ServoParser {
         self.aborted.set(true);
 
         // Step 1.
-        self.script_input.replace_with(BufferQueue::default());
-        self.network_input.replace_with(BufferQueue::default());
+        self.script_input.replace_with(StrBufferQueue::default());
+        self.network_input.replace_with(StrBufferQueue::default());
 
         // Step 2.
         self.document
@@ -463,8 +463,8 @@ impl ServoParser {
             document: Dom::from_ref(document),
             bom_sniff: DomRefCell::new(Some(Vec::with_capacity(3))),
             network_decoder: DomRefCell::new(Some(NetworkDecoder::new(document.encoding()))),
-            network_input: BufferQueue::default(),
-            script_input: BufferQueue::default(),
+            network_input: StrBufferQueue::default(),
+            script_input: StrBufferQueue::default(),
             tokenizer,
             last_chunk_received: Cell::new(false),
             suspended: Default::default(),
@@ -472,7 +472,7 @@ impl ServoParser {
             aborted: Default::default(),
             script_created_parser: kind == ParserKind::ScriptCreated,
             prefetch_tokenizer: prefetch::Tokenizer::new(document),
-            prefetch_input: BufferQueue::default(),
+            prefetch_input: StrBufferQueue::default(),
         }
     }
 
@@ -739,7 +739,7 @@ enum Tokenizer {
 impl Tokenizer {
     fn feed(
         &self,
-        input: &BufferQueue,
+        input: &StrBufferQueue,
         can_gc: CanGc,
         profiler_chan: ProfilerChan,
         profiler_metadata: TimerMetadata,

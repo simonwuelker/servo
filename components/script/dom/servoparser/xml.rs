@@ -9,7 +9,7 @@ use std::cell::Cell;
 use html5ever::tokenizer::TokenizerResult;
 use script_bindings::trace::CustomTraceable;
 use servo_url::ServoUrl;
-use xml5ever::buffer_queue::BufferQueue;
+use xml5ever::buffer_queue::StrBufferQueue;
 use xml5ever::tokenizer::XmlTokenizer;
 use xml5ever::tree_builder::XmlTreeBuilder;
 
@@ -42,7 +42,7 @@ impl Tokenizer {
         Tokenizer { inner: tok }
     }
 
-    pub(crate) fn feed(&self, input: &BufferQueue) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
+    pub(crate) fn feed(&self, input: &StrBufferQueue) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
         self.inner.run(input);
         match self.inner.sink.sink.script.take() {
             Some(script) => TokenizerResult::Script(script),
