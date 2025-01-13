@@ -29,6 +29,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
+use encoding_rs::Encoding;
 use background_hang_monitor_api::{
     BackgroundHangMonitor, BackgroundHangMonitorExitSignal, HangAnnotation, MonitoredComponentId,
     MonitoredComponentType,
@@ -393,6 +394,11 @@ impl Drop for ScriptMemoryFailsafe<'_> {
             }
         }
     }
+}
+
+enum ScriptThreadSetupResult {
+    Success(DomRoot<ServoParser>),
+    TryAgainWithEncoding(&'static Encoding),
 }
 
 impl ScriptThreadFactory for ScriptThread {

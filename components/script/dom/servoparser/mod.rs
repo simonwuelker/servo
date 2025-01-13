@@ -99,8 +99,6 @@ pub(crate) struct ServoParser {
     /// we're not parsing from a byte stream. `Some` contains the BOM bytes
     /// found so far.
     bom_sniff: DomRefCell<Option<Vec<u8>>>,
-    /// The decoder used for the network input.
-    network_decoder: DomRefCell<Option<NetworkDecoder>>,
     /// Input received from network.
     #[ignore_malloc_size_of = "Defined in html5ever"]
     #[no_trace]
@@ -145,6 +143,11 @@ impl ElementAttribute {
     pub(crate) fn new(name: QualName, value: DOMString) -> ElementAttribute {
         ElementAttribute { name, value }
     }
+}
+
+enum StartOver {
+    Yes(&'static encoding_rs::Encoding),
+    No()
 }
 
 impl ServoParser {
@@ -457,7 +460,6 @@ impl ServoParser {
             reflector: Reflector::new(),
             document: Dom::from_ref(document),
             bom_sniff: DomRefCell::new(Some(Vec::with_capacity(3))),
-            network_decoder: DomRefCell::new(Some(NetworkDecoder::new(document.encoding()))),
             network_input: StrBufferQueue::default(),
             script_input: StrBufferQueue::default(),
             tokenizer,
@@ -480,7 +482,7 @@ impl ServoParser {
         )
     }
 
-    fn push_tendril_input_chunk(&self, chunk: StrTendril) {
+    fn push_tendril_input_chunk(&self, chunk: ByteTendril) {
         if chunk.is_empty() {
             return;
         }
@@ -502,7 +504,7 @@ impl ServoParser {
         }
         // Push the chunk into the network input stream,
         // which is tokenized lazily.
-        self.network_input.push_back(chunk);
+        self.push_back(chunk);
     }
 
     fn push_bytes_input_chunk(&self, chunk: Vec<u8>) {
@@ -525,14 +527,8 @@ impl ServoParser {
             }
         }
 
-        // For byte input, we convert it to text using the network decoder.
-        let chunk = self
-            .network_decoder
-            .borrow_mut()
-            .as_mut()
-            .unwrap()
-            .decode(chunk);
         self.push_tendril_input_chunk(chunk);
+
     }
 
     fn push_string_input_chunk(&self, chunk: String) {
@@ -552,16 +548,6 @@ impl ServoParser {
 
         // This parser will continue to parse while there is either pending input or
         // the parser remains unsuspended.
-
-        if self.last_chunk_received.get() {
-            if let Some(decoder) = self.network_decoder.borrow_mut().take() {
-                let chunk = decoder.finish();
-                if !chunk.is_empty() {
-                    self.network_input.push_back(chunk);
-                }
-            }
-        }
-
         let profiler_chan = self
             .document
             .window()
@@ -788,6 +774,8 @@ pub(crate) struct ParserContext {
     resource_timing: ResourceFetchTiming,
     /// pushed entry index
     pushed_entry_index: Option<usize>,
+
+    bytes_processed_so_far: Vec<u8>,
 }
 
 impl ParserContext {
@@ -799,6 +787,7 @@ impl ParserContext {
             url,
             resource_timing: ResourceFetchTiming::new(ResourceTimingType::Navigation),
             pushed_entry_index: None,
+            bytes_processed_so_far: Vec::new(),
         }
     }
 }
@@ -963,6 +952,7 @@ impl FetchResponseListener for ParserContext {
         if self.is_synthesized_document {
             return;
         }
+
         let parser = match self.parser.as_ref() {
             Some(parser) => parser.root(),
             None => return,
@@ -971,6 +961,8 @@ impl FetchResponseListener for ParserContext {
             return;
         }
         let _realm = enter_realm(&*parser);
+
+        self.bytes_processed_so_far.extend_from_slice(&payload);
         parser.parse_bytes_chunk(payload, CanGc::note());
     }
 
