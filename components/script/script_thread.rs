@@ -2653,6 +2653,8 @@ impl ScriptThread {
 
     /// We have received notification that the response associated with a load has completed.
     /// Kick off the document and frame tree creation process using the result.
+    ///
+    /// Returns the parser that is used to construct the document.
     fn handle_page_headers_available(
         &self,
         id: &PipelineId,
@@ -3015,6 +3017,8 @@ impl ScriptThread {
 
     /// The entry point to document loading. Defines bindings, sets up the window and document
     /// objects, parses HTML and CSS, and kicks off initial layout.
+    ///
+    /// Returns the parser that is used to construct the document
     fn load(
         &self,
         metadata: Metadata,
@@ -3240,11 +3244,12 @@ impl ScriptThread {
         document.set_https_state(metadata.https_state);
         document.set_navigation_start(incomplete.navigation_start);
 
-        if is_html_document == IsHTMLDocument::NonHTMLDocument {
-            ServoParser::parse_xml_document(&document, None, final_url, can_gc);
+        let parser = if is_html_document == IsHTMLDocument::NonHTMLDocument {
+            ServoParser::new_xml(&document, final_url)
         } else {
-            ServoParser::parse_html_document(&document, None, final_url, can_gc);
-        }
+            ServoParser::new_html(&document, final_url)
+        };
+        document.set_current_parser(Some(&parser));
 
         if incomplete.activity == DocumentActivity::FullyActive {
             window.resume(can_gc);
@@ -3256,7 +3261,7 @@ impl ScriptThread {
             window.set_throttled(true);
         }
 
-        document.get_current_parser().unwrap()
+        parser
     }
 
     fn notify_devtools(

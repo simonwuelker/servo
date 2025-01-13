@@ -184,7 +184,32 @@ impl ServoParser {
                 ParserKind::Normal,
                 can_gc,
             )
-        };
+        }
+
+        // Set as the document's current parser and initialize with `input`, if given.
+        if let Some(input) = input {
+            parser.parse_complete_string_chunk(String::from(input), can_gc);
+        } else {
+            parser.document.set_current_parser(Some(&parser));
+        }
+    }
+
+    /// Create a parser for an xml document
+    pub(crate) fn new_xml(document: &Document, url: ServoUrl) -> DomRoot<Self> {
+        Self::new(
+            document,
+            Tokenizer::Xml(self::xml::Tokenizer::new(document, url)),
+            ParserKind::Normal,
+        )
+    }
+
+    pub(crate) fn parse_html_document(
+        document: &Document,
+        input: Option<DOMString>,
+        url: ServoUrl,
+        can_gc: CanGc,
+    ) {
+        let parser = Self::new_html(document, url);
 
         // Set as the document's current parser and initialize with `input`, if given.
         if let Some(input) = input {
