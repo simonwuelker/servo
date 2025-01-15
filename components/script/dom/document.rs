@@ -3733,6 +3733,7 @@ impl Document {
         is_initial_about_blank: bool,
         allow_declarative_shadow_roots: bool,
         inherited_insecure_requests_policy: Option<InsecureRequestsPolicy>,
+        encoding: Option<&'static encoding_rs::Encoding>,
     ) -> Document {
         let url = url.unwrap_or_else(|| ServoUrl::parse("about:blank").unwrap());
 
@@ -3761,10 +3762,17 @@ impl Document {
             }
         });
 
+        println!("got {:?}", encoding);
+
         let encoding = content_type
             .get_param(mime::CHARSET)
-            .and_then(|charset| Encoding::for_label(charset.as_str().as_bytes()))
+            .as_ref()
+            .map(mime::Name::as_str)
+            .and_then(|charset| Encoding::for_label(charset.as_bytes()))
+            .or(encoding)
             .unwrap_or(UTF_8);
+
+        println!("creating doc with {}", encoding.name());
 
         let has_browsing_context = has_browsing_context == HasBrowsingContext::Yes;
 
@@ -4050,6 +4058,7 @@ impl Document {
         is_initial_about_blank: bool,
         allow_declarative_shadow_roots: bool,
         inherited_insecure_requests_policy: Option<InsecureRequestsPolicy>,
+        encoding: Option<&'static encoding_rs::Encoding>,
         can_gc: CanGc,
     ) -> DomRoot<Document> {
         Self::new_with_proto(
@@ -4070,6 +4079,7 @@ impl Document {
             is_initial_about_blank,
             allow_declarative_shadow_roots,
             inherited_insecure_requests_policy,
+            encoding,
             can_gc,
         )
     }
@@ -4093,6 +4103,7 @@ impl Document {
         is_initial_about_blank: bool,
         allow_declarative_shadow_roots: bool,
         inherited_insecure_requests_policy: Option<InsecureRequestsPolicy>,
+        encoding: Option<&'static encoding_rs::Encoding>,
         can_gc: CanGc,
     ) -> DomRoot<Document> {
         let document = reflect_dom_object_with_proto(
@@ -4113,6 +4124,7 @@ impl Document {
                 is_initial_about_blank,
                 allow_declarative_shadow_roots,
                 inherited_insecure_requests_policy,
+                encoding,
             )),
             window,
             proto,
@@ -4246,6 +4258,7 @@ impl Document {
                     false,
                     self.allow_declarative_shadow_roots(),
                     Some(self.insecure_requests_policy()),
+                    None,
                     can_gc,
                 );
                 new_doc
@@ -4823,6 +4836,7 @@ impl DocumentMethods<crate::DomTypeHolder> for Document {
             false,
             doc.allow_declarative_shadow_roots(),
             Some(doc.insecure_requests_policy()),
+            None,
             can_gc,
         ))
     }

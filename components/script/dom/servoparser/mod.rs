@@ -16,7 +16,7 @@ use encoding_rs::Encoding;
 use html5ever::buffer_queue::StrBufferQueue;
 use html5ever::tendril::fmt::UTF8;
 use html5ever::tendril::{ByteTendril, StrTendril, TendrilSink};
-use html5ever::tokenizer::TokenizerResult;
+use html5ever::decoding_tokenizer::TokenizerResult;
 use html5ever::tree_builder::{ElementFlags, NextParserState, NodeOrText, QuirksMode, TreeSink};
 use html5ever::{Attribute, ExpandedName, LocalName, QualName, local_name, namespace_url, ns};
 use hyper_serde::Serde;
@@ -30,7 +30,7 @@ use profile_traits::time::{
     ProfilerCategory, ProfilerChan, TimerMetadata, TimerMetadataFrameType, TimerMetadataReflowType,
 };
 use profile_traits::time_profile;
-use script_traits::DocumentActivity;
+use script_traits::{DocumentActivity, NavigationHistoryBehavior};
 use servo_config::pref;
 use servo_url::ServoUrl;
 use style::context::QuirksMode as ServoQuirksMode;
@@ -64,6 +64,7 @@ use crate::dom::htmlimageelement::HTMLImageElement;
 use crate::dom::htmlinputelement::HTMLInputElement;
 use crate::dom::htmlscriptelement::{HTMLScriptElement, ScriptResult};
 use crate::dom::htmltemplateelement::HTMLTemplateElement;
+use crate::dom::location::NavigationType;
 use crate::dom::node::{Node, ShadowIncluding};
 use crate::dom::performanceentry::PerformanceEntry;
 use crate::dom::performancenavigationtiming::PerformanceNavigationTiming;
@@ -108,10 +109,6 @@ pub(crate) struct ServoParser {
     bom_sniff: DomRefCell<Option<Vec<u8>>>,
     /// The decoder used for the network input.
     network_decoder: DomRefCell<Option<NetworkDecoder>>,
-    /// Input received from network.
-    #[ignore_malloc_size_of = "Defined in html5ever"]
-    #[no_trace]
-    network_input: StrBufferQueue,
     /// Input received from script. Used only to support document.write().
     #[ignore_malloc_size_of = "Defined in html5ever"]
     #[no_trace]
@@ -165,7 +162,32 @@ impl ServoParser {
         url: ServoUrl,
         can_gc: CanGc,
     ) {
-        let parser = if pref!(dom_servoparser_async_html_tokenizer_enabled) {
+        let parser = Self::new_html(document, url, can_gc);
+
+        // Set as the document's current parser and initialize with `input`, if given.
+        if let Some(input) = input {
+            parser.parse_complete_string_chunk(String::from(input), can_gc);
+        } else {
+            parser.document.set_current_parser(Some(&parser));
+        }
+    }
+
+    /// Create a parser for an xml document
+    pub(crate) fn new_xml(document: &Document, url: ServoUrl) -> DomRoot<Self> {
+        Self::new(
+            document,
+            Tokenizer::Xml(self::xml::Tokenizer::new(document, url)),
+            ParserKind::Normal,
+            CanGc::note(),
+        )
+    }
+
+    pub(crate) fn new_html(
+        document: &Document,
+        url: ServoUrl,
+        can_gc: CanGc,
+    ) -> DomRoot<Self> {
+        if pref!(dom_servoparser_async_html_tokenizer_enabled) {
             ServoParser::new(
                 document,
                 Tokenizer::AsyncHtml(self::async_html::Tokenizer::new(document, url, None)),
@@ -185,41 +207,9 @@ impl ServoParser {
                 can_gc,
             )
         }
-
-        // Set as the document's current parser and initialize with `input`, if given.
-        if let Some(input) = input {
-            parser.parse_complete_string_chunk(String::from(input), can_gc);
-        } else {
-            parser.document.set_current_parser(Some(&parser));
-        }
     }
 
-    /// Create a parser for an xml document
-    pub(crate) fn new_xml(document: &Document, url: ServoUrl) -> DomRoot<Self> {
-        Self::new(
-            document,
-            Tokenizer::Xml(self::xml::Tokenizer::new(document, url)),
-            ParserKind::Normal,
-        )
-    }
-
-    pub(crate) fn parse_html_document(
-        document: &Document,
-        input: Option<DOMString>,
-        url: ServoUrl,
-        can_gc: CanGc,
-    ) {
-        let parser = Self::new_html(document, url);
-
-        // Set as the document's current parser and initialize with `input`, if given.
-        if let Some(input) = input {
-            parser.parse_complete_string_chunk(String::from(input), can_gc);
-        } else {
-            parser.document.set_current_parser(Some(&parser));
-        }
-    }
-
-    // https://html.spec.whatwg.org/multipage/#parsing-html-fragments
+    /// <https://html.spec.whatwg.org/multipage/#parsing-html-fragments>
     pub(crate) fn parse_html_fragment(
         context: &Element,
         input: DOMString,
@@ -253,6 +243,7 @@ impl ServoParser {
             false,
             allow_declarative_shadow_roots,
             Some(context_document.insecure_requests_policy()),
+            None,
             can_gc,
         );
 
@@ -454,24 +445,27 @@ impl ServoParser {
         self.parse_sync(can_gc);
     }
 
-    // https://html.spec.whatwg.org/multipage/#abort-a-parser
+    /// <https://html.spec.whatwg.org/multipage/#abort-a-parser>
     pub(crate) fn abort(&self, can_gc: CanGc) {
         assert!(!self.aborted.get());
         self.aborted.set(true);
 
-        // Step 1.
+        // Step 1. Throw away any pending content in the input stream, and discard any future content
+        // that would have been added to it.
         self.script_input.replace_with(StrBufferQueue::default());
-        self.network_input.replace_with(StrBufferQueue::default());
 
-        // Step 2.
+        // Step 2. Stop the speculative HTML parser for this HTML parser.
+        // NOTE: Servo doesn't have a speculative HTML parser
+
+        // Step 3. Update the current document readiness to "interactive".
         self.document
             .set_ready_state(DocumentReadyState::Interactive, can_gc);
 
-        // Step 3.
+        // Step 4. Pop all the nodes off the stack of open elements.
         self.tokenizer.end(can_gc);
         self.document.set_current_parser(None);
 
-        // Step 4.
+        // Step 5. Update the current document readiness to "complete".
         self.document
             .set_ready_state(DocumentReadyState::Complete, can_gc);
     }
@@ -488,7 +482,6 @@ impl ServoParser {
             document: Dom::from_ref(document),
             bom_sniff: DomRefCell::new(Some(Vec::with_capacity(3))),
             network_decoder: DomRefCell::new(Some(NetworkDecoder::new(document.encoding()))),
-            network_input: StrBufferQueue::default(),
             script_input: StrBufferQueue::default(),
             tokenizer,
             last_chunk_received: Cell::new(false),
@@ -521,7 +514,10 @@ impl ServoParser {
         }
         // Per https://github.com/whatwg/html/issues/1495
         // stylesheets should not be loaded for documents
-        // without browsing contexts.
+        // without b
+    }
+
+    fn push_bytes_input_chunk(&self, chunk: Vec<u8>) {
         // https://github.com/whatwg/html/issues/1495#issuecomment-230334047
         // suggests that no content should be preloaded in such a case.
         // We're conservative, and only prefetch for documents
@@ -538,36 +534,6 @@ impl ServoParser {
         // Push the chunk into the network input stream,
         // which is tokenized lazily.
         self.network_input.push_back(chunk);
-    }
-
-    fn push_bytes_input_chunk(&self, chunk: Vec<u8>) {
-        // BOM sniff. This is needed because NetworkDecoder will switch the
-        // encoding based on the BOM, but it won't change
-        // `self.document.encoding` in the process.
-        {
-            let mut bom_sniff = self.bom_sniff.borrow_mut();
-            if let Some(partial_bom) = bom_sniff.as_mut() {
-                if partial_bom.len() + chunk.len() >= 3 {
-                    partial_bom.extend(chunk.iter().take(3 - partial_bom.len()).copied());
-                    if let Some((encoding, _)) = Encoding::for_bom(partial_bom) {
-                        self.document.set_encoding(encoding);
-                    }
-                    drop(bom_sniff);
-                    *self.bom_sniff.borrow_mut() = None;
-                } else {
-                    partial_bom.extend(chunk.iter().copied());
-                }
-            }
-        }
-
-        // For byte input, we convert it to text using the network decoder.
-        let chunk = self
-            .network_decoder
-            .borrow_mut()
-            .as_mut()
-            .unwrap()
-            .decode(chunk);
-        self.push_tendril_input_chunk(chunk);
     }
 
     fn push_string_input_chunk(&self, chunk: String) {
@@ -624,8 +590,6 @@ impl ServoParser {
             return;
         }
 
-        assert!(self.network_input.is_empty());
-
         if self.last_chunk_received.get() {
             self.finish(can_gc);
         }
@@ -662,6 +626,22 @@ impl ServoParser {
             let script = match feed(&self.tokenizer) {
                 TokenizerResult::Done => return,
                 TokenizerResult::Script(script) => script,
+                TokenizerResult::StartOverWithEncoding(encoding) => {
+                    use crate::dom::bindings::codegen::Bindings::WindowBinding::Window_Binding::WindowMethods;
+                    // We have found a <meta charset> element with an incompatible encoding
+                    // Restart the navigation algorithm and parse the document again, with
+                    // the new encoding.
+                    println!("reloading with {:?} (currently {:?})", encoding, self.document.CharacterSet());
+                    let window = self.document.window();
+                    window.Location().navigate(
+                        window.get_url(),
+                        NavigationHistoryBehavior::Replace,
+                        NavigationType::ReloadByConstellation,
+                        Some(encoding),
+                        can_gc,
+                    );
+                    return;
+                }
             };
 
             // https://html.spec.whatwg.org/multipage/#parsing-main-incdata
@@ -693,12 +673,11 @@ impl ServoParser {
         }
     }
 
-    // https://html.spec.whatwg.org/multipage/#the-end
+    /// <https://html.spec.whatwg.org/multipage/#the-end>
     fn finish(&self, can_gc: CanGc) {
         assert!(!self.suspended.get());
         assert!(self.last_chunk_received.get());
         assert!(self.script_input.is_empty());
-        assert!(self.network_input.is_empty());
         assert!(self.network_decoder.borrow().is_none());
 
         // Step 1.
@@ -756,7 +735,7 @@ enum Tokenizer {
 impl Tokenizer {
     fn feed(
         &self,
-        input: &StrBufferQueue,
+        input: ByteTendril,
         can_gc: CanGc,
         profiler_chan: ProfilerChan,
         profiler_metadata: TimerMetadata,
@@ -780,6 +759,32 @@ impl Tokenizer {
                 profiler_chan,
                 || tokenizer.feed(input),
             ),
+        }
+    }
+
+    fn feed_str(
+        &self,
+        input: StrTendril,
+        can_gc: CanGc,
+        profiler_chan: ProfilerChan,
+        profiler_metadata: TimerMetadata,
+    ) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
+        match *self {
+            Tokenizer::Html(ref tokenizer) => time_profile!(
+                ProfilerCategory::ScriptParseHTML,
+                Some(profiler_metadata),
+                profiler_chan,
+                || tokenizer.feed_str(input),
+            ),
+            Tokenizer::AsyncHtml(ref tokenizer) => time_profile!(
+                ProfilerCategory::ScriptParseHTML,
+                Some(profiler_metadata),
+                profiler_chan,
+                || tokenizer.feed_str(input, can_gc),
+            ),
+            Tokenizer::Xml(_) => {
+                unreachable!("document.write is the only user of this API and is not available for XML documents")
+            }
         }
     }
 

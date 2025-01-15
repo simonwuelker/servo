@@ -62,6 +62,7 @@ impl XMLDocument {
                 false,
                 false,
                 inherited_insecure_requests_policy,
+                None,
             ),
         }
     }

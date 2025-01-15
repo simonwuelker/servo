@@ -2655,6 +2655,7 @@ impl Node {
                     false,
                     document.allow_declarative_shadow_roots(),
                     Some(document.insecure_requests_policy()),
+                    None,
                     can_gc,
                 );
                 DomRoot::upcast::<Node>(document)

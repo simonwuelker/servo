@@ -12,9 +12,9 @@ use std::thread;
 
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use html5ever::buffer_queue::StrBufferQueue;
-use html5ever::tendril::fmt::UTF8;
-use html5ever::tendril::{SendTendril, StrTendril, Tendril};
-use html5ever::tokenizer::{Tokenizer as HtmlTokenizer, TokenizerOpts, TokenizerResult};
+use html5ever::tendril::fmt::{Bytes, UTF8};
+use html5ever::tendril::{SendTendril, ByteTendril, StrTendril, Tendril};
+use html5ever::decoding_tokenizer::{Tokenizer as HtmlTokenizer, TokenizerOpts, TokenizerResult};
 use html5ever::tree_builder::{
     ElementFlags, NextParserState, NodeOrText as HtmlNodeOrText, QuirksMode, TreeBuilder,
     TreeBuilderOpts, TreeSink,
@@ -146,16 +146,11 @@ enum ParseOperation {
 #[derive(MallocSizeOf)]
 enum ToTokenizerMsg {
     // From HtmlTokenizer
-    TokenizerResultDone {
-        #[ignore_malloc_size_of = "Defined in html5ever"]
-        updated_input: VecDeque<SendTendril<UTF8>>,
-    },
+    TokenizerResultDone,
     TokenizerResultScript {
         script: ParseNode,
-        #[ignore_malloc_size_of = "Defined in html5ever"]
-        updated_input: VecDeque<SendTendril<UTF8>>,
     },
-    End, // Sent to Tokenizer to signify HtmlTokenizer's end method has returned
+    End,
 
     // From Sink
     ProcessOperation(ParseOperation),
@@ -163,9 +158,13 @@ enum ToTokenizerMsg {
 
 #[derive(MallocSizeOf)]
 enum ToHtmlTokenizerMsg {
-    Feed {
+    FeedString {
         #[ignore_malloc_size_of = "Defined in html5ever"]
-        input: VecDeque<SendTendril<UTF8>>,
+        input: SendTendril<UTF8>,
+    },
+    FeedBytes {
+        #[ignore_malloc_size_of = "Defined in html5ever"]
+        input: SendTendril<Bytes>,
     },
     End,
     SetPlainTextState,
@@ -288,19 +287,14 @@ impl Tokenizer {
 
     pub(crate) fn feed(
         &self,
-        input: &StrBufferQueue,
+        input: ByteTendril,
         can_gc: CanGc,
     ) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
-        let mut send_tendrils = VecDeque::new();
-        while let Some(str) = input.pop_front() {
-            send_tendrils.push_back(SendTendril::from(str));
-        }
-
         // Send message to parser thread, asking it to start reading from the input.
         // Parser operation messages will be sent to main thread as they are evaluated.
         self.html_tokenizer_sender
-            .send(ToHtmlTokenizerMsg::Feed {
-                input: send_tendrils,
+            .send(ToHtmlTokenizerMsg::FeedBytes {
+                input: input.into(),
             })
             .unwrap();
 
@@ -313,17 +307,44 @@ impl Tokenizer {
                 ToTokenizerMsg::ProcessOperation(parse_op) => {
                     self.process_operation(parse_op, can_gc)
                 },
-                ToTokenizerMsg::TokenizerResultDone { updated_input } => {
-                    let buffer_queue = create_buffer_queue(updated_input);
-                    input.replace_with(buffer_queue);
-                    return TokenizerResult::Done;
-                },
+                ToTokenizerMsg::TokenizerResultDone => return TokenizerResult::Done,
                 ToTokenizerMsg::TokenizerResultScript {
                     script,
-                    updated_input,
                 } => {
-                    let buffer_queue = create_buffer_queue(updated_input);
-                    input.replace_with(buffer_queue);
+                    let script = self.get_node(&script.id);
+                    return TokenizerResult::Script(DomRoot::from_ref(script.downcast().unwrap()));
+                },
+                _ => unreachable!(),
+            };
+        }
+    }
+
+    pub(crate) fn feed_str(
+        &self,
+        input: StrTendril,
+        can_gc: CanGc,
+    ) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
+        // Send message to parser thread, asking it to start reading from the input.
+        // Parser operation messages will be sent to main thread as they are evaluated.
+        self.html_tokenizer_sender
+            .send(ToHtmlTokenizerMsg::FeedString {
+                input: input.into(),
+            })
+            .unwrap();
+
+        loop {
+            match self
+                .receiver
+                .recv()
+                .expect("Unexpected channel panic in main thread.")
+            {
+                ToTokenizerMsg::ProcessOperation(parse_op) => {
+                    self.process_operation(parse_op, can_gc)
+                },
+                ToTokenizerMsg::TokenizerResultDone => return TokenizerResult::Done,
+                ToTokenizerMsg::TokenizerResultScript {
+                    script,
+                } => {
                     let script = self.get_node(&script.id);
                     return TokenizerResult::Script(DomRoot::from_ref(script.downcast().unwrap()));
                 },
@@ -345,10 +366,9 @@ impl Tokenizer {
                 ToTokenizerMsg::ProcessOperation(parse_op) => {
                     self.process_operation(parse_op, can_gc)
                 },
-                ToTokenizerMsg::TokenizerResultDone { updated_input: _ } |
+                ToTokenizerMsg::TokenizerResultDone |
                 ToTokenizerMsg::TokenizerResultScript {
                     script: _,
-                    updated_input: _,
                 } => continue,
                 ToTokenizerMsg::End => return,
             };
@@ -602,23 +622,23 @@ fn run(
             .recv()
             .expect("Unexpected channel panic in html parser thread")
         {
-            ToHtmlTokenizerMsg::Feed { input } => {
-                let input = create_buffer_queue(input);
-                let res = html_tokenizer.feed(&input);
-
-                // Gather changes to 'input' and place them in 'updated_input',
-                // which will be sent to the main thread to update feed method's 'input'
-                let mut updated_input = VecDeque::new();
-                while let Some(st) = input.pop_front() {
-                    updated_input.push_back(SendTendril::from(st));
-                }
-
-                let res = match res {
-                    TokenizerResult::Done => ToTokenizerMsg::TokenizerResultDone { updated_input },
+            ToHtmlTokenizerMsg::FeedBytes { input } => {
+                let res = match html_tokenizer.feed_bytes(&input) {
+                    TokenizerResult::Done => ToTokenizerMsg::TokenizerResultDone,
                     TokenizerResult::Script(script) => ToTokenizerMsg::TokenizerResultScript {
                         script,
-                        updated_input,
                     },
+                    TokenizerResult::StartOverWithEncoding(_) => todo!("async html is hard"),
+                };
+                sender.send(res).unwrap();
+            },
+            ToHtmlTokenizerMsg::FeedString { input } => {
+                let res = match html_tokenizer.feed_str(&input) {
+                    TokenizerResult::Done => ToTokenizerMsg::TokenizerResultDone,
+                    TokenizerResult::Script(script) => ToTokenizerMsg::TokenizerResultScript {
+                        script,
+                    },
+                    TokenizerResult::StartOverWithEncoding(_) => todo!("async html is hard"),
                 };
                 sender.send(res).unwrap();
             },

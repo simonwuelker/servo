@@ -51,3 +51,4 @@ webgpu = { path = "../../webgpu" }
 webrender_api = { workspace = true }
 webrender_traits = { workspace = true }
 webxr-api = { workspace = true, features = ["ipc"] }
+encoding_rs = { workspace = true }

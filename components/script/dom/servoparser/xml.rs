@@ -42,11 +42,11 @@ impl Tokenizer {
         Tokenizer { inner: tok }
     }
 
-    pub(crate) fn feed(&self, input: &StrBufferQueue) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
+    pub(crate) fn feed(&self, input: &StrBufferQueue) -> html5ever::decoding_tokenizer::TokenizerResult<DomRoot<HTMLScriptElement>> {
         self.inner.run(input);
         match self.inner.sink.sink.script.take() {
-            Some(script) => TokenizerResult::Script(script),
-            None => TokenizerResult::Done,
+            Some(script) => html5ever::decoding_tokenizer::TokenizerResult::Script(script),
+            None => html5ever::decoding_tokenizer::TokenizerResult::Done,
         }
     }
 

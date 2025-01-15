@@ -1515,6 +1515,7 @@ impl XMLHttpRequest {
             false,
             false,
             Some(doc.insecure_requests_policy()),
+            None,
             can_gc,
         )
     }

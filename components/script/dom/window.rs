@@ -2487,7 +2487,7 @@ impl Window {
             } else if load_data.url.scheme() == "javascript" || doc.is_initial_about_blank() {
                 NavigationHistoryBehavior::Replace
             } else {
-                NavigationHistoryBehavior::Push
+                history_handling
             };
 
             // Step 13
