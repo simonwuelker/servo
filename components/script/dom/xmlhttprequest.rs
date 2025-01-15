@@ -1520,6 +1520,7 @@ impl XMLHttpRequest {
             None,
             Default::default(),
             false,
+            None,
             can_gc,
         )
     }

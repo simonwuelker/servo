@@ -10,11 +10,12 @@ use std::io;
 use html5ever::buffer_queue::StrBufferQueue;
 use html5ever::serialize::TraversalScope::IncludeNode;
 use html5ever::serialize::{AttrRef, Serialize, Serializer, TraversalScope};
-use html5ever::tokenizer::{Tokenizer as HtmlTokenizer, TokenizerOpts, TokenizerResult};
+use html5ever::decoding_tokenizer::{Tokenizer as HtmlTokenizer, TokenizerOpts, TokenizerResult};
 use html5ever::tree_builder::{Tracer as HtmlTracer, TreeBuilder, TreeBuilderOpts};
 use html5ever::QualName;
 use js::jsapi::JSTracer;
 use servo_url::ServoUrl;
+use tendril::{ByteTendril, StrTendril};
 
 use crate::dom::bindings::codegen::Bindings::HTMLTemplateElementBinding::HTMLTemplateElementMethods;
 use crate::dom::bindings::inheritance::{Castable, CharacterDataTypeId, NodeTypeId};
@@ -80,9 +81,20 @@ impl Tokenizer {
         Tokenizer { inner }
     }
 
-    pub(crate) fn feed(&self, input: &StrBufferQueue) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
-        match self.inner.feed(input) {
+    pub(crate) fn feed_str(&self, input: StrTendril) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
+        match self.inner.feed_str(input) {
             TokenizerResult::Done => TokenizerResult::Done,
+            TokenizerResult::StartOverWithEncoding(encoding) => TokenizerResult::StartOverWithEncoding(encoding),
+            TokenizerResult::Script(script) => {
+                TokenizerResult::Script(DomRoot::from_ref(script.downcast().unwrap()))
+            },
+        }
+    }
+
+    pub(crate) fn feed(&self, input: ByteTendril) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
+        match self.inner.feed_bytes(&input) {
+            TokenizerResult::Done => TokenizerResult::Done,
+            TokenizerResult::StartOverWithEncoding(encoding) => TokenizerResult::StartOverWithEncoding(encoding),
             TokenizerResult::Script(script) => {
                 TokenizerResult::Script(DomRoot::from_ref(script.downcast().unwrap()))
             },
@@ -94,7 +106,7 @@ impl Tokenizer {
     }
 
     pub(crate) fn url(&self) -> &ServoUrl {
-        &self.inner.sink.sink.base_url
+        &self.inner.sink().sink.base_url
     }
 
     pub(crate) fn set_plaintext_state(&self) {
@@ -118,7 +130,7 @@ unsafe impl CustomTraceable for HtmlTokenizer<TreeBuilder<Dom<Node>, Sink>> {
             }
         }
 
-        let tree_builder = &self.sink;
+        let tree_builder = &self.sink();
         tree_builder.trace_handles(&tracer);
         tree_builder.sink.trace(trc);
     }

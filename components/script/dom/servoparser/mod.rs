@@ -16,7 +16,7 @@ use encoding_rs::Encoding;
 use html5ever::buffer_queue::StrBufferQueue;
 use html5ever::tendril::fmt::UTF8;
 use html5ever::tendril::{ByteTendril, StrTendril, TendrilSink};
-use html5ever::tokenizer::TokenizerResult;
+use html5ever::decoding_tokenizer::TokenizerResult;
 use html5ever::tree_builder::{ElementFlags, NextParserState, NodeOrText, QuirksMode, TreeSink};
 use html5ever::{local_name, namespace_url, ns, Attribute, ExpandedName, LocalName, QualName};
 use hyper_serde::Serde;
@@ -30,7 +30,7 @@ use profile_traits::time::{
     ProfilerCategory, ProfilerChan, TimerMetadata, TimerMetadataFrameType, TimerMetadataReflowType,
 };
 use profile_traits::time_profile;
-use script_traits::DocumentActivity;
+use script_traits::{DocumentActivity, NavigationHistoryBehavior};
 use servo_config::pref;
 use servo_url::ServoUrl;
 use style::context::QuirksMode as ServoQuirksMode;
@@ -60,6 +60,7 @@ use crate::dom::htmlimageelement::HTMLImageElement;
 use crate::dom::htmlinputelement::HTMLInputElement;
 use crate::dom::htmlscriptelement::{HTMLScriptElement, ScriptResult};
 use crate::dom::htmltemplateelement::HTMLTemplateElement;
+use crate::dom::location::NavigationType;
 use crate::dom::node::{Node, ShadowIncluding};
 use crate::dom::performanceentry::PerformanceEntry;
 use crate::dom::performancenavigationtiming::PerformanceNavigationTiming;
@@ -230,6 +231,7 @@ impl ServoParser {
             None,
             Default::default(),
             false,
+            None,
             can_gc,
         );
 
@@ -627,6 +629,22 @@ impl ServoParser {
             let script = match feed(&self.tokenizer) {
                 TokenizerResult::Done => return,
                 TokenizerResult::Script(script) => script,
+                TokenizerResult::StartOverWithEncoding(encoding) => {
+                    use crate::dom::bindings::codegen::Bindings::WindowBinding::Window_Binding::WindowMethods;
+                    // We have found a <meta charset> element with an incompatible encoding
+                    // Restart the navigation algorithm and parse the document again, with
+                    // the new encoding.
+                    println!("reloading with {:?} (currently {:?})", encoding, self.document.CharacterSet());
+                    let window = self.document.window();
+                    window.Location().navigate(
+                        window.get_url(),
+                        NavigationHistoryBehavior::Replace,
+                        NavigationType::ReloadByConstellation,
+                        Some(encoding),
+                        can_gc,
+                    );
+                    return;
+                }
             };
 
             // https://html.spec.whatwg.org/multipage/#parsing-main-incdata
@@ -721,7 +739,7 @@ enum Tokenizer {
 impl Tokenizer {
     fn feed(
         &self,
-        input: &StrBufferQueue,
+        input: ByteTendril,
         can_gc: CanGc,
         profiler_chan: ProfilerChan,
         profiler_metadata: TimerMetadata,
@@ -745,6 +763,32 @@ impl Tokenizer {
                 profiler_chan,
                 || tokenizer.feed(input),
             ),
+        }
+    }
+
+    fn feed_str(
+        &self,
+        input: StrTendril,
+        can_gc: CanGc,
+        profiler_chan: ProfilerChan,
+        profiler_metadata: TimerMetadata,
+    ) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
+        match *self {
+            Tokenizer::Html(ref tokenizer) => time_profile!(
+                ProfilerCategory::ScriptParseHTML,
+                Some(profiler_metadata),
+                profiler_chan,
+                || tokenizer.feed_str(input),
+            ),
+            Tokenizer::AsyncHtml(ref tokenizer) => time_profile!(
+                ProfilerCategory::ScriptParseHTML,
+                Some(profiler_metadata),
+                profiler_chan,
+                || tokenizer.feed_str(input, can_gc),
+            ),
+            Tokenizer::Xml(_) => {
+                unreachable!("document.write is the only user of this API and is not available for XML documents")
+            }
         }
     }
 

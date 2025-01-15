@@ -3211,6 +3211,7 @@ impl Document {
         status_code: Option<u16>,
         canceller: FetchCanceller,
         is_initial_about_blank: bool,
+        encoding: Option<&'static encoding_rs::Encoding>,
     ) -> Document {
         let url = url.unwrap_or_else(|| ServoUrl::parse("about:blank").unwrap());
 
@@ -3232,10 +3233,17 @@ impl Document {
             }
         });
 
+        println!("got {:?}", encoding);
+
         let encoding = content_type
             .get_param(mime::CHARSET)
-            .and_then(|charset| Encoding::for_label(charset.as_str().as_bytes()))
+            .as_ref()
+            .map(mime::Name::as_str)
+            .and_then(|charset| Encoding::for_label(charset.as_bytes()))
+            .or(encoding)
             .unwrap_or(UTF_8);
+
+        println!("creating doc with {}", encoding.name());
 
         let has_browsing_context = has_browsing_context == HasBrowsingContext::Yes;
 
@@ -3475,6 +3483,7 @@ impl Document {
         status_code: Option<u16>,
         canceller: FetchCanceller,
         is_initial_about_blank: bool,
+        encoding: Option<&'static encoding_rs::Encoding>,
         can_gc: CanGc,
     ) -> DomRoot<Document> {
         Self::new_with_proto(
@@ -3493,6 +3502,7 @@ impl Document {
             status_code,
             canceller,
             is_initial_about_blank,
+            encoding,
             can_gc,
         )
     }
@@ -3514,6 +3524,7 @@ impl Document {
         status_code: Option<u16>,
         canceller: FetchCanceller,
         is_initial_about_blank: bool,
+        encoding: Option<&'static encoding_rs::Encoding>,
         can_gc: CanGc,
     ) -> DomRoot<Document> {
         let document = reflect_dom_object_with_proto(
@@ -3532,6 +3543,7 @@ impl Document {
                 status_code,
                 canceller,
                 is_initial_about_blank,
+                encoding,
             )),
             window,
             proto,
@@ -3663,6 +3675,7 @@ impl Document {
                     None,
                     Default::default(),
                     false,
+                    None,
                     can_gc,
                 );
                 new_doc
@@ -4227,6 +4240,7 @@ impl DocumentMethods<crate::DomTypeHolder> for Document {
             None,
             Default::default(),
             false,
+            None,
             can_gc,
         ))
     }

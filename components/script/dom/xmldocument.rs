@@ -58,6 +58,7 @@ impl XMLDocument {
                 None,
                 Default::default(),
                 false,
+                None,
             ),
         }
     }

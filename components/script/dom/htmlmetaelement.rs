@@ -10,11 +10,12 @@ use dom_struct::dom_struct;
 use html5ever::{LocalName, Prefix};
 use js::rust::HandleObject;
 use regex::bytes::Regex;
-use script_traits::NavigationHistoryBehavior;
+use script_traits::{NavigationHistoryBehavior};
 use servo_url::ServoUrl;
 use style::str::HTML_SPACE_CHARACTERS;
 
 use crate::dom::attr::Attr;
+use crate::dom::bindings::codegen::Bindings::DocumentBinding::DocumentMethods;
 use crate::dom::bindings::codegen::Bindings::HTMLMetaElementBinding::HTMLMetaElementMethods;
 use crate::dom::bindings::codegen::Bindings::NodeBinding::NodeMethods;
 use crate::dom::bindings::codegen::Bindings::WindowBinding::WindowMethods;
@@ -50,6 +51,7 @@ impl RefreshRedirectDue {
             self.url.clone(),
             NavigationHistoryBehavior::Replace,
             NavigationType::DeclarativeRefresh,
+            None,
             can_gc,
         );
     }

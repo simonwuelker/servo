@@ -164,6 +164,9 @@ pub struct LoadData {
 
     /// Servo internal: if crash details are present, trigger a crash error page with these details.
     pub crash: Option<String>,
+
+    /// Used to force the use of a specific encoding after having found a <meta charset> element
+    pub charset_override: Option<&'static encoding_rs::Encoding>,
 }
 
 /// The result of evaluating a javascript scheme url.
@@ -199,6 +202,7 @@ impl LoadData {
             srcdoc: "".to_string(),
             inherited_secure_context,
             crash: None,
+            charset_override: None,
         }
     }
 }

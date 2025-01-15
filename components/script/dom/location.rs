@@ -71,6 +71,7 @@ impl Location {
         url: ServoUrl,
         history_handling: NavigationHistoryBehavior,
         navigation_type: NavigationType,
+        charset_override: Option<&'static encoding_rs::Encoding>,
         can_gc: CanGc,
     ) {
         fn incumbent_window() -> DomRoot<Window> {
@@ -122,7 +123,7 @@ impl Location {
 
         // Initiate navigation
         // TODO: rethrow exceptions, set exceptions enabled flag.
-        let load_data = LoadData::new(
+        let mut load_data = LoadData::new(
             LoadOrigin::Script(load_origin),
             url,
             creator_pipeline_id,
@@ -130,6 +131,7 @@ impl Location {
             referrer_policy,
             None, // Top navigation doesn't inherit secure context
         );
+        load_data.charset_override = charset_override;
         self.window
             .load_url(history_handling, reload_triggered, load_data, can_gc);
     }
@@ -235,6 +237,7 @@ impl Location {
                     copy_url,
                     NavigationHistoryBehavior::Push,
                     NavigationType::Normal,
+                    None,
                     can_gc,
                 );
             }
@@ -256,6 +259,7 @@ impl Location {
             url,
             NavigationHistoryBehavior::Replace,
             NavigationType::ReloadByConstellation,
+            None,
             can_gc,
         );
     }
@@ -292,6 +296,7 @@ impl LocationMethods<crate::DomTypeHolder> for Location {
             url,
             NavigationHistoryBehavior::Replace,
             NavigationType::ReloadByScript,
+            None,
             can_gc,
         );
         Ok(())
@@ -314,6 +319,7 @@ impl LocationMethods<crate::DomTypeHolder> for Location {
                 url,
                 NavigationHistoryBehavior::Replace,
                 NavigationType::Normal,
+                None,
                 can_gc,
             );
         }
@@ -426,6 +432,7 @@ impl LocationMethods<crate::DomTypeHolder> for Location {
                 url,
                 NavigationHistoryBehavior::Push,
                 NavigationType::Normal,
+                None,
                 can_gc,
             );
         }

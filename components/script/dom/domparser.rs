@@ -88,6 +88,7 @@ impl DOMParserMethods<crate::DomTypeHolder> for DOMParser {
                     None,
                     Default::default(),
                     false,
+                    None,
                     can_gc,
                 );
                 ServoParser::parse_html_document(&document, Some(s), url, can_gc);
@@ -110,6 +111,7 @@ impl DOMParserMethods<crate::DomTypeHolder> for DOMParser {
                     None,
                     Default::default(),
                     false,
+                    None,
                     can_gc,
                 );
                 ServoParser::parse_xml_document(&document, Some(s), url, can_gc);
