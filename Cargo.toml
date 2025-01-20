@@ -234,5 +234,7 @@ codegen-units = 1
 #
 # Or for another Git dependency:
 #
-# [patch."https://github.com/servo/<repository>"]
-# <crate> = { path = "/path/to/local/checkout" }
+[patch."https://github.com/servo/media"]
+servo-media = { path = "../media/servo-media" }
+servo-media-dummy = { path = "../media/backends/dummy" }
+servo-media-gstreamer = { path = "../media/backends/gstreamer" }
