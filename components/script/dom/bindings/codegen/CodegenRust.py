@@ -3379,10 +3379,8 @@ class CGCreateInterfaceObjectsMethod(CGAbstractMethod):
     def definition_body(self):
         name = self.descriptor.interface.identifier.name
         if self.descriptor.interface.isNamespace():
-            if self.descriptor.interface.getExtendedAttribute("ProtoObjectHack"):
-                proto = "GetRealmObjectPrototype(*cx)"
-            else:
-                proto = "JS_NewPlainObject(*cx)"
+            has_proto_object_hack = str(bool(self.descriptor.interface.getExtendedAttribute("ProtoObjectHack"))).lower()
+
             if self.properties.static_methods.length():
                 methods = f"{self.properties.static_methods.variableName()}.get()"
             else:
@@ -3391,32 +3389,41 @@ class CGCreateInterfaceObjectsMethod(CGAbstractMethod):
                 constants = "sConstants.get()"
             else:
                 constants = "&[]"
+
             id = MakeNativeName(name)
+            native_name = str_to_cstr(name)
             return CGGeneric(f"""
-rooted!(in(*cx) let proto = {proto});
-assert!(!proto.is_null());
-rooted!(in(*cx) let mut namespace = ptr::null_mut::<JSObject>());
-create_namespace_object(cx, global, proto.handle(), &NAMESPACE_OBJECT_CLASS,
-                        {methods}, {constants}, {str_to_cstr(name)}, namespace.handle_mut());
-assert!(!namespace.is_null());
-assert!((*cache)[PrototypeList::Constructor::{id} as usize].is_null());
-(*cache)[PrototypeList::Constructor::{id} as usize] = namespace.get();
-<*mut JSObject>::post_barrier((*cache).as_mut_ptr().offset(PrototypeList::Constructor::{id} as isize),
-                              ptr::null_mut(),
-                              namespace.get());
-""")
+let interface_info = dom::bindings::interface::NamespaceInterfaceInfo {{
+    constructor: PrototypeList::Constructor::{id},
+    static_methods: {methods},
+    constants: {constants},
+    name: {native_name},
+    namespace_object_class: &NAMESPACE_OBJECT_CLASS,
+}};
+
+dom::bindings::interface::create_and_cache_interface_object_for_namespace::<{has_proto_object_hack}>(
+    cx,
+    global,
+    cache,
+    interface_info,
+)
+            """)
         if self.descriptor.interface.isCallback():
             assert not self.descriptor.interface.ctor() and self.descriptor.interface.hasConstants()
             cName = str_to_cstr(name)
             return CGGeneric(f"""
-rooted!(in(*cx) let mut interface = ptr::null_mut::<JSObject>());
-create_callback_interface_object(cx, global, sConstants.get(), {cName}, interface.handle_mut());
-assert!(!interface.is_null());
-assert!((*cache)[PrototypeList::Constructor::{name} as usize].is_null());
-(*cache)[PrototypeList::Constructor::{name} as usize] = interface.get();
-<*mut JSObject>::post_barrier((*cache).as_mut_ptr().offset(PrototypeList::Constructor::{name} as isize),
-                              ptr::null_mut(),
-                              interface.get());
+let interface_info = dom::bindings::interface::CallbackInterfaceInfo {{
+    name: {cName},
+    constructor: PrototypeList::Constructor::{name},
+    constants: sConstants.get(),
+}};
+
+dom::bindings::interface::create_and_cache_interface_object_for_callback(
+    cx,
+    global,
+    cache,
+    interface_info
+)
 """)
 
         parentName = self.descriptor.getParentName()

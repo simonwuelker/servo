@@ -13,13 +13,14 @@ use js::glue::UncheckedUnwrapObject;
 use js::jsapi::JS::CompartmentIterResult;
 use js::jsapi::{
     jsid, CallArgs, CheckedUnwrapStatic, Compartment, CompartmentSpecifier, CurrentGlobalOrNull,
-    GetFunctionRealm, GetNonCCWObjectGlobal, GetRealmGlobalOrNull, GetWellKnownSymbol,
-    HandleObject as RawHandleObject, IsSharableCompartment, IsSystemCompartment, JSAutoRealm,
-    JSClass, JSClassOps, JSContext, JSFunctionSpec, JSObject, JSPropertySpec, JSString, JSTracer,
-    JS_AtomizeAndPinString, JS_GetFunctionObject, JS_GetProperty, JS_IterateCompartments,
-    JS_NewFunction, JS_NewGlobalObject, JS_NewObject, JS_NewPlainObject, JS_NewStringCopyN,
-    JS_SetReservedSlot, JS_WrapObject, ObjectOps, OnNewGlobalHookOption, SymbolCode,
-    TrueHandleValue, Value, JSFUN_CONSTRUCTOR, JSPROP_PERMANENT, JSPROP_READONLY, JSPROP_RESOLVING,
+    GetFunctionRealm, GetNonCCWObjectGlobal, GetRealmGlobalOrNull, GetRealmObjectPrototype,
+    GetWellKnownSymbol, HandleObject as RawHandleObject, IsSharableCompartment,
+    IsSystemCompartment, JSAutoRealm, JSClass, JSClassOps, JSContext, JSFunctionSpec, JSObject,
+    JSPropertySpec, JSString, JSTracer, JS_AtomizeAndPinString, JS_GetFunctionObject,
+    JS_GetProperty, JS_IterateCompartments, JS_NewFunction, JS_NewGlobalObject, JS_NewObject,
+    JS_NewPlainObject, JS_NewStringCopyN, JS_SetReservedSlot, JS_WrapObject, ObjectOps,
+    OnNewGlobalHookOption, SymbolCode, TrueHandleValue, Value, JSFUN_CONSTRUCTOR, JSPROP_PERMANENT,
+    JSPROP_READONLY, JSPROP_RESOLVING,
 };
 use js::jsval::{JSVal, NullValue, PrivateValue};
 use js::rust::wrappers::{
@@ -29,7 +30,7 @@ use js::rust::wrappers::{
 };
 use js::rust::{
     define_methods, define_properties, get_object_class, is_dom_class, maybe_wrap_object,
-    HandleObject, HandleValue, MutableHandleObject, RealmOptions,
+    GCMethods, HandleObject, HandleValue, MutableHandleObject, RealmOptions,
 };
 use servo_url::MutableOrigin;
 
@@ -38,6 +39,7 @@ use crate::dom::bindings::codegen::PrototypeList;
 use crate::dom::bindings::constant::{define_constants, ConstantSpec};
 use crate::dom::bindings::conversions::{get_dom_class, DOM_OBJECT_SLOT};
 use crate::dom::bindings::guard::Guard;
+use crate::dom::bindings::namespace::{create_namespace_object, NamespaceObjectClass};
 use crate::dom::bindings::principals::ServoJSPrincipals;
 use crate::dom::bindings::utils::{
     get_proto_or_iface_array, DOMJSClass, ProtoOrIfaceArray, DOM_PROTOTYPE_SLOT, JSCLASS_DOM_GLOBAL,
@@ -691,4 +693,82 @@ pub(crate) fn get_desired_proto(
         maybe_wrap_object(*cx, desired_proto);
         Ok(())
     }
+}
+
+pub(crate) struct NamespaceInterfaceInfo {
+    pub(crate) constructor: PrototypeList::Constructor,
+    pub(crate) static_methods: &'static [Guard<&'static [JSFunctionSpec]>],
+    pub(crate) constants: &'static [Guard<&'static [ConstantSpec]>],
+    pub(crate) name: &'static core::ffi::CStr,
+    pub(crate) namespace_object_class: &'static NamespaceObjectClass,
+}
+
+pub(crate) unsafe fn create_and_cache_interface_object_for_namespace<
+    const HAS_PROTOTYPE_HACK: bool,
+>(
+    cx: SafeJSContext,
+    global: HandleObject,
+    cache: *mut ProtoOrIfaceArray,
+    interface: NamespaceInterfaceInfo,
+) {
+    rooted!(in(*cx) let proto = if HAS_PROTOTYPE_HACK {
+        GetRealmObjectPrototype(*cx)
+    } else {
+        JS_NewPlainObject(*cx)
+    });
+    assert!(!proto.is_null());
+
+    rooted!(in(*cx) let mut namespace = ptr::null_mut::<JSObject>());
+    create_namespace_object(
+        cx,
+        global,
+        proto.handle(),
+        interface.namespace_object_class,
+        interface.static_methods,
+        interface.constants,
+        interface.name,
+        namespace.handle_mut(),
+    );
+    assert!(!namespace.is_null());
+
+    assert!((*cache)[interface.constructor as usize].is_null());
+    (*cache)[interface.constructor as usize] = namespace.get();
+    <*mut JSObject>::post_barrier(
+        (*cache).as_mut_ptr().offset(interface.constructor as isize),
+        ptr::null_mut(),
+        namespace.get(),
+    );
+}
+
+pub(crate) struct CallbackInterfaceInfo {
+    pub(crate) name: &'static core::ffi::CStr,
+    pub(crate) constructor: PrototypeList::Constructor,
+    pub(crate) constants: &'static [Guard<&'static [ConstantSpec]>],
+}
+
+pub(crate) unsafe fn create_and_cache_interface_object_for_callback(
+    cx: SafeJSContext,
+    global: HandleObject,
+    cache: *mut ProtoOrIfaceArray,
+    interface_info: CallbackInterfaceInfo,
+) {
+    rooted!(in(*cx) let mut interface = ptr::null_mut::<JSObject>());
+    create_callback_interface_object(
+        cx,
+        global,
+        interface_info.constants,
+        interface_info.name,
+        interface.handle_mut(),
+    );
+    assert!(!interface.is_null());
+
+    assert!((*cache)[interface_info.constructor as usize].is_null());
+    (*cache)[interface_info.constructor as usize] = interface.get();
+    <*mut JSObject>::post_barrier(
+        (*cache)
+            .as_mut_ptr()
+            .offset(interface_info.constructor as isize),
+        ptr::null_mut(),
+        interface.get(),
+    );
 }
