@@ -64,9 +64,8 @@ use crate::dom::bindings::codegen::InheritTypes::{
     ElementTypeId, HTMLElementTypeId, HTMLMediaElementTypeId, NodeTypeId,
 };
 use crate::dom::bindings::codegen::UnionTypes::{
-    MediaStreamOrMediaSourceHandleOrBlob, VideoTrackOrAudioTrackOrTextTrack,
+    BlobOrMediaSource, MediaStreamOrMediaSourceHandleOrBlob, VideoTrackOrAudioTrackOrTextTrack,
 };
-use crate::dom::bindings::codegen::UnionTypes::BlobOrMediaSource;
 use crate::dom::bindings::error::{Error, ErrorResult, Fallible};
 use crate::dom::bindings::inheritance::Castable;
 use crate::dom::bindings::num::Finite;
@@ -752,6 +751,7 @@ impl HTMLMediaElement {
 
     // https://html.spec.whatwg.org/multipage/#concept-media-load-algorithm
     fn resource_selection_algorithm_sync(&self, base_url: ServoUrl, can_gc: CanGc) {
+        println!("resource selection algorithm");
         // Step 5.
         // FIXME(ferjm): Implement blocked_on_parser logic
         // https://html.spec.whatwg.org/multipage/#blocked-on-parser
@@ -763,79 +763,105 @@ impl HTMLMediaElement {
             Attribute(String),
             Children(DomRoot<HTMLSourceElement>),
         }
+
         fn mode(media: &HTMLMediaElement) -> Option<Mode> {
+            // Step 6. If the media element has an assigned media provider object,
+            // then let mode be object.
             if media.src_object.borrow().is_some() {
                 return Some(Mode::Object);
             }
+
+            // Otherwise, if the media element has no assigned media provider object but
+            // has a src attribute, then let mode be attribute.
             if let Some(attr) = media
                 .upcast::<Element>()
                 .get_attribute(&ns!(), &local_name!("src"))
             {
                 return Some(Mode::Attribute(attr.Value().into()));
             }
+
+            // Otherwise, if the media element does not have an assigned media provider
+            // object and does not have a src attribute, but does have a source element child,
+            // then let mode be children and let candidate be the first such source element child in tree order.
             let source_child_element = media
                 .upcast::<Node>()
                 .children()
                 .filter_map(DomRoot::downcast::<HTMLSourceElement>)
                 .next();
+
             if let Some(element) = source_child_element {
                 return Some(Mode::Children(element));
             }
+
+            // Otherwise, the media element has no assigned media provider object and has neither a
+            // src attribute nor a source element child:
             None
         }
         let mode = if let Some(mode) = mode(self) {
             mode
         } else {
+            // Step 6.1 Set the networkState to NETWORK_EMPTY.
             self.network_state.set(NetworkState::Empty);
+
+            // Step 6.2 Set the element's delaying-the-load-event flag to false.
+            // This stops delaying the load event.
             // https://github.com/whatwg/html/issues/3065
             self.delay_load_event(false, can_gc);
+
+            // Step 6.3 End the synchronous section and return.
             return;
         };
 
-        // Step 7.
+        // Step 7. Set the media element's networkState to NETWORK_LOADING.
         self.network_state.set(NetworkState::Loading);
 
-        // Step 8.
+        // Step 8. Queue a media element task given the media element to fire an
+        // event named loadstart at the media element.
         self.owner_global()
             .task_manager()
             .media_element_task_source()
             .queue_simple_event(self.upcast(), atom!("loadstart"));
 
-        // Step 9.
+        // Step 9. Run the appropriate steps from the following list:
         match mode {
-            // Step 9.obj.
+            // If mode is object
             Mode::Object => {
-                // Step 9.obj.1.
-                "".clone_into(&mut self.current_src.borrow_mut());
+                // Step 9.obj.1 Set the currentSrc attribute to the empty string.
+                self.current_src.borrow_mut().clear();
 
-                // Step 9.obj.2.
+                // TODO Step 9.obj.2 End the synchronous section, continuing the remaining steps in parallel.
                 // FIXME(nox): The rest of the steps should be ran in parallel.
 
-                // Step 9.obj.3.
+                // Step 9.obj3 Run the resource fetch algorithm with the assigned media provider object.
+                // If that algorithm returns without aborting this one, then the load failed.
                 // Note that the resource fetch algorithm itself takes care
                 // of the cleanup in case of failure itself.
                 self.resource_fetch_algorithm(Resource::Object);
             },
             Mode::Attribute(src) => {
-                // Step 9.attr.1.
+                // Step 9.attr.1. If the src attribute's value is the empty string, then end
+                // the synchronous section, and jump down to the failed with attribute step below.
                 if src.is_empty() {
                     self.queue_dedicated_media_source_failure_steps();
                     return;
                 }
 
-                // Step 9.attr.2.
-                let url_record = match base_url.join(&src) {
-                    Ok(url) => url,
-                    Err(_) => {
-                        self.queue_dedicated_media_source_failure_steps();
-                        return;
-                    },
+                // Step 9.attr.2. Let urlRecord be the result of encoding-parsing a URL given the
+                // src attribute's value, relative to the media element's node document when the src
+                // attribute was last changed.
+                let Ok(url_record) = base_url.join(&src)  else {
+                    self.queue_dedicated_media_source_failure_steps();
+                    return;
                 };
 
-                // Step 9.attr.3.
+                // Step 9.attr.3. If urlRecord is not failure, then set the currentSrc attribute to the
+                // result of applying the URL serializer to urlRecord.
                 *self.current_src.borrow_mut() = url_record.as_str().into();
 
-                // Step 9.attr.4.
+                // TODO Step 9.attr.4 End the synchronous section, continuing the remaining steps in parallel.
+
+                // Step 9.attr.5. If urlRecord is not failure, then run the resource fetch algorithm with urlRecord.
+                // If that algorithm returns without aborting this one, then the load failed.
                 // Note that the resource fetch algorithm itself takes care
                 // of the cleanup in case of failure itself.
                 self.resource_fetch_algorithm(Resource::Url(url_record));
@@ -920,7 +946,7 @@ impl HTMLMediaElement {
         self.owner_document().fetch_background(request, listener);
     }
 
-    // https://html.spec.whatwg.org/multipage/#concept-media-load-resource
+    /// <https://html.spec.whatwg.org/multipage/#concept-media-load-resource>
     fn resource_fetch_algorithm(&self, resource: Resource) {
         if let Err(e) = self.setup_media_player(&resource) {
             eprintln!("Setup media player error {:?}", e);
@@ -928,9 +954,25 @@ impl HTMLMediaElement {
             return;
         }
 
-        // Steps 1-2.
-        // Unapplicable, the `resource` variable already conveys which mode
-        // is in use.
+        enum Mode {
+            Local,
+            Remote,
+        }
+
+        // Step 1. Let mode be remote.
+        let mut mode = Mode::Remote;
+
+        // Step 2. If the algorithm was invoked with media provider object, then set mode to local.
+        if matches!(resource, Resource::Object) {
+            mode = Mode::Local;
+        }
+        // Otherwise:
+        else {
+            // Step 2.1 Let object be the result of obtaining a blob object using the URL record's
+            // blob URL entry and the media element's node document's relevant settings object.
+
+            // Step 2.2 If object is a media provider object, then set mode to local.
+        }
 
         // Step 3.
         // FIXME(nox): Remove all media-resource-specific text tracks.
@@ -974,7 +1016,10 @@ impl HTMLMediaElement {
                 if let Some(ref src_object) = *self.src_object.borrow() {
                     match src_object {
                         SrcObject::Blob(blob) => {
-                            let blob_url = URL::CreateObjectURL(&self.global(), BlobOrMediaSource::Blob(DomRoot::from_ref(&*blob)));
+                            let blob_url = URL::CreateObjectURL(
+                                &self.global(),
+                                BlobOrMediaSource::Blob(DomRoot::from_ref(&*blob)),
+                            );
                             *self.blob_url.borrow_mut() =
                                 Some(ServoUrl::parse(&blob_url).expect("infallible"));
                             self.fetch_request(None, None);
@@ -997,8 +1042,12 @@ impl HTMLMediaElement {
                             }
                         },
                         SrcObject::MediaSourceHandle(media_source_handle) => {
+                            // Inserted steps from https://w3c.github.io/media-source/#mediasource-attach
+
                             // TODO
-                            log::error!("not implemented: media source handle as src for Media Element");
+                            log::error!(
+                                "not implemented: media source handle as src for Media Element"
+                            );
                         },
                     }
                 }

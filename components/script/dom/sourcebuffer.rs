@@ -4,6 +4,7 @@
 
 use dom_struct::dom_struct;
 use js::rust::HandleObject;
+use servo_media::SourceBufferId;
 
 use crate::dom::audiotracklist::AudioTrackList;
 use crate::dom::bindings::codegen::Bindings::SourceBufferBinding::SourceBufferMethods;
@@ -18,13 +19,18 @@ use crate::script_runtime::CanGc;
 pub struct SourceBuffer {
     eventtarget: EventTarget,
     audio_tracks: Dom<AudioTrackList>,
+
+    #[no_trace]
+    #[ignore_malloc_size_of = "defined in servo-media"]
+    backend_handle: SourceBufferId
 }
 
 impl SourceBuffer {
-    pub fn new_inherited(audio_tracks: &AudioTrackList) -> SourceBuffer {
+    pub fn new_inherited(audio_tracks: &AudioTrackList, backend_handle: SourceBufferId) -> SourceBuffer {
         Self {
             eventtarget: EventTarget::new_inherited(),
             audio_tracks: Dom::from_ref(audio_tracks),
+            backend_handle,
         }
     }
 
@@ -32,8 +38,9 @@ impl SourceBuffer {
         global: &GlobalScope,
         can_gc: CanGc,
         audio_tracks: &AudioTrackList,
+        backend_handle: SourceBufferId
     ) -> DomRoot<SourceBuffer> {
-        Self::new_with_proto(global, None, can_gc, audio_tracks)
+        Self::new_with_proto(global, None, can_gc, audio_tracks, backend_handle)
     }
 
     fn new_with_proto(
@@ -41,9 +48,10 @@ impl SourceBuffer {
         proto: Option<HandleObject>,
         can_gc: CanGc,
         audio_tracks: &AudioTrackList,
+        backend_handle: SourceBufferId,
     ) -> DomRoot<SourceBuffer> {
         reflect_dom_object_with_proto(
-            Box::new(SourceBuffer::new_inherited(audio_tracks)),
+            Box::new(SourceBuffer::new_inherited(audio_tracks, backend_handle)),
             global,
             proto,
             can_gc,

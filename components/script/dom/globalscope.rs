@@ -1678,6 +1678,17 @@ impl GlobalScope {
         }
     }
 
+    pub(crate) fn resolve_blob_id(&self, blob_id: &BlobId) -> Option<BlobEntryContent> {
+        let BlobState::Managed(blobs_map) = &*self.blob_state.borrow() else {
+            panic!("accessing blob on a global not managing any blobs.");
+        };
+        let blob_content = blobs_map
+            .get(blob_id)?
+            .content;
+        Some(blob_content)
+
+    }
+
     /// Get a slice to the inner data of a Blob,
     /// if it's a memory blob, or it's file-id and file-size otherwise.
     ///

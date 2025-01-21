@@ -16,11 +16,11 @@ use uuid::Uuid;
 
 use crate::dom::bindings::cell::DomRefCell;
 use crate::dom::bindings::codegen::Bindings::URLBinding::URLMethods;
+use crate::dom::bindings::codegen::UnionTypes::BlobOrMediaSource;
 use crate::dom::bindings::error::{Error, ErrorResult, Fallible};
 use crate::dom::bindings::reflector::{reflect_dom_object_with_proto, DomGlobal, Reflector};
 use crate::dom::bindings::root::{DomRoot, MutNullableDom};
 use crate::dom::bindings::str::{DOMString, USVString};
-use crate::dom::bindings::codegen::UnionTypes::BlobOrMediaSource;
 use crate::dom::globalscope::GlobalScope;
 use crate::dom::urlhelper::UrlHelper;
 use crate::dom::urlsearchparams::URLSearchParams;
@@ -187,7 +187,6 @@ impl URLMethods<crate::DomTypeHolder> for URL {
         //      and should not be trusted. See issue https://github.com/servo/servo/issues/11722
         let origin = get_blob_origin(&global.get_url());
 
-
         let id = match blob_or_mediasource {
             BlobOrMediaSource::Blob(blob) => blob.get_blob_url_id(),
             BlobOrMediaSource::MediaSource(media_source) => {
@@ -196,7 +195,7 @@ impl URLMethods<crate::DomTypeHolder> for URL {
                 let blob_id = BlobId::new();
                 global.track_mediasource(&media_source, blob_id);
                 global.get_blob_url_id(&blob_id)
-            }
+            },
         };
 
         DOMString::from(URL::unicode_serialization_blob_url(&origin, &id))

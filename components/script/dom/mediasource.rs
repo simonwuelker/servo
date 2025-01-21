@@ -5,6 +5,7 @@
 use dom_struct::dom_struct;
 use js::rust::HandleObject;
 use mime::Mime;
+use servo_media::ServoMedia;
 
 use crate::dom::audiotracklist::AudioTrackList;
 use crate::dom::bindings::codegen::Bindings::MediaSourceBinding::MediaSourceMethods;
@@ -29,6 +30,10 @@ pub struct MediaSource {
 
     /// <https://w3c.github.io/media-source/#dom-mediasource-handle>
     handle: MutNullableDom<MediaSourceHandle>,
+
+    #[no_trace]
+    #[ignore_malloc_size_of = "defined in servo-media"]
+    backend_handle: servo_media::MediaSourceId,
 }
 
 impl MediaSource {
@@ -37,6 +42,7 @@ impl MediaSource {
             eventtarget: EventTarget::new_inherited(),
             source_buffer_list: MutNullableDom::new(None),
             handle: MutNullableDom::new(None),
+            backend_handle: ServoMedia::get().create_media_source(),
         }
     }
 
@@ -85,53 +91,11 @@ impl MediaSourceMethods<crate::DomTypeHolder> for MediaSource {
 
     /// <https://w3c.github.io/media-source/#dom-mediasource-istypesupported>
     fn IsTypeSupported(_window: &Window, media_type: DOMString) -> bool {
-        // Step 1. If type is an empty string, then return false.
-        if media_type.is_empty() {
-            return false;
-        }
-
-        // Step 2. If type does not contain a valid MIME type string, then return false.
-        let Ok(_mime_type) = media_type.str().parse::<Mime>() else {
-            return false;
-        };
-
-        // TODO Step 3. If type contains a media type or media subtype that the
-        // MediaSource does not support, then return false.
-
-        // TODO Step 4. If type contains a codec that the MediaSource does not support, then return false.
-
-        // TODO Step 5. If the MediaSource does not support the specified combination of media type,
-        // media subtype, and codecs then return false.
-
-        // Step 6. Return true.
-        true
+        ServoMedia::get().is_type_supported(&media_type)
     }
 
     /// <https://w3c.github.io/media-source/#addsourcebuffer-method>
     fn AddSourceBuffer(&self, buffer_type: DOMString) -> Fallible<DomRoot<SourceBuffer>> {
-        // Step 1. If type is an empty string then throw a TypeError exception and abort these steps.
-        if buffer_type.is_empty() {
-            return Err(Error::Type("type must not be empty".to_owned()));
-        }
-
-        // Step 2. If type contains a MIME type that is not supported or contains a MIME type that is
-        // not supported with the types specified for the other SourceBuffer objects in sourceBuffers,
-        // then throw a NotSupportedError exception and abort these steps.
-        let Ok(_mime_type) = buffer_type.str().parse::<Mime>() else {
-            // TODO: the spec doesn't explicitly state what happens in this case
-            return Err(Error::Type("invalid mime type".to_owned()));
-        };
-
-        // TODO Step 3. If the user agent can't handle any more SourceBuffer objects or if creating a
-        // SourceBuffer based on type would result in an unsupported SourceBuffer configuration,
-        // then throw a QuotaExceededError exception and abort these steps.
-
-        // TODO Step 4. If the readyState attribute is not in the "open" state then throw an
-        // InvalidStateError exception and abort these steps.
-
-        // Step 5. Let buffer be a new instance of a ManagedSourceBuffer if this is a ManagedMediaSource,
-        // or a SourceBuffer otherwise, with their respective associated resources.
-        //
         let global_object = GlobalScope::current().expect("No current global object");
         let audio_track_list = AudioTrackList::new(
             global_object.downcast::<Window>().expect("is not a window"),
@@ -139,7 +103,8 @@ impl MediaSourceMethods<crate::DomTypeHolder> for MediaSource {
             None,
             CanGc::note(),
         );
-        let buffer = SourceBuffer::new(&*global_object, CanGc::note(), &*audio_track_list);
+        let buffer_id = ServoMedia::get().add_source_buffer(self.backend_handle, &buffer_type).unwrap();
+        let buffer = SourceBuffer::new(&*global_object, CanGc::note(), &*audio_track_list, buffer_id);
 
         // TODO Step 6. Set buffer's [[generate timestamps flag]] to the value in the "Generate Timestamps Flag"
         // column of the Media Source Extensions™ Byte Stream Format Registry entry that is associated with type.
