@@ -160,4 +160,13 @@ impl MediaSourceMethods<crate::DomTypeHolder> for MediaSource {
     fn SourceBuffers(&self) -> DomRoot<SourceBufferList> {
         self.get_or_init_src_buffer()
     }
+
+    // https://w3c.github.io/media-source/#dom-mediasource-onsourceopen
+    event_handler!(sourceopen, GetOnsourceopen, SetOnsourceopen);
+
+    // https://w3c.github.io/media-source/#dom-mediasource-onsourceended
+    event_handler!(sourceended, GetOnsourceended, SetOnsourceended);
+
+    // https://w3c.github.io/media-source/#dom-mediasource-onsourceclose
+    event_handler!(sourceclose, GetOnsourceclose, SetOnsourceclose);
 }

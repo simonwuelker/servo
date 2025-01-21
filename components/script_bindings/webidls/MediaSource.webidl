@@ -17,9 +17,9 @@ interface MediaSource : EventTarget {
     // readonly  attribute ReadyState readyState;
 
     // attribute unrestricted double duration;
-    // attribute EventHandler onsourceopen;
-    // attribute EventHandler onsourceended;
-    // attribute EventHandler onsourceclose;
+    attribute EventHandler onsourceopen;
+    attribute EventHandler onsourceended;
+    attribute EventHandler onsourceclose;
 
     // static readonly attribute boolean canConstructInDedicatedWorker;
 
