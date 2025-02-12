@@ -1996,10 +1996,13 @@ impl Element {
         markup: DOMString,
         can_gc: CanGc,
     ) -> Fallible<DomRoot<DocumentFragment>> {
-        // Steps 1-2.
-        // TODO(#11995): XML case.
+        // Step 1. Let algorithm be the HTML fragment parsing algorithm.
+        // TODO(#11995) Step 2. If context's node document is an XML document, then set
+        // algorithm to the XML fragment parsing algorithm.
+        // Step 3. Let newChildren be the result of invoking algorithm given context and markup.
         let new_children = ServoParser::parse_html_fragment(self, markup, can_gc);
-        // Step 3.
+
+        // Step 4. Let fragment be a new DocumentFragment whose node document is context's node document.
         // See https://github.com/w3c/DOM-Parsing/issues/61.
         let context_document = {
             if let Some(template) = self.downcast::<HTMLTemplateElement>() {
@@ -2009,11 +2012,13 @@ impl Element {
             }
         };
         let fragment = DocumentFragment::new(&context_document, can_gc);
-        // Step 4.
+
+        // Step 5. For each node of newChildren, in tree order: append node to fragment.
         for child in new_children {
             fragment.upcast::<Node>().AppendChild(&child).unwrap();
         }
-        // Step 5.
+
+        // Step 6. Return fragment.
         Ok(fragment)
     }
 

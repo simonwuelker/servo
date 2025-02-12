@@ -2004,7 +2004,7 @@ impl Window {
     /// actually happened, false otherwise.
     ///
     /// NOTE: This method should almost never be called directly! Layout and rendering updates
-    /// should happen as part of the HTML event loop via *update the rendering*. Currerntly, the
+    /// should happen as part of the HTML event loop via *update the rendering*. Currently, the
     /// only exceptions are script queries and scroll requests.
     pub(crate) fn reflow(&self, reflow_goal: ReflowGoal, can_gc: CanGc) -> bool {
         // Count the pending web fonts before layout, in case a font loads during the layout.
