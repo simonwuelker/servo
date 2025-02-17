@@ -540,6 +540,8 @@ pub(crate) mod stylesheet;
 pub(crate) mod stylesheetlist;
 pub(crate) mod submitevent;
 pub(crate) mod subtlecrypto;
+pub(crate) mod svggeometryelement;
+pub(crate) mod svgcircleelement;
 pub(crate) mod svgelement;
 pub(crate) mod svggraphicselement;
 pub(crate) mod svgsvgelement;
