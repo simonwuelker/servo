@@ -86,6 +86,7 @@ use crate::dom::htmlunknownelement::HTMLUnknownElement;
 use crate::dom::htmlvideoelement::HTMLVideoElement;
 use crate::dom::svgelement::SVGElement;
 use crate::dom::svgsvgelement::SVGSVGElement;
+use crate::dom::svgcircleelement::SVGCircleElement;
 use crate::realms::{InRealm, enter_realm};
 use crate::script_runtime::CanGc;
 use crate::script_thread::ScriptThread;
@@ -115,6 +116,7 @@ fn create_svg_element(
 
     match name.local {
         local_name!("svg") => make!(SVGSVGElement),
+        local_name!("circle") => make!(SVGCircleElement),
         _ => make!(SVGElement),
     }
 }
