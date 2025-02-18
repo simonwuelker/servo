@@ -41,6 +41,7 @@ use crate::dom::htmloptgroupelement::HTMLOptGroupElement;
 use crate::dom::htmloptionelement::HTMLOptionElement;
 use crate::dom::htmloutputelement::HTMLOutputElement;
 use crate::dom::htmlpreelement::HTMLPreElement;
+use crate::dom::htmlprogresselement::HTMLProgressElement;
 use crate::dom::htmlscriptelement::HTMLScriptElement;
 use crate::dom::htmlselectelement::HTMLSelectElement;
 use crate::dom::htmlslotelement::HTMLSlotElement;
@@ -248,6 +249,9 @@ pub(crate) fn vtable_for(node: &Node) -> &dyn VirtualMethods {
         },
         NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLPreElement)) => {
             node.downcast::<HTMLPreElement>().unwrap() as &dyn VirtualMethods
+        },
+        NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLProgressElement)) => {
+            node.downcast::<HTMLProgressElement>().unwrap() as &dyn VirtualMethods
         },
         NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLScriptElement)) => {
             node.downcast::<HTMLScriptElement>().unwrap() as &dyn VirtualMethods

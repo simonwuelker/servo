@@ -304,3 +304,18 @@ svg > * {
     padding: 0;
     margin: 0;
 }
+
+/* Styles for the <progress> element */
+progress {
+  display: inline-block;
+  width: 200px;
+  height: 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+}
+/* FIXME: This should use ::-moz-progress-bar */
+progress #-servo-progress-bar {
+  display: block;
+  height: 100%;
+  background-color: #7a3;
+}
