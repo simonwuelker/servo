@@ -336,9 +336,9 @@ impl Element {
         let doc = self.node.owner_doc();
         let mut restyle = doc.ensure_pending_restyle(self);
 
-        // FIXME(bholley): I think we should probably only do this for
-        // NodeStyleDamaged, but I'm preserving existing behavior.
-        restyle.hint.insert(RestyleHint::RESTYLE_SELF);
+        if damage == NodeDamage::NodeStyleDamaged {
+            restyle.hint.insert(RestyleHint::RESTYLE_SELF);
+        }
 
         if damage == NodeDamage::OtherNodeDamage {
             doc.note_node_with_dirty_descendants(self.upcast());
