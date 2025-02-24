@@ -56,7 +56,7 @@ impl ResourceProtocolHandler {
             )));
         }
 
-        let response = if let Ok(file) = File::open(file_path.clone()) {
+        let response = match File::open(file_path.clone()) { Ok(file) => {
             let mut response = Response::new(
                 request.current_url(),
                 ResourceFetchTiming::new(request.timing_type()),
@@ -83,9 +83,9 @@ impl ResourceProtocolHandler {
             );
 
             response
-        } else {
+        } _ => {
             Response::network_internal_error("Opening file failed")
-        };
+        }};
 
         Box::pin(std::future::ready(response))
     }

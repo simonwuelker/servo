@@ -165,11 +165,11 @@ impl GamepadSupport {
         effect_complete_sender: IpcSender<bool>,
     ) {
         let GamepadHapticEffectType::DualRumble(params) = effect_type;
-        if let Some(connected_gamepad) = self
+        match self
             .handle
             .gamepads()
             .find(|gamepad| usize::from(gamepad.0) == index)
-        {
+        { Some(connected_gamepad) => {
             let start_delay = Ticks::from_ms(params.start_delay as u32);
             let duration = Ticks::from_ms(params.duration as u32);
             let strong_magnitude = (params.strong_magnitude * u16::MAX as f64).round() as u16;
@@ -206,9 +206,9 @@ impl GamepadSupport {
                 .effect
                 .play()
                 .expect("Failed to play haptic effect.");
-        } else {
+        } _ => {
             debug!("Couldn't find connected gamepad to play haptic effect on");
-        }
+        }}
     }
 
     pub(crate) fn stop_haptic_effect(&mut self, index: usize) -> bool {

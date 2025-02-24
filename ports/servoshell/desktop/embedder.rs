@@ -52,13 +52,13 @@ impl EmbedderMethods for EmbedderCallbacks {
 
         if pref!(dom_webxr_test) {
             xr.register_mock(HeadlessMockDiscovery::default());
-        } else if let Some(xr_discovery) = self.xr_discovery.take() {
+        } else { match self.xr_discovery.take() { Some(xr_discovery) => {
             match xr_discovery {
                 XrDiscovery::GlWindow(discovery) => xr.register(discovery),
                 #[cfg(target_os = "windows")]
                 XrDiscovery::OpenXr(discovery) => xr.register(discovery),
             }
-        }
+        } _ => {}}}
     }
 
     fn get_protocol_handlers(&self) -> ProtocolRegistry {
