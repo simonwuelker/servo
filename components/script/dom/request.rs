@@ -444,12 +444,12 @@ impl RequestMethods<crate::DomTypeHolder> for Request {
         r.request.borrow_mut().headers = r.Headers(can_gc).get_headers_list();
 
         // Step 34
-        let mut input_body = if let RequestInfo::Request(ref mut input_request) = input {
+        let mut input_body = match input { RequestInfo::Request(ref mut input_request) => {
             let mut input_request_request = input_request.request.borrow_mut();
             input_request_request.body.take()
-        } else {
+        } _ => {
             None
-        };
+        }};
 
         // Step 35
         if let Some(init_body_option) = init.body.as_ref() {

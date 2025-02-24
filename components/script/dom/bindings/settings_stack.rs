@@ -34,11 +34,11 @@ pub(crate) struct StackEntry<D: DomTypes> {
 }
 
 /// Traces the script settings stack.
-pub(crate) unsafe fn trace(tracer: *mut JSTracer) {
+pub(crate) unsafe fn trace(tracer: *mut JSTracer) { unsafe {
     STACK.with(|stack| {
         stack.borrow().trace(tracer);
     })
-}
+}}
 
 pub(crate) fn is_execution_stack_empty() -> bool {
     STACK.with(|stack| stack.borrow().is_empty())

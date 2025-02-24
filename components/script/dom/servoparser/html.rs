@@ -104,7 +104,7 @@ impl Tokenizer {
 
 #[allow(unsafe_code)]
 unsafe impl CustomTraceable for HtmlTokenizer<TreeBuilder<Dom<Node>, Sink>> {
-    unsafe fn trace(&self, trc: *mut JSTracer) {
+    unsafe fn trace(&self, trc: *mut JSTracer) { unsafe {
         struct Tracer(*mut JSTracer);
         let tracer = Tracer(trc);
 
@@ -121,7 +121,7 @@ unsafe impl CustomTraceable for HtmlTokenizer<TreeBuilder<Dom<Node>, Sink>> {
         let tree_builder = &self.sink;
         tree_builder.trace_handles(&tracer);
         tree_builder.sink.trace(trc);
-    }
+    }}
 }
 
 fn start_element<S: Serializer>(node: &Element, serializer: &mut S) -> io::Result<()> {
@@ -158,7 +158,7 @@ struct SerializationIterator {
     stack: Vec<SerializationCommand>,
 }
 
-fn rev_children_iter(n: &Node, can_gc: CanGc) -> impl Iterator<Item = DomRoot<Node>> {
+fn rev_children_iter(n: &Node, can_gc: CanGc) -> impl Iterator<Item = DomRoot<Node>> + use<> {
     if n.downcast::<Element>().is_some_and(|e| e.is_void()) {
         return Node::new_document_node().rev_children();
     }

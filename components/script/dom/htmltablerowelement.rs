@@ -140,13 +140,13 @@ impl HTMLTableRowElementMethods<crate::DomTypeHolder> for HTMLTableRowElement {
             Some(parent) => parent,
             None => return -1,
         };
-        let collection = if let Some(table) = parent.downcast::<HTMLTableElement>() {
+        let collection = match parent.downcast::<HTMLTableElement>() { Some(table) => {
             table.Rows()
-        } else if let Some(table_section) = parent.downcast::<HTMLTableSectionElement>() {
+        } _ => { match parent.downcast::<HTMLTableSectionElement>() { Some(table_section) => {
             table_section.Rows()
-        } else {
+        } _ => {
             return -1;
-        };
+        }}}};
         self.row_index(collection)
     }
 }

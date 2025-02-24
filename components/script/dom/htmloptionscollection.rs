@@ -213,11 +213,11 @@ impl HTMLOptionsCollectionMethods<crate::DomTypeHolder> for HTMLOptionsCollectio
         });
 
         // Step 5
-        let parent = if let Some(ref reference_node) = reference_node {
+        let parent = match reference_node { Some(ref reference_node) => {
             reference_node.GetParentNode().unwrap()
-        } else {
+        } _ => {
             root
-        };
+        }};
 
         // Step 6
         Node::pre_insert(node, &parent, reference_node.as_deref()).map(|_| ())

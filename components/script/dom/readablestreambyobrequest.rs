@@ -37,11 +37,11 @@ impl ReadableStreamBYOBRequestMethods<crate::DomTypeHolder> for ReadableStreamBY
         let cx = GlobalScope::get_cx();
 
         // If this.[[controller]] is undefined, throw a TypeError exception.
-        let controller = if let Some(controller) = self.controller.get() {
+        let controller = match self.controller.get() { Some(controller) => {
             controller
-        } else {
+        } _ => {
             return Err(Error::Type("controller is undefined".to_owned()));
-        };
+        }};
 
         // If ! IsDetachedBuffer(this.[[view]].[[ArrayBuffer]]) is true, throw a TypeError exception.
         if self.view.is_detached_buffer(cx) {
@@ -66,11 +66,11 @@ impl ReadableStreamBYOBRequestMethods<crate::DomTypeHolder> for ReadableStreamBY
         ));
 
         // If this.[[controller]] is undefined, throw a TypeError exception.
-        let controller = if let Some(controller) = self.controller.get() {
+        let controller = match self.controller.get() { Some(controller) => {
             controller
-        } else {
+        } _ => {
             return Err(Error::Type("controller is undefined".to_owned()));
-        };
+        }};
 
         // If ! IsDetachedBuffer(view.[[ViewedArrayBuffer]]) is true, throw a TypeError exception.
         if self.view.is_detached_buffer(GlobalScope::get_cx()) {

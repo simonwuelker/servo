@@ -315,11 +315,11 @@ unsafe extern "C" fn do_nothing_promise_executor(
     _cx: *mut JSContext,
     argc: u32,
     vp: *mut JSVal,
-) -> bool {
+) -> bool { unsafe {
     let args = CallArgs::from_vp(vp, argc);
     *args.rval() = UndefinedValue();
     true
-}
+}}
 
 const SLOT_NATIVEHANDLER: usize = 0;
 const SLOT_NATIVEHANDLER_TASK: usize = 1;
@@ -335,7 +335,7 @@ unsafe extern "C" fn native_handler_callback(
     cx: *mut JSContext,
     argc: u32,
     vp: *mut JSVal,
-) -> bool {
+) -> bool { unsafe {
     let cx = SafeJSContext::from_ptr(cx);
     let in_realm_proof = AlreadyInRealm::assert_for_cx(cx);
 
@@ -364,7 +364,7 @@ unsafe extern "C" fn native_handler_callback(
     };
 
     true
-}
+}}
 
 #[allow(unsafe_code)]
 // The apparently-unused CanGc argument reflects the fact that the JS API calls

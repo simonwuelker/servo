@@ -111,7 +111,7 @@ impl Worker {
         let target = worker.upcast();
         let _ac = enter_realm(target);
         rooted!(in(*GlobalScope::get_cx()) let mut message = UndefinedValue());
-        if let Ok(ports) = structuredclone::read(&global, data, message.handle_mut()) {
+        match structuredclone::read(&global, data, message.handle_mut()) { Ok(ports) => {
             MessageEvent::dispatch_jsval(
                 target,
                 &global,
@@ -121,10 +121,10 @@ impl Worker {
                 ports,
                 can_gc,
             );
-        } else {
+        } _ => {
             // Step 4 of the "port post message steps" of the implicit messageport, fire messageerror.
             MessageEvent::dispatch_error(target, &global, can_gc);
-        }
+        }}
     }
 
     pub(crate) fn dispatch_simple_error(address: TrustedWorkerAddress, can_gc: CanGc) {

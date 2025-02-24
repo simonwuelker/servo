@@ -417,12 +417,12 @@ impl<'dom> LayoutShadowRootHelpers<'dom> for LayoutDom<'dom, ShadowRoot> {
         self,
         stylist: &mut Stylist,
         guard: &SharedRwLockReadGuard,
-    ) {
+    ) { unsafe {
         let author_styles = self.unsafe_get().author_styles.borrow_mut_for_layout();
         if author_styles.stylesheets.dirty() {
             author_styles.flush::<E>(stylist, guard);
         }
-    }
+    }}
 }
 
 impl Convert<devtools_traits::ShadowRootMode> for ShadowRootMode {

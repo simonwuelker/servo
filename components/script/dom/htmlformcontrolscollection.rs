@@ -82,7 +82,7 @@ impl HTMLFormControlsCollectionMethods<crate::DomTypeHolder> for HTMLFormControl
             }
         });
 
-        if let Some(elem) = filter_map.next() {
+        match filter_map.next() { Some(elem) => {
             let mut peekable = filter_map.peekable();
             // Step 2
             if peekable.peek().is_none() {
@@ -104,9 +104,9 @@ impl HTMLFormControlsCollectionMethods<crate::DomTypeHolder> for HTMLFormControl
                 ))
             }
         // Step 3
-        } else {
+        } _ => {
             None
-        }
+        }}
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-htmlformcontrolscollection-nameditem

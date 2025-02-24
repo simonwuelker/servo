@@ -83,11 +83,11 @@ impl HTMLOutputElementMethods<crate::DomTypeHolder> for HTMLOutputElement {
     // https://html.spec.whatwg.org/multipage/#dom-output-defaultvaleu
     fn DefaultValue(&self) -> DOMString {
         let dvo = self.default_value_override.borrow();
-        if let Some(ref dv) = *dvo {
+        match *dvo { Some(ref dv) => {
             dv.clone()
-        } else {
+        } _ => {
             self.upcast::<Node>().descendant_text_content()
-        }
+        }}
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-output-defaultvalue

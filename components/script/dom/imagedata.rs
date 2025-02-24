@@ -146,9 +146,9 @@ impl ImageData {
     }
 
     #[allow(unsafe_code)]
-    pub(crate) unsafe fn get_rect(&self, rect: Rect<u64>) -> Cow<[u8]> {
+    pub(crate) unsafe fn get_rect(&self, rect: Rect<u64>) -> Cow<[u8]> { unsafe {
         pixels::rgba8_get_rect(self.as_slice(), self.get_size().to_u64(), rect)
-    }
+    }}
 
     pub(crate) fn get_size(&self) -> Size2D<u32> {
         Size2D::new(self.Width(), self.Height())
@@ -156,7 +156,7 @@ impl ImageData {
 
     /// Nothing must change the array on the JS side while the slice is live.
     #[allow(unsafe_code)]
-    pub(crate) unsafe fn as_slice(&self) -> &[u8] {
+    pub(crate) unsafe fn as_slice(&self) -> &[u8] { unsafe {
         assert!(self.data.is_initialized());
         let internal_data = self
             .data
@@ -169,7 +169,7 @@ impl ImageData {
         // is live.
         let ptr: *const [u8] = internal_data.as_slice() as *const _;
         &*ptr
-    }
+    }}
 }
 
 impl ImageDataMethods<crate::DomTypeHolder> for ImageData {

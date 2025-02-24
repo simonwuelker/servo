@@ -55,9 +55,9 @@ fn perform_platform_specific_initialization() {
 fn perform_platform_specific_initialization() {}
 
 #[allow(unsafe_code)]
-unsafe extern "C" fn is_dom_object(obj: *mut JSObject) -> bool {
+unsafe extern "C" fn is_dom_object(obj: *mut JSObject) -> bool { unsafe {
     !obj.is_null() && (is_platform_object_static(obj) || is_dom_proxy(obj))
-}
+}}
 
 #[allow(unsafe_code)]
 pub fn init() -> JSEngineSetup {

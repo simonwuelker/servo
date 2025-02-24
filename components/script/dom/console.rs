@@ -112,7 +112,7 @@ where
 }
 
 #[allow(unsafe_code)]
-unsafe fn handle_value_to_string(cx: *mut jsapi::JSContext, value: HandleValue) -> DOMString {
+unsafe fn handle_value_to_string(cx: *mut jsapi::JSContext, value: HandleValue) -> DOMString { unsafe {
     rooted!(in(cx) let mut js_string = std::ptr::null_mut::<jsapi::JSString>());
     match std::ptr::NonNull::new(JS_ValueToSource(cx, value)) {
         Some(js_str) => {
@@ -121,7 +121,7 @@ unsafe fn handle_value_to_string(cx: *mut jsapi::JSContext, value: HandleValue) 
         },
         None => "<error converting value to string>".into(),
     }
-}
+}}
 
 #[allow(unsafe_code)]
 fn console_argument_from_handle_value(
@@ -160,7 +160,7 @@ fn stringify_handle_value(message: HandleValue) -> DOMString {
             cx: *mut jsapi::JSContext,
             value: HandleValue,
             parents: Vec<u64>,
-        ) -> DOMString {
+        ) -> DOMString { unsafe {
             rooted!(in(cx) let mut obj = value.to_object());
             let mut object_class = ESClass::Other;
             if !GetBuiltinClass(cx, obj.handle(), &mut object_class as *mut _) {
@@ -208,11 +208,11 @@ fn stringify_handle_value(message: HandleValue) -> DOMString {
 
                 if !explicit_keys {
                     if id.is_int() {
-                        if let Ok(id_int) = usize::try_from(id.to_int()) {
+                        match usize::try_from(id.to_int()) { Ok(id_int) => {
                             explicit_keys = props.len() != id_int;
-                        } else {
+                        } _ => {
                             explicit_keys = false;
-                        }
+                        }}
                     } else {
                         explicit_keys = false;
                     }
@@ -243,7 +243,7 @@ fn stringify_handle_value(message: HandleValue) -> DOMString {
             } else {
                 DOMString::from(format!("{{{}}}", itertools::join(props, ", ")))
             }
-        }
+        }}
         fn stringify_inner(cx: JSContext, value: HandleValue, mut parents: Vec<u64>) -> DOMString {
             if parents.len() >= MAX_LOG_DEPTH {
                 return DOMString::from("...");
@@ -299,12 +299,12 @@ fn maybe_stringify_dom_object(cx: JSContext, value: HandleValue) -> Option<DOMSt
         string: *const u16,
         len: u32,
         data: *mut std::ffi::c_void,
-    ) -> bool {
+    ) -> bool { unsafe {
         let s = data as *mut String;
         let string_chars = slice::from_raw_parts(string, len as usize);
         (*s).push_str(&String::from_utf16_lossy(string_chars));
         true
-    }
+    }}
 
     rooted!(in(*cx) let space = Int32Value(2));
     let stringify_result = unsafe {
@@ -484,11 +484,11 @@ fn get_js_stack(cx: *mut jsapi::JSContext) -> Vec<StackFrame> {
                 jsapi::SavedFrameSelfHosted::Include,
             );
         }
-        let function_name = if let Some(nonnull_result) = ptr::NonNull::new(*result) {
+        let function_name = match ptr::NonNull::new(*result) { Some(nonnull_result) => {
             unsafe { jsstring_to_str(cx, nonnull_result) }.into()
-        } else {
+        } _ => {
             "<anonymous>".into()
-        };
+        }};
 
         // Get source file name
         result.set(ptr::null_mut());
@@ -501,11 +501,11 @@ fn get_js_stack(cx: *mut jsapi::JSContext) -> Vec<StackFrame> {
                 jsapi::SavedFrameSelfHosted::Include,
             );
         }
-        let filename = if let Some(nonnull_result) = ptr::NonNull::new(*result) {
+        let filename = match ptr::NonNull::new(*result) { Some(nonnull_result) => {
             unsafe { jsstring_to_str(cx, nonnull_result) }.into()
-        } else {
+        } _ => {
             "<anonymous>".into()
-        };
+        }};
 
         // get line/column number
         let mut line_number = 0;

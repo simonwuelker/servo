@@ -15,6 +15,6 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 pub(crate) unsafe fn malloc_size_of_including_raw_self<T: MallocSizeOf>(
     ops: &mut MallocSizeOfOps,
     obj: *const c_void,
-) -> usize {
+) -> usize { unsafe {
     ops.malloc_size_of(obj) + (*(obj as *const T)).size_of(ops)
-}
+}}

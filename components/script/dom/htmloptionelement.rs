@@ -109,17 +109,17 @@ impl HTMLOptionElement {
     // https://html.spec.whatwg.org/multipage/#concept-option-index
     fn index(&self) -> i32 {
         if let Some(parent) = self.upcast::<Node>().GetParentNode() {
-            if let Some(select_parent) = parent.downcast::<HTMLSelectElement>() {
+            match parent.downcast::<HTMLSelectElement>() { Some(select_parent) => {
                 // return index in parent select's list of options
                 return self.index_in_select(select_parent);
-            } else if parent.is::<HTMLOptGroupElement>() {
+            } _ => if parent.is::<HTMLOptGroupElement>() {
                 if let Some(grandparent) = parent.GetParentNode() {
                     if let Some(select_grandparent) = grandparent.downcast::<HTMLSelectElement>() {
                         // return index in grandparent select's list of options
                         return self.index_in_select(select_grandparent);
                     }
                 }
-            }
+            }}
         }
         // "If the option element is not in a list of options,
         // then the option element's index is zero."
@@ -168,9 +168,9 @@ fn collect_text(element: &Element, value: &mut String) {
         if child.is::<Text>() {
             let characterdata = child.downcast::<CharacterData>().unwrap();
             value.push_str(&characterdata.Data());
-        } else if let Some(element_child) = child.downcast() {
+        } else { match child.downcast() { Some(element_child) => {
             collect_text(element_child, value);
-        }
+        } _ => {}}}
     }
 }
 

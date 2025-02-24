@@ -42,12 +42,12 @@ impl<T> DomRefCell<T> {
     ///
     /// Panics if the value is currently mutably borrowed.
     #[allow(unsafe_code)]
-    pub(crate) unsafe fn borrow_for_layout(&self) -> &T {
+    pub(crate) unsafe fn borrow_for_layout(&self) -> &T { unsafe {
         assert_in_layout();
         self.value
             .try_borrow_unguarded()
             .expect("cell is mutably borrowed")
-    }
+    }}
 
     /// Borrow the contents for the purpose of script deallocation.
     ///
@@ -61,10 +61,10 @@ impl<T> DomRefCell<T> {
     ///
     /// Panics if this is called from anywhere other than the script thread.
     #[allow(unsafe_code, clippy::mut_from_ref)]
-    pub(crate) unsafe fn borrow_for_script_deallocation(&self) -> &mut T {
+    pub(crate) unsafe fn borrow_for_script_deallocation(&self) -> &mut T { unsafe {
         assert_in_script();
         &mut *self.value.as_ptr()
-    }
+    }}
 
     /// Mutably borrow a cell for layout. Ideally this would use
     /// `RefCell::try_borrow_mut_unguarded` but that doesn't exist yet.
@@ -79,10 +79,10 @@ impl<T> DomRefCell<T> {
     ///
     /// Panics if this is called from anywhere other than the layout thread.
     #[allow(unsafe_code, clippy::mut_from_ref)]
-    pub(crate) unsafe fn borrow_mut_for_layout(&self) -> &mut T {
+    pub(crate) unsafe fn borrow_mut_for_layout(&self) -> &mut T { unsafe {
         assert_in_layout();
         &mut *self.value.as_ptr()
-    }
+    }}
 }
 
 // Functionality duplicated with `std::cell::RefCell`

@@ -103,15 +103,14 @@ impl HeadersMethods<crate::DomTypeHolder> for Headers {
 
         // Step 3
         if self.guard.get() == Guard::RequestNoCors {
-            let tmp_value = if let Some(mut value) =
-                get_value_from_header_list(&valid_name, &self.header_list.borrow())
-            {
+            let tmp_value = match get_value_from_header_list(&valid_name, &self.header_list.borrow())
+            { Some(mut value) => {
                 value.extend(b", ");
                 value.extend(valid_value.clone());
                 value
-            } else {
+            } _ => {
                 valid_value.clone()
-            };
+            }};
 
             if !is_cors_safelisted_request_header(&valid_name, &tmp_value) {
                 return Ok(());
@@ -331,9 +330,9 @@ impl Headers {
                 for value in borrowed_header_list.get_all(name).iter() {
                     header_vec.push((name.to_owned(), value.as_bytes().to_vec()));
                 }
-            } else if let Some(value) = get_value_from_header_list(name, &borrowed_header_list) {
+            } else { match get_value_from_header_list(name, &borrowed_header_list) { Some(value) => {
                 header_vec.push((name.to_owned(), value));
-            }
+            } _ => {}}}
         }
 
         header_vec.sort_by(|a, b| a.0.cmp(&b.0));

@@ -84,21 +84,21 @@ impl HTMLMetaElement {
 
     fn process_attributes(&self) {
         let element = self.upcast::<Element>();
-        if let Some(ref name) = element.get_name() {
+        match element.get_name() { Some(ref name) => {
             let name = name.to_ascii_lowercase();
             let name = name.trim_matches(HTML_SPACE_CHARACTERS);
             if name == "referrer" {
                 self.apply_referrer();
             }
         // https://html.spec.whatwg.org/multipage/#attr-meta-http-equiv
-        } else if !self.HttpEquiv().is_empty() {
+        } _ => if !self.HttpEquiv().is_empty() {
             // TODO: Implement additional http-equiv candidates
             match self.HttpEquiv().to_ascii_lowercase().as_str() {
                 "refresh" => self.declarative_refresh(),
                 "content-security-policy" => self.apply_csp_list(),
                 _ => {},
             }
-        }
+        }}
     }
 
     fn process_referrer_attribute(&self) {
@@ -178,11 +178,11 @@ impl HTMLMetaElement {
         });
 
         let mut url_record = document.url();
-        let captures = if let Some(captures) = REFRESH_REGEX.captures(content.as_bytes()) {
+        let captures = match REFRESH_REGEX.captures(content.as_bytes()) { Some(captures) => {
             captures
-        } else {
+        } _ => {
             return;
-        };
+        }};
         let time = if let Some(time_string) = captures.name("time") {
             u64::from_str(&String::from_utf8_lossy(time_string.as_bytes())).unwrap_or(0)
         } else {
@@ -193,14 +193,14 @@ impl HTMLMetaElement {
             .or(captures.name("url3").or(captures.name("url4"))));
 
         if let Some(url_match) = captured_url {
-            url_record = if let Ok(url) = ServoUrl::parse_with_base(
+            url_record = match ServoUrl::parse_with_base(
                 Some(&url_record),
                 &String::from_utf8_lossy(url_match.as_bytes()),
-            ) {
+            ) { Ok(url) => {
                 url
-            } else {
+            } _ => {
                 return;
-            }
+            }}
         }
         // 12-13
         if document.completely_loaded() {

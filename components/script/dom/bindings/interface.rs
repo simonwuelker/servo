@@ -140,7 +140,7 @@ pub(crate) unsafe fn create_global_object(
     trace: TraceHook,
     mut rval: MutableHandleObject,
     origin: &MutableOrigin,
-) {
+) { unsafe {
     assert!(rval.is_null());
 
     let mut options = RealmOptions::default();
@@ -170,7 +170,7 @@ pub(crate) unsafe fn create_global_object(
 
     let _ac = JSAutoRealm::new(*cx, rval.get());
     JS_FireOnNewGlobalObject(*cx, rval.handle());
-}
+}}
 
 /// Choose the compartment to create a new global object in.
 fn select_compartment(cx: SafeJSContext, options: &mut RealmOptions) {
@@ -179,7 +179,7 @@ fn select_compartment(cx: SafeJSContext, options: &mut RealmOptions) {
         _cx: *mut JSContext,
         data: *mut libc::c_void,
         compartment: *mut Compartment,
-    ) -> CompartmentIterResult {
+    ) -> CompartmentIterResult { unsafe {
         let data = data as *mut Data;
 
         if !IsSharableCompartment(compartment) || IsSystemCompartment(compartment) {
@@ -190,7 +190,7 @@ fn select_compartment(cx: SafeJSContext, options: &mut RealmOptions) {
         // same-agent documents to share JS and DOM objects.
         *data = compartment;
         CompartmentIterResult::Stop
-    }
+    }}
 
     let mut compartment: Data = ptr::null_mut();
     unsafe {
@@ -457,7 +457,7 @@ unsafe extern "C" fn fun_to_string_hook(
     cx: *mut JSContext,
     obj: RawHandleObject,
     _is_to_source: bool,
-) -> *mut JSString {
+) -> *mut JSString { unsafe {
     let js_class = get_object_class(obj.get());
     assert!(!js_class.is_null());
     let repr = (*(js_class as *const NonCallbackInterfaceObjectClass)).representation;
@@ -465,7 +465,7 @@ unsafe extern "C" fn fun_to_string_hook(
     let ret = JS_NewStringCopyN(cx, repr.as_ptr() as *const libc::c_char, repr.len());
     assert!(!ret.is_null());
     ret
-}
+}}
 
 fn create_unscopable_object(cx: SafeJSContext, names: &[&CStr], mut rval: MutableHandleObject) {
     assert!(!names.is_empty());
@@ -515,19 +515,19 @@ unsafe extern "C" fn invalid_constructor(
     cx: *mut JSContext,
     _argc: libc::c_uint,
     _vp: *mut JSVal,
-) -> bool {
+) -> bool { unsafe {
     throw_type_error(cx, "Illegal constructor.");
     false
-}
+}}
 
 unsafe extern "C" fn non_new_constructor(
     cx: *mut JSContext,
     _argc: libc::c_uint,
     _vp: *mut JSVal,
-) -> bool {
+) -> bool { unsafe {
     throw_type_error(cx, "This constructor needs to be called with `new`.");
     false
-}
+}}
 
 pub(crate) enum ProtoOrIfaceIndex {
     ID(PrototypeList::ID),

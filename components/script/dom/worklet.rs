@@ -462,10 +462,10 @@ struct WorkletThread {
 
 #[allow(unsafe_code)]
 unsafe impl JSTraceable for WorkletThread {
-    unsafe fn trace(&self, trc: *mut JSTracer) {
+    unsafe fn trace(&self, trc: *mut JSTracer) { unsafe {
         debug!("Tracing worklet thread.");
         self.global_scopes.trace(trc);
-    }
+    }}
 }
 
 impl WorkletThread {

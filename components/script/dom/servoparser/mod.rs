@@ -192,7 +192,7 @@ impl ServoParser {
         context: &Element,
         input: DOMString,
         can_gc: CanGc,
-    ) -> impl Iterator<Item = DomRoot<Node>> {
+    ) -> impl Iterator<Item = DomRoot<Node>> + use<> {
         let context_node = context.upcast::<Node>();
         let context_document = context_node.owner_doc();
         let window = context_document.window();
@@ -1105,12 +1105,12 @@ fn insert(
                 .or_else(|| parent.GetLastChild())
                 .and_then(DomRoot::downcast::<Text>);
 
-            if let Some(text) = text {
+            match text { Some(text) => {
                 text.upcast::<CharacterData>().append_data(&t);
-            } else {
+            } _ => {
                 let text = Text::new(String::from(t).into(), &parent.owner_doc(), can_gc);
                 parent.InsertBefore(text.upcast(), reference_child).unwrap();
-            }
+            }}
         },
     }
 }

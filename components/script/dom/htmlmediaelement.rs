@@ -213,7 +213,7 @@ impl VideoFrameRenderer for MediaFrameRenderer {
         );
 
         match &mut self.current_frame {
-            Some(ref mut current_frame)
+            Some(current_frame)
                 if current_frame.width == frame.get_width() &&
                     current_frame.height == frame.get_height() =>
             {
@@ -233,7 +233,7 @@ impl VideoFrameRenderer for MediaFrameRenderer {
                     updates.push(ImageUpdate::DeleteImage(old_image_key));
                 }
             },
-            Some(ref mut current_frame) => {
+            Some(current_frame) => {
                 self.old_frame = Some(current_frame.image_key);
 
                 let Some(new_image_key) = self.compositor_api.generate_image_key() else {
@@ -775,14 +775,14 @@ impl HTMLMediaElement {
             }
             None
         }
-        let mode = if let Some(mode) = mode(self) {
+        let mode = match mode(self) { Some(mode) => {
             mode
-        } else {
+        } _ => {
             self.network_state.set(NetworkState::Empty);
             // https://github.com/whatwg/html/issues/3065
             self.delay_load_event(false, can_gc);
             return;
-        };
+        }};
 
         // Step 7.
         self.network_state.set(NetworkState::Loading);
@@ -971,7 +971,7 @@ impl HTMLMediaElement {
                                 Some(ServoUrl::parse(&blob_url).expect("infallible"));
                             self.fetch_request(None, None);
                         },
-                        SrcObject::MediaStream(ref stream) => {
+                        SrcObject::MediaStream(stream) => {
                             let tracks = &*stream.get_tracks();
                             for (pos, track) in tracks.iter().enumerate() {
                                 if self
@@ -1341,14 +1341,14 @@ impl HTMLMediaElement {
     fn setup_media_player(&self, resource: &Resource) -> Result<(), ()> {
         let stream_type = match *resource {
             Resource::Object => {
-                if let Some(ref src_object) = *self.src_object.borrow() {
+                match *self.src_object.borrow() { Some(ref src_object) => {
                     match src_object {
                         SrcObject::MediaStream(_) => StreamType::Stream,
                         _ => StreamType::Seekable,
                     }
-                } else {
+                } _ => {
                     return Err(());
-                }
+                }}
             },
             _ => StreamType::Seekable,
         };
@@ -1788,7 +1788,7 @@ impl HTMLMediaElement {
                 // fetching where we left.
                 if let Some(ref current_fetch_context) = *self.current_fetch_context.borrow() {
                     match current_fetch_context.cancel_reason() {
-                        Some(ref reason) if *reason == CancelReason::Backoff => {
+                        Some(reason) if *reason == CancelReason::Backoff => {
                             // XXX(ferjm) Ideally we should just create a fetch request from
                             // where we left. But keeping track of the exact next byte that the
                             // media backend expects is not the easiest task, so I'm simply
@@ -2697,7 +2697,7 @@ impl FetchResponseListener for HTMLMediaElementFetchListener {
                 // We only set the expected input size if it changes.
                 if content_length != self.expected_content_length {
                     if let Some(content_length) = content_length {
-                        if let Err(e) = elem
+                        match elem
                             .player
                             .borrow()
                             .as_ref()
@@ -2705,11 +2705,11 @@ impl FetchResponseListener for HTMLMediaElementFetchListener {
                             .lock()
                             .unwrap()
                             .set_input_size(content_length)
-                        {
+                        { Err(e) => {
                             warn!("Could not set player input size {:?}", e);
-                        } else {
+                        } _ => {
                             self.expected_content_length = Some(content_length);
-                        }
+                        }}
                     }
                 }
             }

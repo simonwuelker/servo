@@ -234,14 +234,14 @@ unsafe extern "C" fn get_incumbent_global(_: *const c_void, _: *mut RawJSContext
 }
 
 #[allow(unsafe_code)]
-unsafe extern "C" fn empty(extra: *const c_void) -> bool {
+unsafe extern "C" fn empty(extra: *const c_void) -> bool { unsafe {
     let mut result = false;
     wrap_panic(&mut || {
         let microtask_queue = &*(extra as *const MicrotaskQueue);
         result = microtask_queue.empty()
     });
     result
-}
+}}
 
 /// SM callback for promise job resolution. Adds a promise callback to the current
 /// global's microtask queue.
@@ -253,7 +253,7 @@ unsafe extern "C" fn enqueue_promise_job(
     job: HandleObject,
     _allocation_site: HandleObject,
     incumbent_global: HandleObject,
-) -> bool {
+) -> bool { unsafe {
     let cx = JSContext::from_ptr(cx);
     let mut result = false;
     wrap_panic(&mut || {
@@ -283,7 +283,7 @@ unsafe extern "C" fn enqueue_promise_job(
         result = true
     });
     result
-}
+}}
 
 #[allow(unsafe_code)]
 #[cfg_attr(crown, allow(crown::unrooted_must_root))]
@@ -294,7 +294,7 @@ unsafe extern "C" fn promise_rejection_tracker(
     promise: HandleObject,
     state: PromiseRejectionHandlingState,
     _data: *mut c_void,
-) {
+) { unsafe {
     // TODO: Step 2 - If script's muted errors is true, terminate these steps.
 
     // Step 3.
@@ -362,14 +362,14 @@ unsafe extern "C" fn promise_rejection_tracker(
             },
         };
     })
-}
+}}
 
 #[allow(unsafe_code)]
 unsafe extern "C" fn content_security_policy_allows(
     cx: *mut RawJSContext,
     runtime_code: RuntimeCode,
     sample: HandleString,
-) -> bool {
+) -> bool { unsafe {
     let mut allowed = false;
     let cx = JSContext::from_ptr(cx);
     wrap_panic(&mut || {
@@ -417,7 +417,7 @@ unsafe extern "C" fn content_security_policy_allows(
         }
     });
     allowed
-}
+}}
 
 #[allow(unsafe_code)]
 #[cfg_attr(crown, allow(crown::unrooted_must_root))]
@@ -531,16 +531,16 @@ impl Runtime {
     pub(crate) unsafe fn new_with_parent(
         parent: Option<ParentRuntime>,
         networking_task_source: Option<SendableTaskSource>,
-    ) -> Runtime {
+    ) -> Runtime { unsafe {
         LiveDOMReferences::initialize();
-        let (cx, runtime) = if let Some(parent) = parent {
+        let (cx, runtime) = match parent { Some(parent) => {
             let runtime = RustRuntime::create_with_parent(parent);
             let cx = runtime.cx();
             (cx, runtime)
-        } else {
+        } _ => {
             let runtime = RustRuntime::new(JS_ENGINE.lock().unwrap().as_ref().unwrap().clone());
             (runtime.cx(), runtime)
-        };
+        }};
 
         JS_AddExtraGCRootsTracer(cx, Some(trace_rust_roots), ptr::null_mut());
 
@@ -577,7 +577,7 @@ impl Runtime {
         unsafe extern "C" fn dispatch_to_event_loop(
             closure: *mut c_void,
             dispatchable: *mut JSRunnable,
-        ) -> bool {
+        ) -> bool { unsafe {
             let networking_task_src: &SendableTaskSource = &*(closure as *mut SendableTaskSource);
             let runnable = Runnable(dispatchable);
             let task = task!(dispatch_to_event_loop_message: move || {
@@ -588,7 +588,7 @@ impl Runtime {
 
             networking_task_src.queue_unconditionally(task);
             true
-        }
+        }}
 
         let mut networking_task_src_ptr = std::ptr::null_mut();
         if let Some(source) = networking_task_source {
@@ -754,7 +754,7 @@ impl Runtime {
             networking_task_src: (!networking_task_src_ptr.is_null())
                 .then(|| Box::from_raw(networking_task_src_ptr)),
         }
-    }
+    }}
 
     pub(crate) fn thread_safe_js_context(&self) -> ThreadSafeJSContext {
         self.rt.thread_safe_js_context()
@@ -816,7 +816,7 @@ thread_local!(static SEEN_POINTERS: LazyCell<RefCell<HashSet<*const c_void>>> = 
 });
 
 #[allow(unsafe_code)]
-unsafe extern "C" fn get_size(obj: *mut JSObject) -> usize {
+unsafe extern "C" fn get_size(obj: *mut JSObject) -> usize { unsafe {
     match get_dom_class(obj) {
         Ok(v) => {
             let dom_object = private_from_object(obj) as *const c_void;
@@ -835,7 +835,7 @@ unsafe extern "C" fn get_size(obj: *mut JSObject) -> usize {
         },
         Err(_e) => 0,
     }
-}
+}}
 
 thread_local!(static GC_CYCLE_START: Cell<Option<Instant>> = const { Cell::new(None) });
 thread_local!(static GC_SLICE_START: Cell<Option<Instant>> = const { Cell::new(None) });
@@ -845,7 +845,7 @@ unsafe extern "C" fn gc_slice_callback(
     _cx: *mut RawJSContext,
     progress: GCProgress,
     desc: *const GCDescription,
-) {
+) { unsafe {
     match progress {
         GCProgress::GC_CYCLE_BEGIN => GC_CYCLE_START.with(|start| {
             start.set(Some(Instant::now()));
@@ -876,7 +876,7 @@ unsafe extern "C" fn gc_slice_callback(
         println!("  isZone={}, options={}", desc.isZone_, options);
     }
     let _ = stdout().flush();
-}
+}}
 
 #[allow(unsafe_code)]
 unsafe extern "C" fn debug_gc_callback(
@@ -892,7 +892,7 @@ unsafe extern "C" fn debug_gc_callback(
 }
 
 #[allow(unsafe_code)]
-unsafe extern "C" fn trace_rust_roots(tr: *mut JSTracer, _data: *mut os::raw::c_void) {
+unsafe extern "C" fn trace_rust_roots(tr: *mut JSTracer, _data: *mut os::raw::c_void) { unsafe {
     if !runtime_is_alive() {
         return;
     }
@@ -902,13 +902,13 @@ unsafe extern "C" fn trace_rust_roots(tr: *mut JSTracer, _data: *mut os::raw::c_
     trace_refcounted_objects(tr);
     settings_stack::trace(tr);
     trace!("done custom root handler");
-}
+}}
 
 #[allow(unsafe_code)]
-unsafe extern "C" fn servo_build_id(build_id: *mut BuildIdCharVector) -> bool {
+unsafe extern "C" fn servo_build_id(build_id: *mut BuildIdCharVector) -> bool { unsafe {
     let servo_id = b"Servo\0";
     SetBuildId(build_id, servo_id[0] as *const c_char, servo_id.len())
-}
+}}
 
 #[allow(unsafe_code)]
 #[cfg(feature = "debugmozjs")]
@@ -1055,15 +1055,14 @@ unsafe extern "C" fn consume_stream(
     obj: HandleObject,
     _mime_type: MimeType,
     _consumer: *mut JSStreamConsumer,
-) -> bool {
+) -> bool { unsafe {
     let cx = JSContext::from_ptr(_cx);
     let in_realm_proof = AlreadyInRealm::assert_for_cx(cx);
     let global = GlobalScope::from_context(*cx, InRealm::Already(&in_realm_proof));
 
     //Step 2.1 Upon fulfillment of source, store the Response with value unwrappedSource.
-    if let Ok(unwrapped_source) =
-        root_from_handleobject::<Response>(RustHandleObject::from_raw(obj), *cx)
-    {
+    match root_from_handleobject::<Response>(RustHandleObject::from_raw(obj), *cx)
+    { Ok(unwrapped_source) => {
         //Step 2.2 Let mimeType be the result of extracting a MIME type from response’s header list.
         let mimetype = unwrapped_source.Headers(CanGc::note()).extract_mime_type();
 
@@ -1125,7 +1124,7 @@ unsafe extern "C" fn consume_stream(
             return false;
         }
         unwrapped_source.set_stream_consumer(Some(StreamConsumer(_consumer)));
-    } else {
+    } _ => {
         //Step 3 Upon rejection of source, return with reason.
         throw_dom_exception(
             cx,
@@ -1134,17 +1133,17 @@ unsafe extern "C" fn consume_stream(
             CanGc::note(),
         );
         return false;
-    }
+    }}
     true
-}
+}}
 
 #[allow(unsafe_code)]
-unsafe extern "C" fn report_stream_error(_cx: *mut RawJSContext, error_code: usize) {
+unsafe extern "C" fn report_stream_error(_cx: *mut RawJSContext, error_code: usize) { unsafe {
     error!(
         "Error initializing StreamConsumer: {:?}",
         RUST_js_GetErrorMessage(ptr::null_mut(), error_code as u32)
     );
-}
+}}
 
 pub(crate) struct Runnable(*mut JSRunnable);
 

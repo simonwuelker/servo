@@ -35,9 +35,9 @@ pub(crate) struct Tokenizer {
 
 #[allow(unsafe_code)]
 unsafe impl CustomTraceable for HtmlTokenizer<PrefetchSink> {
-    unsafe fn trace(&self, trc: *mut JSTracer) {
+    unsafe fn trace(&self, trc: *mut JSTracer) { unsafe {
         self.sink.trace(trc)
-    }
+    }}
 }
 
 impl Tokenizer {

@@ -38,16 +38,16 @@ impl ServoJSPrincipals {
     /// Construct `Self` from a raw `*mut JSPrincipals`, incrementing its
     /// reference count.
     #[inline]
-    pub(crate) unsafe fn from_raw_nonnull(raw: NonNull<JSPrincipals>) -> Self {
+    pub(crate) unsafe fn from_raw_nonnull(raw: NonNull<JSPrincipals>) -> Self { unsafe {
         JS_HoldPrincipals(raw.as_ptr());
         Self(raw)
-    }
+    }}
 
     #[inline]
-    pub(crate) unsafe fn origin(&self) -> MutableOrigin {
+    pub(crate) unsafe fn origin(&self) -> MutableOrigin { unsafe {
         let origin = GetRustJSPrincipalsPrivate(self.0.as_ptr()) as *mut MutableOrigin;
         (*origin).clone()
-    }
+    }}
 
     #[inline]
     pub(crate) fn as_raw_nonnull(&self) -> NonNull<JSPrincipals> {
@@ -103,9 +103,9 @@ impl ServoJSPrincipalsRef<'_> {
     /// The behavior is undefined if `raw` is null. See also
     /// [`Self::from_raw_nonnull`].
     #[inline]
-    pub(crate) unsafe fn from_raw_unchecked(raw: *mut JSPrincipals) -> Self {
+    pub(crate) unsafe fn from_raw_unchecked(raw: *mut JSPrincipals) -> Self { unsafe {
         Self::from_raw_nonnull(NonNull::new_unchecked(raw))
-    }
+    }}
 }
 
 impl Clone for ServoJSPrincipalsRef<'_> {
@@ -125,16 +125,16 @@ impl Deref for ServoJSPrincipalsRef<'_> {
 }
 
 #[allow(unused)]
-pub(crate) unsafe extern "C" fn destroy_servo_jsprincipal(principals: *mut JSPrincipals) {
+pub(crate) unsafe extern "C" fn destroy_servo_jsprincipal(principals: *mut JSPrincipals) { unsafe {
     Box::from_raw(GetRustJSPrincipalsPrivate(principals) as *mut MutableOrigin);
     DestroyRustJSPrincipals(principals);
-}
+}}
 
 pub(crate) unsafe extern "C" fn write_jsprincipal(
     principal: *mut JSPrincipals,
     _cx: *mut JSContext,
     writer: *mut JSStructuredCloneWriter,
-) -> bool {
+) -> bool { unsafe {
     let Some(principal) = NonNull::new(principal) else {
         return false;
     };
@@ -153,13 +153,13 @@ pub(crate) unsafe extern "C" fn write_jsprincipal(
         return false;
     }
     true
-}
+}}
 
 pub(crate) unsafe extern "C" fn read_jsprincipal(
     _cx: *mut JSContext,
     reader: *mut JSStructuredCloneReader,
     principals: *mut *mut JSPrincipals,
-) -> bool {
+) -> bool { unsafe {
     let mut tag: u32 = 0;
     let mut len: u32 = 0;
     if !JS_ReadUint32Pair(reader, &mut tag as *mut u32, &mut len as *mut u32) {
@@ -180,7 +180,7 @@ pub(crate) unsafe extern "C" fn read_jsprincipal(
     // we transferred ownership of principal to the caller
     std::mem::forget(principal);
     true
-}
+}}
 
 const PRINCIPALS_CALLBACKS: JSPrincipalsCallbacks = JSPrincipalsCallbacks {
     write: Some(write_jsprincipal),
@@ -192,7 +192,7 @@ unsafe extern "C" fn principals_is_system_or_addon_principal(_: *mut JSPrincipal
 }
 
 //TODO is same_origin_domain equivalent to subsumes for our purposes
-pub(crate) unsafe extern "C" fn subsumes(obj: *mut JSPrincipals, other: *mut JSPrincipals) -> bool {
+pub(crate) unsafe extern "C" fn subsumes(obj: *mut JSPrincipals, other: *mut JSPrincipals) -> bool { unsafe {
     match (NonNull::new(obj), NonNull::new(other)) {
         (Some(obj), Some(other)) => {
             let obj = ServoJSPrincipalsRef::from_raw_nonnull(obj);
@@ -211,4 +211,4 @@ pub(crate) unsafe extern "C" fn subsumes(obj: *mut JSPrincipals, other: *mut JSP
             false
         },
     }
-}
+}}

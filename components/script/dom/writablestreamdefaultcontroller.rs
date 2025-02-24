@@ -440,15 +440,15 @@ impl WritableStreamDefaultController {
     ) -> Rc<Promise> {
         rooted!(in(*cx) let this_object = self.underlying_sink_obj.get());
         let algo = self.abort.borrow().clone();
-        let result = if let Some(algo) = algo {
+        let result = match algo { Some(algo) => {
             algo.Call_(
                 &this_object.handle(),
                 Some(reason),
                 ExceptionHandling::Rethrow,
             )
-        } else {
+        } _ => {
             Ok(Promise::new_resolved(global, cx, (), can_gc))
-        };
+        }};
         result.unwrap_or_else(|e| {
             let promise = Promise::new(global, can_gc);
             promise.reject_error(e);
@@ -465,16 +465,16 @@ impl WritableStreamDefaultController {
     ) -> Rc<Promise> {
         rooted!(in(*cx) let this_object = self.underlying_sink_obj.get());
         let algo = self.write.borrow().clone();
-        let result = if let Some(algo) = algo {
+        let result = match algo { Some(algo) => {
             algo.Call_(
                 &this_object.handle(),
                 chunk,
                 self,
                 ExceptionHandling::Rethrow,
             )
-        } else {
+        } _ => {
             Ok(Promise::new_resolved(global, cx, (), can_gc))
-        };
+        }};
         result.unwrap_or_else(|e| {
             let promise = Promise::new(global, can_gc);
             promise.reject_error(e);
@@ -491,11 +491,11 @@ impl WritableStreamDefaultController {
         rooted!(in(*cx) let mut this_object = ptr::null_mut::<JSObject>());
         this_object.set(self.underlying_sink_obj.get());
         let algo = self.close.borrow().clone();
-        let result = if let Some(algo) = algo {
+        let result = match algo { Some(algo) => {
             algo.Call_(&this_object.handle(), ExceptionHandling::Rethrow)
-        } else {
+        } _ => {
             Ok(Promise::new_resolved(global, cx, (), can_gc))
-        };
+        }};
         result.unwrap_or_else(|e| {
             let promise = Promise::new(global, can_gc);
             promise.reject_error(e);

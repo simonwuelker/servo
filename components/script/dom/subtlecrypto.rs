@@ -2812,7 +2812,7 @@ impl DigestAlgorithm {
         .into()
     }
 
-    fn digest(&self, data: &[u8]) -> Result<impl AsRef<[u8]>, Error> {
+    fn digest(&self, data: &[u8]) -> Result<impl AsRef<[u8]> + use<>, Error> {
         let algorithm = match self {
             Self::Sha1 => &digest::SHA1_FOR_LEGACY_USE_ONLY,
             Self::Sha256 => &digest::SHA256,
@@ -2967,7 +2967,7 @@ impl KeyGenerationAlgorithm {
 }
 
 /// <https://w3c.github.io/webcrypto/#hmac-operations>
-fn sign_hmac(cx: JSContext, key: &CryptoKey, data: &[u8]) -> Result<impl AsRef<[u8]>, Error> {
+fn sign_hmac(cx: JSContext, key: &CryptoKey, data: &[u8]) -> Result<impl AsRef<[u8]> + use<>, Error> {
     // Step 1. Let mac be the result of performing the MAC Generation operation described in Section 4 of [FIPS-198-1]
     // using the key represented by [[handle]] internal slot of key, the hash function identified by the hash attribute
     // of the [[algorithm]] internal slot of key and message as the input data text.

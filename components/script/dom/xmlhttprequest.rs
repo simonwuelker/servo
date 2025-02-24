@@ -659,11 +659,11 @@ impl XMLHttpRequestMethods<crate::DomTypeHolder> for XMLHttpRequest {
         } else {
             CredentialsMode::CredentialsSameOrigin
         };
-        let use_url_credentials = if let Some(ref url) = *self.request_url.borrow() {
+        let use_url_credentials = match *self.request_url.borrow() { Some(ref url) => {
             !url.username().is_empty() || url.password().is_some()
-        } else {
+        } _ => {
             unreachable!()
-        };
+        }};
 
         let content_type = match extracted_or_serialized.as_mut() {
             Some(body) => body.content_type.take(),

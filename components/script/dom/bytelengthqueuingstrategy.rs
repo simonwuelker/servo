@@ -90,7 +90,7 @@ pub(crate) unsafe fn byte_length_queuing_strategy_size(
     cx: *mut JSContext,
     argc: u32,
     vp: *mut JSVal,
-) -> bool {
+) -> bool { unsafe {
     let args = CallArgs::from_vp(vp, argc);
 
     // Step 1.1: Return ? GetV(chunk, "byteLength").
@@ -111,4 +111,4 @@ pub(crate) unsafe fn byte_length_queuing_strategy_size(
         MutableHandleValue::from_raw(args.rval()),
     )
     .unwrap_or(false)
-}
+}}

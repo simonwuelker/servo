@@ -77,7 +77,7 @@ impl CSSKeyframesRule {
     fn find_rule(&self, selector: &str) -> Option<usize> {
         let mut input = ParserInput::new(selector);
         let mut input = Parser::new(&mut input);
-        if let Ok(sel) = KeyframeSelector::parse(&mut input) {
+        match KeyframeSelector::parse(&mut input) { Ok(sel) => {
             let guard = self.cssrule.shared_lock().read();
             // This finds the *last* element matching a selector
             // because that's the rule that applies. Thus, rposition
@@ -86,9 +86,9 @@ impl CSSKeyframesRule {
                 .keyframes
                 .iter()
                 .rposition(|frame| frame.read_with(&guard).selector == sel)
-        } else {
+        } _ => {
             None
-        }
+        }}
     }
 }
 

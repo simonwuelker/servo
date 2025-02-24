@@ -2864,7 +2864,7 @@ impl Activatable for HTMLInputElement {
             },
             // Step 3
             InputType::Radio => {
-                if let Some(ref o) = cache.checked_radio {
+                match cache.checked_radio { Some(ref o) => {
                     let tree_root = self
                         .upcast::<Node>()
                         .GetRootNode(&GetRootNodeOptions::empty());
@@ -2880,9 +2880,9 @@ impl Activatable for HTMLInputElement {
                     } else {
                         self.SetChecked(false);
                     }
-                } else {
+                } _ => {
                     self.SetChecked(false);
-                }
+                }}
             },
             _ => (),
         }

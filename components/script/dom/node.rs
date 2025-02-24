@@ -467,14 +467,14 @@ impl Node {
         loop {
             match current {
                 Some(node) => {
-                    if let Some(directionality) = node
+                    match node
                         .downcast::<HTMLElement>()
                         .and_then(|html_element| html_element.directionality())
-                    {
+                    { Some(directionality) => {
                         return directionality;
-                    } else {
+                    } _ => {
                         current = node.GetParentNode();
-                    }
+                    }}
                 },
                 None => return "ltr".to_owned(),
             }
@@ -751,14 +751,14 @@ impl Node {
         TreeIterator::new(self, shadow_including)
     }
 
-    pub(crate) fn inclusively_following_siblings(&self) -> impl Iterator<Item = DomRoot<Node>> {
+    pub(crate) fn inclusively_following_siblings(&self) -> impl Iterator<Item = DomRoot<Node>> + use<> {
         SimpleNodeIterator {
             current: Some(DomRoot::from_ref(self)),
             next_node: |n| n.GetNextSibling(),
         }
     }
 
-    pub(crate) fn inclusively_preceding_siblings(&self) -> impl Iterator<Item = DomRoot<Node>> {
+    pub(crate) fn inclusively_preceding_siblings(&self) -> impl Iterator<Item = DomRoot<Node>> + use<> {
         SimpleNodeIterator {
             current: Some(DomRoot::from_ref(self)),
             next_node: |n| n.GetPreviousSibling(),
@@ -790,14 +790,14 @@ impl Node {
             .any(|ancestor| &*ancestor == self)
     }
 
-    pub(crate) fn following_siblings(&self) -> impl Iterator<Item = DomRoot<Node>> {
+    pub(crate) fn following_siblings(&self) -> impl Iterator<Item = DomRoot<Node>> + use<> {
         SimpleNodeIterator {
             current: self.GetNextSibling(),
             next_node: |n| n.GetNextSibling(),
         }
     }
 
-    pub(crate) fn preceding_siblings(&self) -> impl Iterator<Item = DomRoot<Node>> {
+    pub(crate) fn preceding_siblings(&self) -> impl Iterator<Item = DomRoot<Node>> + use<> {
         SimpleNodeIterator {
             current: self.GetPreviousSibling(),
             next_node: |n| n.GetPreviousSibling(),
@@ -818,7 +818,7 @@ impl Node {
         }
     }
 
-    pub(crate) fn descending_last_children(&self) -> impl Iterator<Item = DomRoot<Node>> {
+    pub(crate) fn descending_last_children(&self) -> impl Iterator<Item = DomRoot<Node>> + use<> {
         SimpleNodeIterator {
             current: self.GetLastChild(),
             next_node: |n| n.GetLastChild(),
@@ -960,12 +960,12 @@ impl Node {
     /// <https://dom.spec.whatwg.org/#dom-childnode-replacewith>
     pub(crate) fn replace_with(&self, nodes: Vec<NodeOrString>, can_gc: CanGc) -> ErrorResult {
         // Step 1.
-        let parent = if let Some(parent) = self.GetParentNode() {
+        let parent = match self.GetParentNode() { Some(parent) => {
             parent
-        } else {
+        } _ => {
             // Step 2.
             return Ok(());
-        };
+        }};
         // Step 3.
         let viable_next_sibling = first_node_not_in(self.following_siblings(), &nodes);
         // Step 4.
@@ -1081,7 +1081,7 @@ impl Node {
         Ok(NodeList::new_simple_list(&window, iter, CanGc::note()))
     }
 
-    pub(crate) fn ancestors(&self) -> impl Iterator<Item = DomRoot<Node>> {
+    pub(crate) fn ancestors(&self) -> impl Iterator<Item = DomRoot<Node>> + use<> {
         SimpleNodeIterator {
             current: self.GetParentNode(),
             next_node: |n| n.GetParentNode(),
@@ -1092,7 +1092,7 @@ impl Node {
     pub(crate) fn inclusive_ancestors(
         &self,
         shadow_including: ShadowIncluding,
-    ) -> impl Iterator<Item = DomRoot<Node>> {
+    ) -> impl Iterator<Item = DomRoot<Node>> + use<> {
         SimpleNodeIterator {
             current: Some(DomRoot::from_ref(self)),
             next_node: move |n| {
@@ -1134,21 +1134,21 @@ impl Node {
         self.is_connected() && self.owner_doc().browsing_context().is_some()
     }
 
-    pub(crate) fn children(&self) -> impl Iterator<Item = DomRoot<Node>> {
+    pub(crate) fn children(&self) -> impl Iterator<Item = DomRoot<Node>> + use<> {
         SimpleNodeIterator {
             current: self.GetFirstChild(),
             next_node: |n| n.GetNextSibling(),
         }
     }
 
-    pub(crate) fn rev_children(&self) -> impl Iterator<Item = DomRoot<Node>> {
+    pub(crate) fn rev_children(&self) -> impl Iterator<Item = DomRoot<Node>> + use<> {
         SimpleNodeIterator {
             current: self.GetLastChild(),
             next_node: |n| n.GetPreviousSibling(),
         }
     }
 
-    pub(crate) fn child_elements(&self) -> impl Iterator<Item = DomRoot<Element>> {
+    pub(crate) fn child_elements(&self) -> impl Iterator<Item = DomRoot<Element>> + use<> {
         self.children()
             .filter_map(DomRoot::downcast as fn(_) -> _)
             .peekable()
@@ -1413,18 +1413,18 @@ where
 /// If the given untrusted node address represents a valid DOM node in the given runtime,
 /// returns it.
 #[allow(unsafe_code)]
-pub(crate) unsafe fn from_untrusted_node_address(candidate: UntrustedNodeAddress) -> DomRoot<Node> {
+pub(crate) unsafe fn from_untrusted_node_address(candidate: UntrustedNodeAddress) -> DomRoot<Node> { unsafe {
     DomRoot::from_ref(Node::from_untrusted_node_address(candidate))
-}
+}}
 
 /// If the given untrusted node address represents a valid DOM node in the given runtime,
 /// returns it.
 #[allow(unsafe_code)]
 pub(crate) unsafe fn from_untrusted_compositor_node_address(
     candidate: CompositorUntrustedNodeAddress,
-) -> DomRoot<Node> {
+) -> DomRoot<Node> { unsafe {
     DomRoot::from_ref(Node::from_untrusted_compositor_node_address(candidate))
-}
+}}
 
 #[allow(unsafe_code)]
 pub(crate) trait LayoutNodeHelpers<'dom> {
@@ -1617,26 +1617,26 @@ impl<'dom> LayoutNodeHelpers<'dom> for LayoutDom<'dom, Node> {
 
     #[inline]
     #[allow(unsafe_code)]
-    unsafe fn initialize_style_data(self) {
+    unsafe fn initialize_style_data(self) { unsafe {
         let data = self.unsafe_get().style_data.borrow_mut_for_layout();
         debug_assert!(data.is_none());
         *data = Some(Box::default());
-    }
+    }}
 
     #[inline]
     #[allow(unsafe_code)]
-    unsafe fn initialize_layout_data(self, new_data: Box<GenericLayoutData>) {
+    unsafe fn initialize_layout_data(self, new_data: Box<GenericLayoutData>) { unsafe {
         let data = self.unsafe_get().layout_data.borrow_mut_for_layout();
         debug_assert!(data.is_none());
         *data = Some(new_data);
-    }
+    }}
 
     #[inline]
     #[allow(unsafe_code)]
-    unsafe fn clear_style_and_layout_data(self) {
+    unsafe fn clear_style_and_layout_data(self) { unsafe {
         self.unsafe_get().style_data.borrow_mut_for_layout().take();
         self.unsafe_get().layout_data.borrow_mut_for_layout().take();
-    }
+    }}
 
     fn text_content(self) -> Cow<'dom, str> {
         if let Some(text) = self.downcast::<Text>() {
@@ -1783,17 +1783,17 @@ impl Iterator for PrecedingNodeIterator {
 
         self.current = if self.root == current {
             None
-        } else if let Some(previous_sibling) = current.GetPreviousSibling() {
+        } else { match current.GetPreviousSibling() { Some(previous_sibling) => {
             if self.root == previous_sibling {
                 None
-            } else if let Some(last_child) = previous_sibling.descending_last_children().last() {
+            } else { match previous_sibling.descending_last_children().last() { Some(last_child) => {
                 Some(last_child)
-            } else {
+            } _ => {
                 Some(previous_sibling)
-            }
-        } else {
+            }}}
+        } _ => {
             current.GetParentNode()
-        };
+        }}};
         self.current.clone()
     }
 }
@@ -2741,7 +2741,7 @@ impl Node {
     #[allow(unsafe_code)]
     pub(crate) unsafe fn from_untrusted_node_address(
         candidate: UntrustedNodeAddress,
-    ) -> &'static Self {
+    ) -> &'static Self { unsafe {
         // https://github.com/servo/servo/issues/6383
         let candidate = candidate.0 as usize;
         let object = candidate as *mut JSObject;
@@ -2749,7 +2749,7 @@ impl Node {
             panic!("Attempted to create a `Node` from an invalid pointer!")
         }
         &*(conversions::private_from_object(object) as *const Self)
-    }
+    }}
 
     /// If the given untrusted node address represents a valid DOM node in the given runtime,
     /// returns it.
@@ -2761,7 +2761,7 @@ impl Node {
     #[allow(unsafe_code)]
     pub(crate) unsafe fn from_untrusted_compositor_node_address(
         candidate: CompositorUntrustedNodeAddress,
-    ) -> &'static Self {
+    ) -> &'static Self { unsafe {
         // https://github.com/servo/servo/issues/6383
         let candidate = candidate.0 as usize;
         let object = candidate as *mut JSObject;
@@ -2769,7 +2769,7 @@ impl Node {
             panic!("Attempted to create a `Node` from an invalid pointer!")
         }
         &*(conversions::private_from_object(object) as *const Self)
-    }
+    }}
 
     pub(crate) fn html_serialize(
         &self,
@@ -3185,7 +3185,7 @@ impl NodeMethods<crate::DomTypeHolder> for Node {
     fn Normalize(&self) {
         let mut children = self.children().enumerate().peekable();
         while let Some((_, node)) = children.next() {
-            if let Some(text) = node.downcast::<Text>() {
+            match node.downcast::<Text>() { Some(text) => {
                 let cdata = text.upcast::<CharacterData>();
                 let mut length = cdata.Length();
                 if length == 0 {
@@ -3207,9 +3207,9 @@ impl NodeMethods<crate::DomTypeHolder> for Node {
                     cdata.append_data(&sibling_cdata.data());
                     Node::remove(&sibling, self, SuppressObserver::Unsuppressed);
                 }
-            } else {
+            } _ => {
                 node.Normalize();
-            }
+            }}
         }
     }
 

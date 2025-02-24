@@ -98,7 +98,7 @@ use crate::script_runtime::{CanGc, JSContext as SafeJSContext};
 //
 // and similar text occurs for other object types.
 macro_rules! handle_object_deletion {
-    ($self_:expr, $binding:expr, $object:ident, $unbind_command:expr) => {
+    ($self_:expr_2021, $binding:expr_2021, $object:ident, $unbind_command:expr_2021) => {
         if let Some(bound_object) = $binding.get() {
             if bound_object.id() == $object.id() {
                 $binding.set(None);
@@ -137,12 +137,12 @@ pub(crate) unsafe fn uniform_typed<T>(
     mut retval: MutableHandleValue,
 ) where
     T: TypedArrayElementCreator,
-{
+{ unsafe {
     rooted!(in(cx) let mut rval = ptr::null_mut::<JSObject>());
     <TypedArray<T, *mut JSObject>>::create(cx, CreateWith::Slice(value), rval.handle_mut())
         .unwrap();
     retval.set(ObjectValue(rval.get()));
-}
+}}
 
 /// Set of bitflags for texture unpacking (texImage2d, etc...)
 #[derive(Clone, Copy, JSTraceable, MallocSizeOf)]
@@ -628,14 +628,14 @@ impl WebGLRenderingContext {
                 if !canvas.origin_is_clean() {
                     return Err(Error::Security);
                 }
-                if let Some((data, size)) = canvas.fetch_all_data() {
+                match canvas.fetch_all_data() { Some((data, size)) => {
                     let data = data.unwrap_or_else(|| {
                         IpcSharedMemory::from_bytes(&vec![0; size.area() as usize * 4])
                     });
                     TexPixels::new(data, size, PixelFormat::BGRA8, true)
-                } else {
+                } _ => {
                     return Ok(None);
-                }
+                }}
             },
             TexImageSource::HTMLVideoElement(video) => match video.get_current_frame_data() {
                 Some((data, size)) => {
@@ -3177,7 +3177,7 @@ impl WebGLRenderingContextMethods<crate::DomTypeHolder> for WebGLRenderingContex
         mut retval: MutableHandleValue,
     ) {
         // Check if currently bound framebuffer is non-zero as per spec.
-        if let Some(fb) = self.bound_draw_framebuffer.get() {
+        match self.bound_draw_framebuffer.get() { Some(fb) => {
             // Opaque framebuffers cannot have their attachments inspected
             // https://immersive-web.github.io/webxr/#opaque-framebuffer
             handle_potential_webgl_error!(
@@ -3185,10 +3185,10 @@ impl WebGLRenderingContextMethods<crate::DomTypeHolder> for WebGLRenderingContex
                 fb.validate_transparent(),
                 return retval.set(NullValue())
             );
-        } else {
+        } _ => {
             self.webgl_error(InvalidOperation);
             return retval.set(NullValue());
-        }
+        }}
 
         // Note: commented out stuff is for the WebGL2 standard.
         let target_matches = match target {
@@ -3552,11 +3552,11 @@ impl WebGLRenderingContextMethods<crate::DomTypeHolder> for WebGLRenderingContex
                 },
                 constants::VERTEX_ATTRIB_ARRAY_STRIDE => retval.set(Int32Value(data.stride as i32)),
                 constants::VERTEX_ATTRIB_ARRAY_BUFFER_BINDING => unsafe {
-                    if let Some(buffer) = data.buffer() {
+                    match data.buffer() { Some(buffer) => {
                         buffer.to_jsval(*cx, retval);
-                    } else {
+                    } _ => {
                         retval.set(NullValue());
-                    }
+                    }}
                 },
                 ANGLEInstancedArraysConstants::VERTEX_ATTRIB_ARRAY_DIVISOR_ANGLE => {
                     retval.set(UInt32Value(data.divisor))
@@ -4864,7 +4864,7 @@ macro_rules! capabilities {
     ($prev:ident, $name:ident, $($rest:ident,)* [$($tt:tt)*]) => {
         capabilities!($name, $($rest,)* [$($tt)* $name = Self::$prev.bits() << 1;]);
     };
-    ($prev:ident, [$($name:ident = $value:expr;)*]) => {
+    ($prev:ident, [$($name:ident = $value:expr_2021;)*]) => {
         #[derive(Clone, Copy, JSTraceable, MallocSizeOf)]
         pub(crate) struct CapFlags(u16);
 

@@ -118,20 +118,20 @@ impl IntersectionObserver {
         // Step 3.
         // > Attempt to parse a margin from options.rootMargin. If a list is returned,
         // > set this’s internal [[rootMargin]] slot to that. Otherwise, throw a SyntaxError exception.
-        let root_margin = if let Ok(margin) = parse_a_margin(init.rootMargin.as_ref()) {
+        let root_margin = match parse_a_margin(init.rootMargin.as_ref()) { Ok(margin) => {
             margin
-        } else {
+        } _ => {
             return Err(Error::Syntax);
-        };
+        }};
 
         // Step 4.
         // > Attempt to parse a margin from options.scrollMargin. If a list is returned,
         // > set this’s internal [[scrollMargin]] slot to that. Otherwise, throw a SyntaxError exception.
-        let scroll_margin = if let Ok(margin) = parse_a_margin(init.scrollMargin.as_ref()) {
+        let scroll_margin = match parse_a_margin(init.scrollMargin.as_ref()) { Ok(margin) => {
             margin
-        } else {
+        } _ => {
             return Err(Error::Syntax);
-        };
+        }};
 
         // Step 1 and step 2, 3, 4 setter
         // > 1. Let this be a new IntersectionObserver object

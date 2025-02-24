@@ -33,12 +33,12 @@ impl RecordKey for DOMString {
         self.encode_utf16().collect::<Vec<_>>()
     }
 
-    unsafe fn from_id(cx: *mut JSContext, id: HandleId) -> Result<ConversionResult<Self>, ()> {
+    unsafe fn from_id(cx: *mut JSContext, id: HandleId) -> Result<ConversionResult<Self>, ()> { unsafe {
         match jsid_to_string(cx, id) {
             Some(s) => Ok(ConversionResult::Success(s)),
             None => Ok(ConversionResult::Failure("Failed to get DOMString".into())),
         }
-    }
+    }}
 }
 
 impl RecordKey for USVString {
@@ -46,13 +46,13 @@ impl RecordKey for USVString {
         self.0.encode_utf16().collect::<Vec<_>>()
     }
 
-    unsafe fn from_id(cx: *mut JSContext, id: HandleId) -> Result<ConversionResult<Self>, ()> {
+    unsafe fn from_id(cx: *mut JSContext, id: HandleId) -> Result<ConversionResult<Self>, ()> { unsafe {
         rooted!(in(cx) let mut jsid_value = UndefinedValue());
         let raw_id: RawHandleId = id.into();
         JS_IdToValue(cx, *raw_id.ptr, jsid_value.handle_mut());
 
         USVString::from_jsval(cx, jsid_value.handle(), ())
-    }
+    }}
 }
 
 impl RecordKey for ByteString {
@@ -60,13 +60,13 @@ impl RecordKey for ByteString {
         self.iter().map(|&x| x as u16).collect::<Vec<u16>>()
     }
 
-    unsafe fn from_id(cx: *mut JSContext, id: HandleId) -> Result<ConversionResult<Self>, ()> {
+    unsafe fn from_id(cx: *mut JSContext, id: HandleId) -> Result<ConversionResult<Self>, ()> { unsafe {
         rooted!(in(cx) let mut jsid_value = UndefinedValue());
         let raw_id: RawHandleId = id.into();
         JS_IdToValue(cx, *raw_id.ptr, jsid_value.handle_mut());
 
         ByteString::from_jsval(cx, jsid_value.handle(), ())
-    }
+    }}
 }
 
 /// The `Record` (open-ended dictionary) type.
@@ -104,7 +104,7 @@ where
         cx: *mut JSContext,
         value: HandleValue,
         config: C,
-    ) -> Result<ConversionResult<Self>, ()> {
+    ) -> Result<ConversionResult<Self>, ()> { unsafe {
         if !value.is_object() {
             return Ok(ConversionResult::Failure(
                 "Record value was not an object".into(),
@@ -164,7 +164,7 @@ where
         }
 
         Ok(ConversionResult::Success(Record { map }))
-    }
+    }}
 }
 
 impl<K, V> ToJSValConvertible for Record<K, V>
@@ -173,7 +173,7 @@ where
     V: ToJSValConvertible,
 {
     #[inline]
-    unsafe fn to_jsval(&self, cx: *mut JSContext, mut rval: MutableHandleValue) {
+    unsafe fn to_jsval(&self, cx: *mut JSContext, mut rval: MutableHandleValue) { unsafe {
         rooted!(in(cx) let js_object = JS_NewPlainObject(cx));
         assert!(!js_object.handle().is_null());
 
@@ -193,7 +193,7 @@ where
         }
 
         rval.set(ObjectValue(js_object.handle().get()));
-    }
+    }}
 }
 
 impl<K: RecordKey, V> Default for Record<K, V> {

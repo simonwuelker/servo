@@ -162,13 +162,13 @@ impl HTMLCollection {
         index: u32,
         element: Option<DomRoot<Element>>,
     ) -> Option<DomRoot<Element>> {
-        if let Some(element) = element {
+        match element { Some(element) => {
             self.cached_cursor_index.set(OptionU32::some(index));
             self.cached_cursor_element.set(Some(&element));
             Some(element)
-        } else {
+        } _ => {
             None
-        }
+        }}
     }
 
     /// <https://dom.spec.whatwg.org/#concept-getelementsbytagname>
@@ -357,7 +357,7 @@ impl HTMLCollectionMethods<crate::DomTypeHolder> for HTMLCollection {
     fn Item(&self, index: u32) -> Option<DomRoot<Element>> {
         self.validate_cache();
 
-        if let Some(element) = self.cached_cursor_element.get() {
+        match self.cached_cursor_element.get() { Some(element) => {
             // Cache hit, the cursor element is set
             if let Some(cached_index) = self.cached_cursor_index.get().to_option() {
                 match cached_index.cmp(&index) {
@@ -387,11 +387,11 @@ impl HTMLCollectionMethods<crate::DomTypeHolder> for HTMLCollection {
                 // Iterate forwards through all the nodes
                 self.set_cached_cursor(index, self.elements_iter().nth(index as usize))
             }
-        } else {
+        } _ => {
             // Cache miss
             // Iterate forwards through all the nodes
             self.set_cached_cursor(index, self.elements_iter().nth(index as usize))
-        }
+        }}
     }
 
     /// <https://dom.spec.whatwg.org/#dom-htmlcollection-nameditem>

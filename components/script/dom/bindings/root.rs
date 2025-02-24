@@ -87,12 +87,12 @@ pub(crate) trait ToLayout<T> {
 }
 
 impl<T: DomObject> ToLayout<T> for Dom<T> {
-    unsafe fn to_layout(&self) -> LayoutDom<T> {
+    unsafe fn to_layout(&self) -> LayoutDom<T> { unsafe {
         assert_in_layout();
         LayoutDom {
             value: self.as_ptr().as_ref().unwrap(),
         }
-    }
+    }}
 }
 
 /// An unrooted reference to a DOM object for use in layout. `Layout*Helpers`
@@ -177,13 +177,13 @@ impl<T> Clone for LayoutDom<'_, T> {
 impl LayoutDom<'_, Node> {
     /// Create a new JS-owned value wrapped from an address known to be a
     /// `Node` pointer.
-    pub(crate) unsafe fn from_trusted_node_address(inner: TrustedNodeAddress) -> Self {
+    pub(crate) unsafe fn from_trusted_node_address(inner: TrustedNodeAddress) -> Self { unsafe {
         assert_in_layout();
         let TrustedNodeAddress(addr) = inner;
         LayoutDom {
             value: &*(addr as *const Node),
         }
-    }
+    }}
 }
 
 /// A holder that provides interior mutability for GC-managed values such as
@@ -285,10 +285,10 @@ impl<T: DomObject> MutNullableDom<T> {
     /// Retrieve a copy of the inner optional `Dom<T>` as `LayoutDom<T>`.
     /// For use by layout, which can't use safe types like Temporary.
     #[cfg_attr(crown, allow(crown::unrooted_must_root))]
-    pub(crate) unsafe fn get_inner_as_layout(&self) -> Option<LayoutDom<T>> {
+    pub(crate) unsafe fn get_inner_as_layout(&self) -> Option<LayoutDom<T>> { unsafe {
         assert_in_layout();
         (*self.ptr.get()).as_ref().map(|js| js.to_layout())
-    }
+    }}
 
     /// Get a rooted value out of this object
     #[cfg_attr(crown, allow(crown::unrooted_must_root))]
@@ -388,11 +388,11 @@ impl<T: DomObject> MallocSizeOf for DomOnceCell<T> {
 
 #[cfg_attr(crown, allow(crown::unrooted_must_root))]
 unsafe impl<T: DomObject> JSTraceable for DomOnceCell<T> {
-    unsafe fn trace(&self, trc: *mut JSTracer) {
+    unsafe fn trace(&self, trc: *mut JSTracer) { unsafe {
         if let Some(ptr) = self.ptr.get() {
             ptr.trace(trc);
         }
-    }
+    }}
 }
 
 impl<'dom, T> LayoutDom<'dom, T>
@@ -408,10 +408,10 @@ where
 
     /// Transforms a slice of `Dom<T>` into a slice of `LayoutDom<T>`.
     // FIXME(nox): This should probably be done through a ToLayout trait.
-    pub(crate) unsafe fn to_layout_slice(slice: &'dom [Dom<T>]) -> &'dom [LayoutDom<'dom, T>] {
+    pub(crate) unsafe fn to_layout_slice(slice: &'dom [Dom<T>]) -> &'dom [LayoutDom<'dom, T>] { unsafe {
         // This doesn't compile if Dom and LayoutDom don't have the same
         // representation.
         let _ = mem::transmute::<Dom<T>, LayoutDom<T>>;
         &*(slice as *const [Dom<T>] as *const [LayoutDom<T>])
-    }
+    }}
 }

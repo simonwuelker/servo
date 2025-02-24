@@ -72,10 +72,10 @@ impl SpecificCSSRule for CSSLayerBlockRule {
 impl CSSLayerBlockRuleMethods<crate::DomTypeHolder> for CSSLayerBlockRule {
     /// <https://drafts.csswg.org/css-cascade-5/#dom-csslayerblockrule-name>
     fn Name(&self) -> DOMString {
-        if let Some(name) = &self.layerblockrule.name {
+        match &self.layerblockrule.name { Some(name) => {
             DOMString::from_string(name.to_css_string())
-        } else {
+        } _ => {
             DOMString::new()
-        }
+        }}
     }
 }

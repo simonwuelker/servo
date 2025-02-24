@@ -61,10 +61,10 @@ use crate::dom::nodelist::NodeList;
 
 impl<T: Float + ToJSValConvertible> ToJSValConvertible for Finite<T> {
     #[inline]
-    unsafe fn to_jsval(&self, cx: *mut JSContext, rval: MutableHandleValue) {
+    unsafe fn to_jsval(&self, cx: *mut JSContext, rval: MutableHandleValue) { unsafe {
         let value = **self;
         value.to_jsval(cx, rval);
-    }
+    }}
 }
 
 impl<T: Float + FromJSValConvertible<Config = ()>> FromJSValConvertible for Finite<T> {
@@ -74,7 +74,7 @@ impl<T: Float + FromJSValConvertible<Config = ()>> FromJSValConvertible for Fini
         cx: *mut JSContext,
         value: HandleValue,
         option: (),
-    ) -> Result<ConversionResult<Finite<T>>, ()> {
+    ) -> Result<ConversionResult<Finite<T>>, ()> { unsafe {
         let result = match FromJSValConvertible::from_jsval(cx, value, option)? {
             ConversionResult::Success(v) => v,
             ConversionResult::Failure(error) => {
@@ -90,15 +90,15 @@ impl<T: Float + FromJSValConvertible<Config = ()>> FromJSValConvertible for Fini
                 Err(())
             },
         }
-    }
+    }}
 }
 
 impl<T: ToJSValConvertible + JSTraceable> ToJSValConvertible for RootedTraceableBox<T> {
     #[inline]
-    unsafe fn to_jsval(&self, cx: *mut JSContext, rval: MutableHandleValue) {
+    unsafe fn to_jsval(&self, cx: *mut JSContext, rval: MutableHandleValue) { unsafe {
         let value = &**self;
         value.to_jsval(cx, rval);
-    }
+    }}
 }
 
 impl<T> FromJSValConvertible for RootedTraceableBox<Heap<T>>
@@ -112,21 +112,21 @@ where
         cx: *mut JSContext,
         value: HandleValue,
         config: Self::Config,
-    ) -> Result<ConversionResult<Self>, ()> {
+    ) -> Result<ConversionResult<Self>, ()> { unsafe {
         T::from_jsval(cx, value, config).map(|result| match result {
             ConversionResult::Success(inner) => {
                 ConversionResult::Success(RootedTraceableBox::from_box(Heap::boxed(inner)))
             },
             ConversionResult::Failure(msg) => ConversionResult::Failure(msg),
         })
-    }
+    }}
 }
 
 /// Convert `id` to a `DOMString`. Returns `None` if `id` is not a string or
 /// integer.
 ///
 /// Handling of invalid UTF-16 in strings depends on the relevant option.
-pub(crate) unsafe fn jsid_to_string(cx: *mut JSContext, id: HandleId) -> Option<DOMString> {
+pub(crate) unsafe fn jsid_to_string(cx: *mut JSContext, id: HandleId) -> Option<DOMString> { unsafe {
     let id_raw = *id;
     if id_raw.is_string() {
         let jsstr = std::ptr::NonNull::new(id_raw.to_string()).unwrap();
@@ -138,7 +138,7 @@ pub(crate) unsafe fn jsid_to_string(cx: *mut JSContext, id: HandleId) -> Option<
     }
 
     None
-}
+}}
 
 pub(crate) use script_bindings::conversions::is_dom_proxy;
 
@@ -151,7 +151,7 @@ pub(crate) use script_bindings::conversions::is_dom_proxy;
 unsafe fn private_from_proto_check_static(
     obj: *mut JSObject,
     proto_check: fn(&'static DOMClass) -> bool,
-) -> Result<*const libc::c_void, ()> {
+) -> Result<*const libc::c_void, ()> { unsafe {
     let dom_class = get_dom_class(obj).map_err(|_| ())?;
     if proto_check(dom_class) {
         trace!("good prototype");
@@ -160,7 +160,7 @@ unsafe fn private_from_proto_check_static(
         trace!("bad prototype");
         Err(())
     }
-}
+}}
 
 /// Get a `*const T` for a DOM object accessible from a `JSObject`, where the DOM object
 /// is guaranteed not to be a wrapper.
@@ -210,7 +210,7 @@ where
 /// Returns whether `value` is an array-like object (Array, FileList,
 /// HTMLCollection, HTMLFormControlsCollection, HTMLOptionsCollection,
 /// NodeList).
-pub(crate) unsafe fn is_array_like(cx: *mut JSContext, value: HandleValue) -> bool {
+pub(crate) unsafe fn is_array_like(cx: *mut JSContext, value: HandleValue) -> bool { unsafe {
     let mut is_array = false;
     assert!(IsArrayObject(cx, value, &mut is_array));
     if is_array {
@@ -239,7 +239,7 @@ pub(crate) unsafe fn is_array_like(cx: *mut JSContext, value: HandleValue) -> bo
     }
 
     false
-}
+}}
 
 /// Get a property from a JS object.
 pub(crate) unsafe fn get_property_jsval(
@@ -247,7 +247,7 @@ pub(crate) unsafe fn get_property_jsval(
     object: HandleObject,
     name: &str,
     mut rval: MutableHandleValue,
-) -> Fallible<()> {
+) -> Fallible<()> { unsafe {
     rval.set(UndefinedValue());
     let cname = match ffi::CString::new(name) {
         Ok(cname) => cname,
@@ -265,7 +265,7 @@ pub(crate) unsafe fn get_property_jsval(
     } else {
         Ok(())
     }
-}
+}}
 
 /// Get a property from a JS object, and convert it to a Rust value.
 pub(crate) unsafe fn get_property<T>(
@@ -276,7 +276,7 @@ pub(crate) unsafe fn get_property<T>(
 ) -> Fallible<Option<T>>
 where
     T: FromJSValConvertible,
-{
+{ unsafe {
     debug!("Getting property {}.", name);
     rooted!(in(cx) let mut result = UndefinedValue());
     get_property_jsval(cx, object, name, result.handle_mut())?;
@@ -290,14 +290,14 @@ where
         Ok(ConversionResult::Failure(_)) => Ok(None),
         Err(()) => Err(Error::JSFailed),
     }
-}
+}}
 
 /// Get a `DomRoot<T>` for a WindowProxy accessible from a `HandleValue`.
 /// Caller is responsible for throwing a JS exception if needed in case of error.
 pub(crate) unsafe fn windowproxy_from_handlevalue<D: crate::DomTypes>(
     v: HandleValue,
     _cx: *mut JSContext,
-) -> Result<DomRoot<D::WindowProxy>, ()> {
+) -> Result<DomRoot<D::WindowProxy>, ()> { unsafe {
     if !v.get().is_object() {
         return Err(());
     }
@@ -309,4 +309,4 @@ pub(crate) unsafe fn windowproxy_from_handlevalue<D: crate::DomTypes>(
     GetProxyReservedSlot(object, 0, &mut value);
     let ptr = value.to_private() as *const D::WindowProxy;
     Ok(DomRoot::from_ref(&*ptr))
-}
+}}

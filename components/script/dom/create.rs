@@ -103,7 +103,7 @@ fn create_svg_element(
             let obj = $ctor::new(name.local, prefix, document, proto, CanGc::note());
             DomRoot::upcast(obj)
         });
-        ($ctor:ident, $($arg:expr),+) => ({
+        ($ctor:ident, $($arg:expr_2021),+) => ({
             let obj = $ctor::new(name.local, prefix, document, proto, $($arg),+, CanGc::note());
             DomRoot::upcast(obj)
         })
@@ -269,7 +269,7 @@ pub(crate) fn create_native_html_element(
             let obj = $ctor::new(name.local, prefix, document, proto, CanGc::note());
             DomRoot::upcast(obj)
         });
-        ($ctor:ident, $($arg:expr),+) => ({
+        ($ctor:ident, $($arg:expr_2021),+) => ({
             let obj = $ctor::new(name.local, prefix, document, proto, $($arg),+, CanGc::note());
             DomRoot::upcast(obj)
         })

@@ -600,7 +600,7 @@ impl FileListener {
         match msg {
             Ok(ReadFileProgress::Meta(blob_buf)) => match self.state.take() {
                 Some(FileListenerState::Empty(target)) => {
-                    let bytes = if let FileListenerTarget::Stream(ref trusted_stream) = target {
+                    let bytes = match target { FileListenerTarget::Stream(ref trusted_stream) => {
                         let trusted = trusted_stream.clone();
 
                         let task = task!(enqueue_stream_chunk: move || {
@@ -610,9 +610,9 @@ impl FileListener {
                         self.task_source.queue(task);
 
                         Vec::with_capacity(0)
-                    } else {
+                    } _ => {
                         blob_buf.bytes
-                    };
+                    }};
 
                     self.state = Some(FileListenerState::Receiving(bytes, target));
                 },
@@ -622,7 +622,7 @@ impl FileListener {
             },
             Ok(ReadFileProgress::Partial(mut bytes_in)) => match self.state.take() {
                 Some(FileListenerState::Receiving(mut bytes, target)) => {
-                    if let FileListenerTarget::Stream(ref trusted_stream) = target {
+                    match target { FileListenerTarget::Stream(ref trusted_stream) => {
                         let trusted = trusted_stream.clone();
 
                         let task = task!(enqueue_stream_chunk: move || {
@@ -631,9 +631,9 @@ impl FileListener {
                         });
 
                         self.task_source.queue(task);
-                    } else {
+                    } _ => {
                         bytes.append(&mut bytes_in);
-                    };
+                    }};
 
                     self.state = Some(FileListenerState::Receiving(bytes, target));
                 },
@@ -774,11 +774,11 @@ impl GlobalScope {
 
     /// The message-port router Id of the global, if any
     fn port_router_id(&self) -> Option<MessagePortRouterId> {
-        if let MessagePortState::Managed(id, _message_ports) = &*self.message_port_state.borrow() {
+        match &*self.message_port_state.borrow() { MessagePortState::Managed(id, _message_ports) => {
             Some(*id)
-        } else {
+        } _ => {
             None
-        }
+        }}
     }
 
     /// Is this global managing a given port?
@@ -847,10 +847,10 @@ impl GlobalScope {
         // Step 1
         let mut workers = self.worker_map.borrow_mut();
 
-        if let Some(worker) = workers.get(&worker_id) {
+        match workers.get(&worker_id) { Some(worker) => {
             // Step 3
             DomRoot::from_ref(&**worker)
-        } else {
+        } _ => {
             // Step 2.1
             // TODO: step 2.2, worker state.
             let new_worker =
@@ -861,14 +861,13 @@ impl GlobalScope {
 
             // Step 3
             new_worker
-        }
+        }}
     }
 
     /// Complete the transfer of a message-port.
     fn complete_port_transfer(&self, port_id: MessagePortId, tasks: VecDeque<PortMessageTask>) {
-        let should_start = if let MessagePortState::Managed(_id, message_ports) =
-            &mut *self.message_port_state.borrow_mut()
-        {
+        let should_start = match &mut *self.message_port_state.borrow_mut()
+        { MessagePortState::Managed(_id, message_ports) => {
             match message_ports.get_mut(&port_id) {
                 None => {
                     panic!("complete_port_transfer called for an unknown port.");
@@ -885,9 +884,9 @@ impl GlobalScope {
                     }
                 },
             }
-        } else {
+        } _ => {
             panic!("complete_port_transfer called for an unknown port.");
-        };
+        }};
         if should_start {
             self.start_message_port(&port_id);
         }
@@ -946,9 +945,8 @@ impl GlobalScope {
 
     /// <https://html.spec.whatwg.org/multipage/#entangle>
     pub(crate) fn entangle_ports(&self, port1: MessagePortId, port2: MessagePortId) {
-        if let MessagePortState::Managed(_id, message_ports) =
-            &mut *self.message_port_state.borrow_mut()
-        {
+        match &mut *self.message_port_state.borrow_mut()
+        { MessagePortState::Managed(_id, message_ports) => {
             for (port_id, entangled_id) in &[(port1, port2), (port2, port1)] {
                 match message_ports.get_mut(port_id) {
                     None => {
@@ -964,9 +962,9 @@ impl GlobalScope {
                     },
                 }
             }
-        } else {
+        } _ => {
             panic!("entangled_ports called on a global not managing any ports.");
-        }
+        }}
 
         let _ = self
             .script_to_constellation_chan()
@@ -987,9 +985,8 @@ impl GlobalScope {
 
     /// Handle the transfer of a port in the current task.
     pub(crate) fn mark_port_as_transferred(&self, port_id: &MessagePortId) -> MessagePortImpl {
-        if let MessagePortState::Managed(_id, message_ports) =
-            &mut *self.message_port_state.borrow_mut()
-        {
+        match &mut *self.message_port_state.borrow_mut()
+        { MessagePortState::Managed(_id, message_ports) => {
             let mut port_impl = message_ports
                 .remove(port_id)
                 .map(|ref mut managed_port| {
@@ -1004,16 +1001,15 @@ impl GlobalScope {
                 .script_to_constellation_chan()
                 .send(ScriptMsg::MessagePortShipped(*port_id));
             port_impl
-        } else {
+        } _ => {
             panic!("mark_port_as_transferred called on a global not managing any ports.");
-        }
+        }}
     }
 
     /// <https://html.spec.whatwg.org/multipage/#dom-messageport-start>
     pub(crate) fn start_message_port(&self, port_id: &MessagePortId) {
-        if let MessagePortState::Managed(_id, message_ports) =
-            &mut *self.message_port_state.borrow_mut()
-        {
+        match &mut *self.message_port_state.borrow_mut()
+        { MessagePortState::Managed(_id, message_ports) => {
             let message_buffer = match message_ports.get_mut(port_id) {
                 None => panic!("start_message_port called on a unknown port."),
                 Some(managed_port) => {
@@ -1036,16 +1032,15 @@ impl GlobalScope {
                     );
                 }
             }
-        } else {
+        } _ => {
             warn!("start_message_port called on a global not managing any ports.")
-        }
+        }}
     }
 
     /// <https://html.spec.whatwg.org/multipage/#dom-messageport-close>
     pub(crate) fn close_message_port(&self, port_id: &MessagePortId) {
-        if let MessagePortState::Managed(_id, message_ports) =
-            &mut *self.message_port_state.borrow_mut()
-        {
+        match &mut *self.message_port_state.borrow_mut()
+        { MessagePortState::Managed(_id, message_ports) => {
             match message_ports.get_mut(port_id) {
                 None => panic!("close_message_port called on an unknown port."),
                 Some(managed_port) => {
@@ -1057,17 +1052,16 @@ impl GlobalScope {
                     }
                 },
             };
-        } else {
+        } _ => {
             warn!("close_message_port called on a global not managing any ports.")
-        }
+        }}
     }
 
     /// <https://html.spec.whatwg.org/multipage/#message-port-post-message-steps>
     // Steps 6 and 7
     pub(crate) fn post_messageport_msg(&self, port_id: MessagePortId, task: PortMessageTask) {
-        if let MessagePortState::Managed(_id, message_ports) =
-            &mut *self.message_port_state.borrow_mut()
-        {
+        match &mut *self.message_port_state.borrow_mut()
+        { MessagePortState::Managed(_id, message_ports) => {
             let entangled_port = match message_ports.get_mut(&port_id) {
                 None => panic!("post_messageport_msg called on an unknown port."),
                 Some(managed_port) => {
@@ -1090,9 +1084,9 @@ impl GlobalScope {
                         global.route_task_to_port(entangled_id, task, CanGc::note());
                     }));
             }
-        } else {
+        } _ => {
             warn!("post_messageport_msg called on a global not managing any ports.");
-        }
+        }}
     }
 
     /// If we don't know about the port,
@@ -1109,9 +1103,8 @@ impl GlobalScope {
         // First, broadcast locally.
         self.broadcast_message_event(msg.clone(), Some(channel_id));
 
-        if let BroadcastChannelState::Managed(router_id, _) =
-            &*self.broadcast_channel_state.borrow()
-        {
+        match &*self.broadcast_channel_state.borrow()
+        { BroadcastChannelState::Managed(router_id, _) => {
             // Second, broadcast to other globals via the constellation.
             //
             // Note: for globals in the same script-thread,
@@ -1119,9 +1112,9 @@ impl GlobalScope {
             let _ = self
                 .script_to_constellation_chan()
                 .send(ScriptMsg::ScheduleBroadcast(*router_id, msg));
-        } else {
+        } _ => {
             panic!("Attemps to broadcast a message via global not managing any channels.");
-        }
+        }}
     }
 
     /// <https://html.spec.whatwg.org/multipage/#dom-broadcastchannel-postmessage>
@@ -1190,7 +1183,7 @@ impl GlobalScope {
                                 rooted!(in(*GlobalScope::get_cx()) let mut message = UndefinedValue());
 
                                 // Step 10.3 StructuredDeserialize(serialized, targetRealm).
-                                if let Ok(ports) = structuredclone::read(&global, data, message.handle_mut()) {
+                                match structuredclone::read(&global, data, message.handle_mut()) { Ok(ports) => {
                                     // Step 10.4, Fire an event named message at destination.
                                     MessageEvent::dispatch_jsval(
                                         destination.upcast(),
@@ -1201,10 +1194,10 @@ impl GlobalScope {
                                         ports,
                                         CanGc::note()
                                     );
-                                } else {
+                                } _ => {
                                     // Step 10.3, fire an event named messageerror at destination.
                                     MessageEvent::dispatch_error(destination.upcast(), &global, CanGc::note());
-                                }
+                                }}
                             })
                         );
                     });
@@ -1219,9 +1212,8 @@ impl GlobalScope {
         task: PortMessageTask,
         can_gc: CanGc,
     ) {
-        let should_dispatch = if let MessagePortState::Managed(_id, message_ports) =
-            &mut *self.message_port_state.borrow_mut()
-        {
+        let should_dispatch = match &mut *self.message_port_state.borrow_mut()
+        { MessagePortState::Managed(_id, message_ports) => {
             if !message_ports.contains_key(&port_id) {
                 self.re_route_port_task(port_id, task);
                 return;
@@ -1240,14 +1232,14 @@ impl GlobalScope {
                     }
                 },
             }
-        } else {
+        } _ => {
             self.re_route_port_task(port_id, task);
             return;
-        };
+        }};
         if let Some((dom_port, PortMessageTask { origin, data })) = should_dispatch {
             // Substep 3-4
             rooted!(in(*GlobalScope::get_cx()) let mut message_clone = UndefinedValue());
-            if let Ok(ports) = structuredclone::read(self, data, message_clone.handle_mut()) {
+            match structuredclone::read(self, data, message_clone.handle_mut()) { Ok(ports) => {
                 // Substep 6
                 // Dispatch the event, using the dom message-port.
                 MessageEvent::dispatch_jsval(
@@ -1259,19 +1251,18 @@ impl GlobalScope {
                     ports,
                     can_gc,
                 );
-            } else {
+            } _ => {
                 // Step 4, fire messageerror event.
                 MessageEvent::dispatch_error(dom_port.upcast(), self, can_gc);
-            }
+            }}
         }
     }
 
     /// Check all ports that have been transfer-received in the previous task,
     /// and complete their transfer if they haven't been re-transferred.
     pub(crate) fn maybe_add_pending_ports(&self) {
-        if let MessagePortState::Managed(router_id, message_ports) =
-            &mut *self.message_port_state.borrow_mut()
-        {
+        match &mut *self.message_port_state.borrow_mut()
+        { MessagePortState::Managed(router_id, message_ports) => {
             let to_be_added: Vec<MessagePortId> = message_ports
                 .iter()
                 .filter_map(|(id, managed_port)| {
@@ -1297,16 +1288,15 @@ impl GlobalScope {
                         *router_id,
                         to_be_added,
                     ));
-        } else {
+        } _ => {
             warn!("maybe_add_pending_ports called on a global not managing any ports.");
-        }
+        }}
     }
 
     /// <https://html.spec.whatwg.org/multipage/#ports-and-garbage-collection>
     pub(crate) fn perform_a_message_port_garbage_collection_checkpoint(&self) {
-        let is_empty = if let MessagePortState::Managed(_id, message_ports) =
-            &mut *self.message_port_state.borrow_mut()
-        {
+        let is_empty = match &mut *self.message_port_state.borrow_mut()
+        { MessagePortState::Managed(_id, message_ports) => {
             let to_be_removed: Vec<MessagePortId> = message_ports
                 .iter()
                 .filter_map(|(id, managed_port)| {
@@ -1326,9 +1316,9 @@ impl GlobalScope {
                 message_ports.remove(&id);
             }
             message_ports.is_empty()
-        } else {
+        } _ => {
             false
-        };
+        }};
         if is_empty {
             self.remove_message_ports_router();
         }
@@ -1338,9 +1328,8 @@ impl GlobalScope {
     /// TODO: Also remove them if they do not have an event-listener.
     /// see <https://github.com/servo/servo/issues/25772>
     pub(crate) fn perform_a_broadcast_channel_garbage_collection_checkpoint(&self) {
-        let is_empty = if let BroadcastChannelState::Managed(router_id, ref mut channels) =
-            &mut *self.broadcast_channel_state.borrow_mut()
-        {
+        let is_empty = match &mut *self.broadcast_channel_state.borrow_mut()
+        { BroadcastChannelState::Managed(router_id, channels) => {
             channels.retain(|name, ref mut channels| {
                 channels.retain(|chan| !chan.closed());
                 if channels.is_empty() {
@@ -1357,9 +1346,9 @@ impl GlobalScope {
                 }
             });
             channels.is_empty()
-        } else {
+        } _ => {
             false
-        };
+        }};
         if is_empty {
             self.remove_broadcast_channel_router();
         }
@@ -1396,7 +1385,7 @@ impl GlobalScope {
                 ));
         }
 
-        if let BroadcastChannelState::Managed(router_id, channels) = &mut *current_state {
+        match &mut *current_state { BroadcastChannelState::Managed(router_id, channels) => {
             let entry = channels.entry(dom_channel.Name()).or_insert_with(|| {
                 let _ = self.script_to_constellation_chan().send(
                     ScriptMsg::NewBroadcastChannelNameInRouter(
@@ -1408,9 +1397,9 @@ impl GlobalScope {
                 VecDeque::new()
             });
             entry.push_back(Dom::from_ref(dom_channel));
-        } else {
+        } _ => {
             panic!("track_broadcast_channel should have first switched the state to managed.");
-        }
+        }}
     }
 
     /// Start tracking a message-port
@@ -1447,7 +1436,7 @@ impl GlobalScope {
                 ));
         }
 
-        if let MessagePortState::Managed(router_id, message_ports) = &mut *current_state {
+        match &mut *current_state { MessagePortState::Managed(router_id, message_ports) => {
             if let Some(port_impl) = port_impl {
                 // We keep transfer-received ports as "pending",
                 // and only ask the constellation to complete the transfer
@@ -1490,9 +1479,9 @@ impl GlobalScope {
                         *dom_port.message_port_id(),
                     ));
             };
-        } else {
+        } _ => {
             panic!("track_message_port should have first switched the state to managed.");
-        }
+        }}
     }
 
     /// <https://html.spec.whatwg.org/multipage/#serialization-steps>
@@ -1552,7 +1541,7 @@ impl GlobalScope {
                 BlobTracker::Blob(weak) => weak.root().is_none(),
             };
             if garbage_collected && !blob_info.has_url {
-                if let BlobData::File(ref f) = blob_info.blob_impl.blob_data() {
+                if let BlobData::File(f) = blob_info.blob_impl.blob_data() {
                     self.decrement_file_ref(f.get_id());
                 }
                 false
@@ -1569,7 +1558,7 @@ impl GlobalScope {
             .borrow_mut()
             .drain()
             .for_each(|(_id, blob_info)| {
-                if let BlobData::File(ref f) = blob_info.blob_impl.blob_data() {
+                if let BlobData::File(f) = blob_info.blob_impl.blob_data() {
                     self.decrement_file_ref(f.get_id());
                 }
             });
@@ -1594,7 +1583,7 @@ impl GlobalScope {
                 .get(blob_id)
                 .expect("get_blob_bytes for an unknown blob.");
             match blob_info.blob_impl.blob_data() {
-                BlobData::Sliced(ref parent, ref rel_pos) => Some((*parent, rel_pos.clone())),
+                BlobData::Sliced(parent, rel_pos) => Some((*parent, rel_pos.clone())),
                 _ => None,
             }
         };
@@ -1615,7 +1604,7 @@ impl GlobalScope {
             .get(blob_id)
             .expect("get_blob_bytes_non_sliced called for a unknown blob.");
         match blob_info.blob_impl.blob_data() {
-            BlobData::File(ref f) => {
+            BlobData::File(f) => {
                 let (buffer, is_new_buffer) = match f.get_cache() {
                     Some(bytes) => (bytes, false),
                     None => {
@@ -1631,7 +1620,7 @@ impl GlobalScope {
 
                 Ok(buffer)
             },
-            BlobData::Memory(ref s) => Ok(s.clone()),
+            BlobData::Memory(s) => Ok(s.clone()),
             BlobData::Sliced(_, _) => panic!("This blob doesn't have a parent."),
         }
     }
@@ -1649,7 +1638,7 @@ impl GlobalScope {
                 .get(blob_id)
                 .expect("get_blob_bytes_or_file_id for an unknown blob.");
             match blob_info.blob_impl.blob_data() {
-                BlobData::Sliced(ref parent, ref rel_pos) => Some((*parent, rel_pos.clone())),
+                BlobData::Sliced(parent, rel_pos) => Some((*parent, rel_pos.clone())),
                 _ => None,
             }
         };
@@ -1679,11 +1668,11 @@ impl GlobalScope {
             .get(blob_id)
             .expect("get_blob_bytes_non_sliced_or_file_id called for a unknown blob.");
         match blob_info.blob_impl.blob_data() {
-            BlobData::File(ref f) => match f.get_cache() {
+            BlobData::File(f) => match f.get_cache() {
                 Some(bytes) => BlobResult::Bytes(bytes.clone()),
                 None => BlobResult::File(f.get_id(), f.get_size() as usize),
             },
-            BlobData::Memory(ref s) => BlobResult::Bytes(s.clone()),
+            BlobData::Memory(s) => BlobResult::Bytes(s.clone()),
             BlobData::Sliced(_, _) => panic!("This blob doesn't have a parent."),
         }
     }
@@ -1705,7 +1694,7 @@ impl GlobalScope {
                 .get(blob_id)
                 .expect("get_blob_size called for a unknown blob.");
             match blob_info.blob_impl.blob_data() {
-                BlobData::Sliced(ref parent, ref rel_pos) => Some((*parent, rel_pos.clone())),
+                BlobData::Sliced(parent, rel_pos) => Some((*parent, rel_pos.clone())),
                 _ => None,
             }
         };
@@ -1715,8 +1704,8 @@ impl GlobalScope {
                     .get(&parent_id)
                     .expect("Parent of blob whose size is unknown.");
                 let parent_size = match parent_info.blob_impl.blob_data() {
-                    BlobData::File(ref f) => f.get_size(),
-                    BlobData::Memory(ref v) => v.len() as u64,
+                    BlobData::File(f) => f.get_size(),
+                    BlobData::Memory(v) => v.len() as u64,
                     BlobData::Sliced(_, _) => panic!("Blob ancestry should be only one level."),
                 };
                 rel_pos.to_abs_range(parent_size as usize).len() as u64
@@ -1726,8 +1715,8 @@ impl GlobalScope {
                     .get(blob_id)
                     .expect("Blob whose size is unknown.");
                 match blob_info.blob_impl.blob_data() {
-                    BlobData::File(ref f) => f.get_size(),
-                    BlobData::Memory(ref v) => v.len() as u64,
+                    BlobData::File(f) => f.get_size(),
+                    BlobData::Memory(v) => v.len() as u64,
                     BlobData::Sliced(_, _) => {
                         panic!("It was previously checked that this blob does not have a parent.")
                     },
@@ -1747,7 +1736,7 @@ impl GlobalScope {
             blob_info.has_url = true;
 
             match blob_info.blob_impl.blob_data() {
-                BlobData::Sliced(ref parent, ref rel_pos) => Some((*parent, rel_pos.clone())),
+                BlobData::Sliced(parent, rel_pos) => Some((*parent, rel_pos.clone())),
                 _ => None,
             }
         };
@@ -1758,8 +1747,8 @@ impl GlobalScope {
                     .expect("Parent of blob whose url is requested is unknown.");
                 let parent_file_id = self.promote(parent_info, /* set_valid is */ false);
                 let parent_size = match parent_info.blob_impl.blob_data() {
-                    BlobData::File(ref f) => f.get_size(),
-                    BlobData::Memory(ref v) => v.len() as u64,
+                    BlobData::File(f) => f.get_size(),
+                    BlobData::Memory(v) => v.len() as u64,
                     BlobData::Sliced(_, _) => panic!("Blob ancestry should be only one level."),
                 };
                 let parent_size = rel_pos.to_abs_range(parent_size as usize).len() as u64;
@@ -1827,7 +1816,7 @@ impl GlobalScope {
             BlobData::Sliced(_, _) => {
                 panic!("Sliced blobs should use create_sliced_url_id instead of promote.");
             },
-            BlobData::File(ref f) => {
+            &mut BlobData::File(ref f) => {
                 if set_valid {
                     let origin = get_blob_origin(&global_url);
                     let (tx, rx) = profile_ipc::channel(self.time_profiler_chan().clone()).unwrap();
@@ -1845,7 +1834,7 @@ impl GlobalScope {
                     return f.get_id();
                 }
             },
-            BlobData::Memory(ref mut bytes_in) => mem::swap(bytes_in, &mut bytes),
+            BlobData::Memory(bytes_in) => mem::swap(bytes_in, &mut bytes),
         };
 
         let origin = get_blob_origin(&global_url);
@@ -2030,19 +2019,19 @@ impl GlobalScope {
 
     /// Returns the global scope of the realm that the given JS object was created in.
     #[allow(unsafe_code)]
-    pub(crate) unsafe fn from_object(obj: *mut JSObject) -> DomRoot<Self> {
+    pub(crate) unsafe fn from_object(obj: *mut JSObject) -> DomRoot<Self> { unsafe {
         assert!(!obj.is_null());
         let global = GetNonCCWObjectGlobal(obj);
         global_scope_from_global_static(global)
-    }
+    }}
 
     /// Returns the global scope for the given JSContext
     #[allow(unsafe_code)]
-    pub(crate) unsafe fn from_context(cx: *mut JSContext, _realm: InRealm) -> DomRoot<Self> {
+    pub(crate) unsafe fn from_context(cx: *mut JSContext, _realm: InRealm) -> DomRoot<Self> { unsafe {
         let global = CurrentGlobalOrNull(cx);
         assert!(!global.is_null());
         global_scope_from_global(global, cx)
-    }
+    }}
 
     /// Returns the global scope for the given SafeJSContext
     #[allow(unsafe_code)]
@@ -2056,13 +2045,13 @@ impl GlobalScope {
     pub(crate) unsafe fn from_object_maybe_wrapped(
         mut obj: *mut JSObject,
         cx: *mut JSContext,
-    ) -> DomRoot<Self> {
+    ) -> DomRoot<Self> { unsafe {
         if IsWrapper(obj) {
             obj = UnwrapObjectDynamic(obj, cx, /* stopAtWindowProxy = */ false);
             assert!(!obj.is_null());
         }
         GlobalScope::from_object(obj)
-    }
+    }}
 
     pub(crate) fn add_uncaught_rejection(&self, rejection: HandleObject) {
         self.uncaught_rejections
@@ -3307,7 +3296,7 @@ impl GlobalScope {
 unsafe fn global_scope_from_global(
     global: *mut JSObject,
     cx: *mut JSContext,
-) -> DomRoot<GlobalScope> {
+) -> DomRoot<GlobalScope> { unsafe {
     assert!(!global.is_null());
     let clasp = get_object_class(global);
     assert_ne!(
@@ -3315,11 +3304,11 @@ unsafe fn global_scope_from_global(
         0
     );
     root_from_object(global, cx).unwrap()
-}
+}}
 
 /// Returns the Rust global scope from a JS global object.
 #[allow(unsafe_code)]
-unsafe fn global_scope_from_global_static(global: *mut JSObject) -> DomRoot<GlobalScope> {
+unsafe fn global_scope_from_global_static(global: *mut JSObject) -> DomRoot<GlobalScope> { unsafe {
     assert!(!global.is_null());
     let clasp = get_object_class(global);
     assert_ne!(
@@ -3327,7 +3316,7 @@ unsafe fn global_scope_from_global_static(global: *mut JSObject) -> DomRoot<Glob
         0
     );
     root_from_object_static(global).unwrap()
-}
+}}
 
 /// Operations that must be invoked from the generated bindings.
 #[allow(unsafe_code)]
@@ -3356,25 +3345,25 @@ pub(crate) trait GlobalScopeHelpers<D: crate::DomTypes> {
 
 #[allow(unsafe_code)]
 impl GlobalScopeHelpers<crate::DomTypeHolder> for GlobalScope {
-    unsafe fn from_context(cx: *mut JSContext, realm: InRealm) -> DomRoot<Self> {
+    unsafe fn from_context(cx: *mut JSContext, realm: InRealm) -> DomRoot<Self> { unsafe {
         GlobalScope::from_context(cx, realm)
-    }
+    }}
 
     fn get_cx() -> SafeJSContext {
         GlobalScope::get_cx()
     }
 
-    unsafe fn from_object(obj: *mut JSObject) -> DomRoot<Self> {
+    unsafe fn from_object(obj: *mut JSObject) -> DomRoot<Self> { unsafe {
         GlobalScope::from_object(obj)
-    }
+    }}
 
     fn from_reflector(reflector: &impl DomObject, realm: &AlreadyInRealm) -> DomRoot<Self> {
         GlobalScope::from_reflector(reflector, realm)
     }
 
-    unsafe fn from_object_maybe_wrapped(obj: *mut JSObject, cx: *mut JSContext) -> DomRoot<Self> {
+    unsafe fn from_object_maybe_wrapped(obj: *mut JSObject, cx: *mut JSContext) -> DomRoot<Self> { unsafe {
         GlobalScope::from_object_maybe_wrapped(obj, cx)
-    }
+    }}
 
     fn origin(&self) -> &MutableOrigin {
         GlobalScope::origin(self)

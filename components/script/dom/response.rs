@@ -177,7 +177,7 @@ impl ResponseMethods<crate::DomTypeHolder> for Response {
         }
 
         // Step 6
-        if let Some(ref body) = body {
+        match body { Some(ref body) => {
             // Step 6.1
             if is_null_body_status(init.status) {
                 return Err(Error::Type(
@@ -208,12 +208,12 @@ impl ResponseMethods<crate::DomTypeHolder> for Response {
                     )?;
                 }
             };
-        } else {
+        } _ => {
             // Reset FetchResponse to an in-memory stream with empty byte sequence here for
             // no-init-body case
             let stream = ReadableStream::new_from_bytes(global, Vec::with_capacity(0), can_gc)?;
             r.body_stream.set(Some(&*stream));
-        }
+        }}
 
         Ok(r)
     }
@@ -456,11 +456,11 @@ impl Response {
 
     pub(crate) fn stream_chunk(&self, chunk: Vec<u8>, can_gc: CanGc) {
         // Note, are these two actually mutually exclusive?
-        if let Some(stream_consumer) = self.stream_consumer.borrow().as_ref() {
+        match self.stream_consumer.borrow().as_ref() { Some(stream_consumer) => {
             stream_consumer.consume_chunk(chunk.as_slice());
-        } else if let Some(body) = self.body_stream.get() {
+        } _ => { match self.body_stream.get() { Some(body) => {
             body.enqueue_native(chunk, can_gc);
-        }
+        } _ => {}}}}
     }
 
     #[cfg_attr(crown, allow(crown::unrooted_must_root))]

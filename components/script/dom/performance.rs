@@ -372,11 +372,11 @@ impl Performance {
                 .resource_timing_secondary_entries
                 .borrow_mut()
                 .pop_front();
-            if let Some(ref entry) = entry {
+            match entry { Some(ref entry) => {
                 self.queue_entry(entry, can_gc);
-            } else {
+            } _ => {
                 break;
-            }
+            }}
         }
     }
     // `fire a buffer full event` paragraph of

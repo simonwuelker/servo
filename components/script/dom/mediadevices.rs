@@ -118,7 +118,7 @@ fn convert_constraints(js: &BooleanOrMediaTrackConstraints) -> Option<MediaTrack
     match js {
         BooleanOrMediaTrackConstraints::Boolean(false) => None,
         BooleanOrMediaTrackConstraints::Boolean(true) => Some(Default::default()),
-        BooleanOrMediaTrackConstraints::MediaTrackConstraints(ref c) => {
+        BooleanOrMediaTrackConstraints::MediaTrackConstraints(c) => {
             Some(MediaTrackConstraintSet {
                 height: c.parent.height.as_ref().and_then(convert_culong),
                 width: c.parent.width.as_ref().and_then(convert_culong),
@@ -133,7 +133,7 @@ fn convert_constraints(js: &BooleanOrMediaTrackConstraints) -> Option<MediaTrack
 fn convert_culong(js: &ConstrainULong) -> Option<Constrain<u32>> {
     match js {
         ConstrainULong::ClampedUnsignedLong(val) => Some(Constrain::Value(*val)),
-        ConstrainULong::ConstrainULongRange(ref range) => {
+        ConstrainULong::ConstrainULongRange(range) => {
             if range.parent.min.is_some() || range.parent.max.is_some() {
                 Some(Constrain::Range(ConstrainRange {
                     min: range.parent.min,
@@ -150,7 +150,7 @@ fn convert_culong(js: &ConstrainULong) -> Option<Constrain<u32>> {
 fn convert_cdouble(js: &ConstrainDouble) -> Option<Constrain<f64>> {
     match js {
         ConstrainDouble::Double(val) => Some(Constrain::Value(**val)),
-        ConstrainDouble::ConstrainDoubleRange(ref range) => {
+        ConstrainDouble::ConstrainDoubleRange(range) => {
             if range.parent.min.is_some() || range.parent.max.is_some() {
                 Some(Constrain::Range(ConstrainRange {
                     min: range.parent.min.map(|x| *x),

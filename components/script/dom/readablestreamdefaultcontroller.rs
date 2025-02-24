@@ -676,7 +676,7 @@ impl ReadableStreamDefaultController {
                 let reference = self.strategy_size.borrow();
                 reference.clone()
             };
-            let size = if let Some(strategy_size) = strategy_size {
+            let size = match strategy_size { Some(strategy_size) => {
                 // Note: the Rethrow exception handling is necessary,
                 // otherwise returning JSFailed will panic because no exception is pending.
                 let result = strategy_size.Call__(chunk, ExceptionHandling::Rethrow);
@@ -696,9 +696,9 @@ impl ReadableStreamDefaultController {
                         return Err(error);
                     },
                 }
-            } else {
+            } _ => {
                 0.
-            };
+            }};
 
             {
                 // Let enqueueResult be EnqueueValueWithSize(controller, chunk, chunkSize).

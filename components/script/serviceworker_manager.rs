@@ -337,7 +337,7 @@ impl ServiceWorkerManager {
         }
 
         // Step 4: Get registration.
-        if let Some(registration) = self.registrations.get(&job.scope_url) {
+        match self.registrations.get(&job.scope_url) { Some(registration) => {
             // Step 5, we have a registation.
 
             // Step 5.1, get newest worker
@@ -365,7 +365,7 @@ impl ServiceWorkerManager {
                     },
                 ));
             }
-        } else {
+        } _ => {
             // Step 6: we do not have a registration.
 
             // Step 6.1: Run Set Registration.
@@ -376,13 +376,13 @@ impl ServiceWorkerManager {
             // Step 7: Schedule update
             job.job_type = JobType::Update;
             let _ = self.own_sender.send(ServiceWorkerMsg::ScheduleJob(job));
-        }
+        }}
     }
 
     /// <https://w3c.github.io/ServiceWorker/#update>
     fn handle_update_job(&mut self, job: Job) {
         // Step 1: Get registation
-        if let Some(registration) = self.registrations.get_mut(&job.scope_url) {
+        match self.registrations.get_mut(&job.scope_url) { Some(registration) => {
             // Step 3.
             let newest_worker = registration.get_newest_worker();
 
@@ -429,12 +429,12 @@ impl ServiceWorkerManager {
                     active_worker: registration.active_worker.as_ref().map(|worker| worker.id),
                 },
             ));
-        } else {
+        } _ => {
             // Step 2
             let _ = job
                 .client
                 .send(JobResult::RejectPromise(JobError::TypeError));
-        }
+        }}
     }
 }
 

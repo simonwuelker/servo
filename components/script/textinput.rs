@@ -1210,16 +1210,16 @@ pub(crate) fn handle_text_clipboard_action(
         },
         "paste" => {
             // Step 3.1 If there is a selection or cursor in an editable context where pasting is enabled, then
-            if let Some(data) = event.get_clipboard_data() {
+            match event.get_clipboard_data() { Some(data) => {
                 // Step 3.1.1 Insert the most suitable content found on the clipboard, if any, into the context.
                 let drag_data_store = data.data_store().expect("This shouldn't fail");
                 textinput.borrow_mut().paste_contents(&drag_data_store);
 
                 // Step 3.1.2 Queue tasks to fire any events that should fire due to the modification.
-            } else {
+            } _ => {
                 // Step 3.2 Else return false.
                 return false;
-            }
+            }}
         },
         _ => (),
     }

@@ -114,7 +114,7 @@ impl QueuedTaskConversion for DedicatedWorkerScriptMsg {
             _ => return None,
         };
         let script_msg = match common_worker_msg {
-            WorkerScriptMsg::Common(ref script_msg) => script_msg,
+            WorkerScriptMsg::Common(script_msg) => script_msg,
             _ => return None,
         };
         match script_msg {
@@ -568,8 +568,8 @@ impl DedicatedWorkerGlobalScope {
                 let target = self.upcast();
                 let _ac = enter_realm(self);
                 rooted!(in(*scope.get_cx()) let mut message = UndefinedValue());
-                if let Ok(ports) = structuredclone::read(scope.upcast(), data, message.handle_mut())
-                {
+                match structuredclone::read(scope.upcast(), data, message.handle_mut())
+                { Ok(ports) => {
                     MessageEvent::dispatch_jsval(
                         target,
                         scope.upcast(),
@@ -579,9 +579,9 @@ impl DedicatedWorkerGlobalScope {
                         ports,
                         can_gc,
                     );
-                } else {
+                } _ => {
                     MessageEvent::dispatch_error(target, scope.upcast(), can_gc);
-                }
+                }}
             },
             WorkerScriptMsg::Common(msg) => {
                 self.upcast::<WorkerGlobalScope>().process_event(msg);
@@ -685,7 +685,7 @@ impl DedicatedWorkerGlobalScope {
 }
 
 #[allow(unsafe_code)]
-unsafe extern "C" fn interrupt_callback(cx: *mut JSContext) -> bool {
+unsafe extern "C" fn interrupt_callback(cx: *mut JSContext) -> bool { unsafe {
     let in_realm_proof = AlreadyInRealm::assert_for_cx(SafeJSContext::from_ptr(cx));
     let global = GlobalScope::from_context(cx, InRealm::Already(&in_realm_proof));
     let worker =
@@ -694,7 +694,7 @@ unsafe extern "C" fn interrupt_callback(cx: *mut JSContext) -> bool {
 
     // A false response causes the script to terminate
     !worker.is_closing()
-}
+}}
 
 impl DedicatedWorkerGlobalScopeMethods<crate::DomTypeHolder> for DedicatedWorkerGlobalScope {
     /// <https://html.spec.whatwg.org/multipage/#dom-dedicatedworkerglobalscope-postmessage>

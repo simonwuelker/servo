@@ -1088,10 +1088,10 @@ impl CustomElementReactionStack {
 
     /// <https://html.spec.whatwg.org/multipage/#enqueue-an-element-on-the-appropriate-element-queue>
     pub(crate) fn enqueue_element(&self, element: &Element) {
-        if let Some(current_queue) = self.stack.borrow().last() {
+        match self.stack.borrow().last() { Some(current_queue) => {
             // Step 2
             current_queue.append_element(element);
-        } else {
+        } _ => {
             // Step 1.1
             self.backup_queue.append_element(element);
 
@@ -1106,7 +1106,7 @@ impl CustomElementReactionStack {
 
             // Step 4
             ScriptThread::enqueue_microtask(Microtask::CustomElementReaction);
-        }
+        }}
     }
 
     /// <https://html.spec.whatwg.org/multipage/#enqueue-a-custom-element-callback-reaction>
@@ -1200,11 +1200,11 @@ impl CustomElementReactionStack {
             },
             CallbackReaction::FormAssociated(form) => {
                 let args = vec![Heap::default()];
-                if let Some(form) = form {
+                match form { Some(form) => {
                     args[0].set(ObjectValue(form.reflector().get_jsobject().get()));
-                } else {
+                } _ => {
                     args[0].set(NullValue());
-                }
+                }}
                 (definition.callbacks.form_associated_callback.clone(), args)
             },
             CallbackReaction::FormDisabled(disabled) => {

@@ -240,15 +240,14 @@ where
                 buffer.get()
             },
         });
-        let data = if let Ok(array) =
-            array as Result<CustomAutoRooterGuard<'_, TypedArray<T, *mut JSObject>>, &mut ()>
-        {
+        let data = match array as Result<CustomAutoRooterGuard<'_, TypedArray<T, *mut JSObject>>, &mut ()>
+        { Ok(array) => {
             let data = array.to_vec();
             let _ = self.detach_buffer(cx);
             Ok(data)
-        } else {
+        } _ => {
             Err(())
-        };
+        }};
 
         match &self.buffer_source {
             BufferSource::ArrayBufferView(buffer) |
@@ -338,7 +337,7 @@ where
 
 unsafe impl<T> crate::dom::bindings::trace::JSTraceable for HeapBufferSource<T> {
     #[inline]
-    unsafe fn trace(&self, tracer: *mut js::jsapi::JSTracer) {
+    unsafe fn trace(&self, tracer: *mut js::jsapi::JSTracer) { unsafe {
         match &self.buffer_source {
             BufferSource::ArrayBufferView(buffer) |
             BufferSource::ArrayBuffer(buffer) |
@@ -346,7 +345,7 @@ unsafe impl<T> crate::dom::bindings::trace::JSTraceable for HeapBufferSource<T> 
                 buffer.trace(tracer);
             },
         }
-    }
+    }}
 }
 
 /// <https://webidl.spec.whatwg.org/#arraybufferview-create>

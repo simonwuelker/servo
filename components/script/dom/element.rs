@@ -1591,7 +1591,7 @@ impl Element {
             if *name == local_name!("id") || *name == local_name!("name") {
                 match maybe_attr {
                     None => true,
-                    Some(ref attr) => matches!(*attr.value(), AttrValue::Atom(_)),
+                    Some(attr) => matches!(*attr.value(), AttrValue::Atom(_)),
                 }
             } else {
                 true
@@ -1690,11 +1690,11 @@ impl Element {
             .iter()
             .find(|attr| find(attr))
             .map(|js| DomRoot::from_ref(&**js));
-        if let Some(attr) = attr {
+        match attr { Some(attr) => {
             attr.set_value(value, self);
-        } else {
+        } _ => {
             self.push_new_attribute(local_name, value, name, namespace, prefix, can_gc);
-        };
+        }};
     }
 
     pub(crate) fn parse_attribute(
@@ -1957,22 +1957,22 @@ impl Element {
         let self_node = self.upcast::<Node>();
         match where_ {
             AdjacentPosition::BeforeBegin => {
-                if let Some(parent) = self_node.GetParentNode() {
+                match self_node.GetParentNode() { Some(parent) => {
                     Node::pre_insert(node, &parent, Some(self_node)).map(Some)
-                } else {
+                } _ => {
                     Ok(None)
-                }
+                }}
             },
             AdjacentPosition::AfterBegin => {
                 Node::pre_insert(node, self_node, self_node.GetFirstChild().as_deref()).map(Some)
             },
             AdjacentPosition::BeforeEnd => Node::pre_insert(node, self_node, None).map(Some),
             AdjacentPosition::AfterEnd => {
-                if let Some(parent) = self_node.GetParentNode() {
+                match self_node.GetParentNode() { Some(parent) => {
                     Node::pre_insert(node, &parent, self_node.GetNextSibling().as_deref()).map(Some)
-                } else {
+                } _ => {
                     Ok(None)
-                }
+                }}
             },
         }
     }
@@ -3618,27 +3618,27 @@ impl VirtualMethods for Element {
                         AttributeMutation::Set(old_value) => {
                             if let Some(old_value) = old_value {
                                 let old_value = old_value.as_atom().clone();
-                                if let Some(ref shadow_root) = containing_shadow_root {
+                                match containing_shadow_root { Some(ref shadow_root) => {
                                     shadow_root.unregister_element_id(self, old_value);
-                                } else {
+                                } _ => {
                                     doc.unregister_element_id(self, old_value);
-                                }
+                                }}
                             }
                             if value != atom!("") {
-                                if let Some(ref shadow_root) = containing_shadow_root {
+                                match containing_shadow_root { Some(ref shadow_root) => {
                                     shadow_root.register_element_id(self, value);
-                                } else {
+                                } _ => {
                                     doc.register_element_id(self, value);
-                                }
+                                }}
                             }
                         },
                         AttributeMutation::Removed => {
                             if value != atom!("") {
-                                if let Some(ref shadow_root) = containing_shadow_root {
+                                match containing_shadow_root { Some(ref shadow_root) => {
                                     shadow_root.unregister_element_id(self, value);
-                                } else {
+                                } _ => {
                                     doc.unregister_element_id(self, value);
-                                }
+                                }}
                             }
                         },
                     }
@@ -3738,11 +3738,11 @@ impl VirtualMethods for Element {
         self.update_sequentially_focusable_status(CanGc::note());
 
         if let Some(ref id) = *self.id_attribute.borrow() {
-            if let Some(shadow_root) = self.containing_shadow_root() {
+            match self.containing_shadow_root() { Some(shadow_root) => {
                 shadow_root.register_element_id(self, id.clone());
-            } else {
+            } _ => {
                 doc.register_element_id(self, id.clone());
-            }
+            }}
         }
         if let Some(ref name) = self.name_attribute() {
             if self.containing_shadow_root().is_none() {
@@ -3777,15 +3777,15 @@ impl VirtualMethods for Element {
             doc.exit_fullscreen(CanGc::note());
         }
         if let Some(ref value) = *self.id_attribute.borrow() {
-            if let Some(ref shadow_root) = self.containing_shadow_root() {
+            match self.containing_shadow_root() { Some(ref shadow_root) => {
                 // Only unregister the element id if the node was disconnected from it's shadow root
                 // (as opposed to the whole shadow tree being disconnected as a whole)
                 if !self.upcast::<Node>().is_in_a_shadow_tree() {
                     shadow_root.unregister_element_id(self, value.clone());
                 }
-            } else {
+            } _ => {
                 doc.unregister_element_id(self, value.clone());
-            }
+            }}
         }
         if let Some(ref value) = self.name_attribute() {
             if self.containing_shadow_root().is_none() {

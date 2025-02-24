@@ -138,7 +138,7 @@ unsafe fn object_has_to_json_property(
     cx: *mut JSContext,
     global_scope: &GlobalScope,
     object: HandleObject,
-) -> bool {
+) -> bool { unsafe {
     let name = CString::new("toJSON").unwrap();
     let mut found = false;
     if JS_HasOwnProperty(cx, object, name.as_ptr(), &mut found) && found {
@@ -166,14 +166,14 @@ unsafe fn object_has_to_json_property(
     } else {
         false
     }
-}
+}}
 
 #[allow(unsafe_code)]
 pub(crate) unsafe fn jsval_to_webdriver(
     cx: *mut JSContext,
     global_scope: &GlobalScope,
     val: HandleValue,
-) -> WebDriverJSResult {
+) -> WebDriverJSResult { unsafe {
     let _ac = enter_realm(global_scope);
     if val.get().is_undefined() {
         Ok(WebDriverJSValue::Undefined)
@@ -256,11 +256,11 @@ pub(crate) unsafe fn jsval_to_webdriver(
             }
 
             Ok(WebDriverJSValue::ArrayLike(result))
-        } else if let Ok(element) = root_from_object::<Element>(*object, cx) {
+        } else { match root_from_object::<Element>(*object, cx) { Ok(element) => {
             Ok(WebDriverJSValue::Element(WebElement(
                 element.upcast::<Node>().unique_id(),
             )))
-        } else if let Ok(window) = root_from_object::<Window>(*object, cx) {
+        } _ => { match root_from_object::<Window>(*object, cx) { Ok(window) => {
             let window_proxy = window.window_proxy();
             if window_proxy.is_browsing_context_discarded() {
                 Err(WebDriverJSError::StaleElementReference)
@@ -275,7 +275,7 @@ pub(crate) unsafe fn jsval_to_webdriver(
                     window.Document().upcast::<Node>().unique_id(),
                 )))
             }
-        } else if object_has_to_json_property(cx, global_scope, object.handle()) {
+        } _ => if object_has_to_json_property(cx, global_scope, object.handle()) {
             let name = CString::new("toJSON").unwrap();
             rooted!(in(cx) let mut value = UndefinedValue());
             if JS_CallFunctionName(
@@ -336,20 +336,20 @@ pub(crate) unsafe fn jsval_to_webdriver(
                         return Err(WebDriverJSError::JSError);
                     };
 
-                    if let Ok(value) = jsval_to_webdriver(cx, global_scope, property.handle()) {
+                    match jsval_to_webdriver(cx, global_scope, property.handle()) { Ok(value) => {
                         result.insert(name.into(), value);
-                    } else {
+                    } _ => {
                         return Err(WebDriverJSError::JSError);
-                    }
+                    }}
                 }
             }
 
             Ok(WebDriverJSValue::Object(result))
-        }
+        }}}}}
     } else {
         Err(WebDriverJSError::UnknownType)
     }
-}
+}}
 
 #[allow(unsafe_code)]
 pub(crate) fn handle_execute_script(
@@ -1275,15 +1275,15 @@ pub(crate) fn handle_is_selected(
     reply
         .send(
             find_node_by_unique_id(documents, pipeline, element_id).and_then(|node| {
-                if let Some(input_element) = node.downcast::<HTMLInputElement>() {
+                match node.downcast::<HTMLInputElement>() { Some(input_element) => {
                     Ok(input_element.Checked())
-                } else if let Some(option_element) = node.downcast::<HTMLOptionElement>() {
+                } _ => { match node.downcast::<HTMLOptionElement>() { Some(option_element) => {
                     Ok(option_element.Selected())
-                } else if node.is::<HTMLElement>() {
+                } _ => if node.is::<HTMLElement>() {
                     Ok(false) // regular elements are not selectable
                 } else {
                     Err(ErrorStatus::UnknownError)
-                }
+                }}}}
             }),
         )
         .unwrap();

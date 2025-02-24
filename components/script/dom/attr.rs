@@ -113,12 +113,12 @@ impl AttrMethods<crate::DomTypeHolder> for Attr {
 
     // https://dom.spec.whatwg.org/#dom-attr-value
     fn SetValue(&self, value: DOMString) {
-        if let Some(owner) = self.owner() {
+        match self.owner() { Some(owner) => {
             let value = owner.parse_attribute(self.namespace(), self.local_name(), value);
             self.set_value(value, &owner);
-        } else {
+        } _ => {
             *self.value.borrow_mut() = AttrValue::String(value.into());
-        }
+        }}
     }
 
     // https://dom.spec.whatwg.org/#dom-attr-name

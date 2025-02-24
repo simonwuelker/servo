@@ -1165,7 +1165,7 @@ impl FetchResponseListener for ModuleContext {
             // Step 9-3.
             let meta = self.metadata.take().unwrap();
 
-            if let Some(content_type) = meta.content_type.map(Serde::into_inner) {
+            match meta.content_type.map(Serde::into_inner) { Some(content_type) => {
                 if let Ok(content_type) = Mime::from_str(&content_type.to_string()) {
                     let essence_mime = content_type.essence_str();
 
@@ -1181,9 +1181,9 @@ impl FetchResponseListener for ModuleContext {
                         content_type
                     )));
                 }
-            } else {
+            } _ => {
                 return Err(NetworkError::Internal("No MIME type".into()));
-            }
+            }}
 
             // Step 13.4: Let referrerPolicy be the result of parsing the `Referrer-Policy` header
             // given response.
@@ -1289,7 +1289,7 @@ impl PreInvoke for ModuleContext {}
 #[allow(unsafe_code, non_snake_case)]
 /// A function to register module hooks (e.g. listening on resolving modules,
 /// getting module metadata, getting script private reference and resolving dynamic import)
-pub(crate) unsafe fn EnsureModuleHooksInitialized(rt: *mut JSRuntime) {
+pub(crate) unsafe fn EnsureModuleHooksInitialized(rt: *mut JSRuntime) { unsafe {
     if GetModuleResolveHook(rt).is_some() {
         return;
     }
@@ -1302,19 +1302,19 @@ pub(crate) unsafe fn EnsureModuleHooksInitialized(rt: *mut JSRuntime) {
         Some(host_release_top_level_script),
     );
     SetModuleDynamicImportHook(rt, Some(host_import_module_dynamically));
-}
+}}
 
 #[allow(unsafe_code)]
-unsafe extern "C" fn host_add_ref_top_level_script(value: *const Value) {
+unsafe extern "C" fn host_add_ref_top_level_script(value: *const Value) { unsafe {
     let val = Rc::from_raw((*value).to_private() as *const ModuleScript);
     mem::forget(val.clone());
     mem::forget(val);
-}
+}}
 
 #[allow(unsafe_code)]
-unsafe extern "C" fn host_release_top_level_script(value: *const Value) {
+unsafe extern "C" fn host_release_top_level_script(value: *const Value) { unsafe {
     let _val = Rc::from_raw((*value).to_private() as *const ModuleScript);
-}
+}}
 
 #[allow(unsafe_code)]
 /// <https://html.spec.whatwg.org/multipage/#hostimportmoduledynamically(referencingscriptormodule,-specifier,-promisecapability)>
@@ -1323,7 +1323,7 @@ pub(crate) unsafe extern "C" fn host_import_module_dynamically(
     reference_private: RawHandleValue,
     specifier: RawHandle<*mut JSObject>,
     promise: RawHandle<*mut JSObject>,
-) -> bool {
+) -> bool { unsafe {
     // Step 1.
     let cx = SafeJSContext::from_ptr(cx);
     let in_realm_proof = AlreadyInRealm::assert_for_cx(cx);
@@ -1359,7 +1359,7 @@ pub(crate) unsafe extern "C" fn host_import_module_dynamically(
     }
 
     true
-}
+}}
 
 #[derive(Clone, JSTraceable, MallocSizeOf)]
 /// <https://html.spec.whatwg.org/multipage/#script-fetch-options>
@@ -1405,12 +1405,12 @@ impl ScriptFetchOptions {
 #[allow(unsafe_code)]
 unsafe fn module_script_from_reference_private(
     reference_private: &RawHandle<JSVal>,
-) -> Option<&ModuleScript> {
+) -> Option<&ModuleScript> { unsafe {
     if reference_private.get().is_undefined() {
         return None;
     }
     (reference_private.get().to_private() as *const ModuleScript).as_ref()
-}
+}}
 
 /// <https://html.spec.whatwg.org/multipage/#fetch-an-import()-module-script-graph>
 #[allow(unsafe_code)]
@@ -1484,7 +1484,7 @@ unsafe extern "C" fn HostResolveImportedModule(
     cx: *mut JSContext,
     reference_private: RawHandleValue,
     specifier: RawHandle<*mut JSObject>,
-) -> *mut JSObject {
+) -> *mut JSObject { unsafe {
     let in_realm_proof = AlreadyInRealm::assert_for_cx(SafeJSContext::from_ptr(cx));
     let global_scope = GlobalScope::from_context(cx, InRealm::Already(&in_realm_proof));
 
@@ -1529,7 +1529,7 @@ unsafe extern "C" fn HostResolveImportedModule(
     }
 
     unreachable!()
-}
+}}
 
 #[allow(unsafe_code, non_snake_case)]
 /// <https://tc39.es/ecma262/#sec-hostgetimportmetaproperties>
@@ -1538,7 +1538,7 @@ unsafe extern "C" fn HostPopulateImportMeta(
     cx: *mut JSContext,
     reference_private: RawHandleValue,
     meta_object: RawHandle<*mut JSObject>,
-) -> bool {
+) -> bool { unsafe {
     let in_realm_proof = AlreadyInRealm::assert_for_cx(SafeJSContext::from_ptr(cx));
     let global_scope = GlobalScope::from_context(cx, InRealm::Already(&in_realm_proof));
 
@@ -1562,7 +1562,7 @@ unsafe extern "C" fn HostPopulateImportMeta(
         url_string.handle().into_handle(),
         JSPROP_ENUMERATE.into(),
     )
-}
+}}
 
 /// <https://html.spec.whatwg.org/multipage/#fetch-a-module-script-tree>
 pub(crate) fn fetch_external_module_script(

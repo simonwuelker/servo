@@ -246,13 +246,13 @@ impl Transferable for MessagePort {
         return_object.set(transferred_port.reflector().rootable().get());
 
         // Store the DOM port where it will be passed along to script in the message-event.
-        if let Some(ports) = sc_reader.message_ports.as_mut() {
+        match sc_reader.message_ports.as_mut() { Some(ports) => {
             ports.push(transferred_port);
-        } else {
+        } _ => {
             let mut ports = Vec::with_capacity(ports_len);
             ports.push(transferred_port);
             sc_reader.message_ports = Some(ports);
-        }
+        }}
 
         Ok(())
     }

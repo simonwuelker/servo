@@ -30,12 +30,12 @@ pub(crate) fn create_temp_files() -> Option<(NamedTempFile, File)> {
     // observed on macOS when using direct input/output pipes with very large
     // unminified content.
     let (input, output) = (NamedTempFile::new(), tempfile::tempfile());
-    if let (Ok(input), Ok(output)) = (input, output) {
+    match (input, output) { (Ok(input), Ok(output)) => {
         Some((input, output))
-    } else {
+    } _ => {
         log::warn!("Error creating input and output temp files");
         None
-    }
+    }}
 }
 
 #[derive(Debug)]

@@ -48,7 +48,7 @@ pub(crate) enum MixedMessage {
 impl MixedMessage {
     pub(crate) fn pipeline_id(&self) -> Option<PipelineId> {
         match self {
-            MixedMessage::FromConstellation(ref inner_msg) => match *inner_msg {
+            MixedMessage::FromConstellation(inner_msg) => match *inner_msg {
                 ScriptThreadMessage::StopDelayingLoadEventsMode(id) => Some(id),
                 ScriptThreadMessage::AttachLayout(ref new_layout_info) => new_layout_info
                     .parent_info
@@ -90,7 +90,7 @@ impl MixedMessage {
                 ScriptThreadMessage::SetScrollStates(id, ..) => Some(id),
                 ScriptThreadMessage::SetEpochPaintTime(id, ..) => Some(id),
             },
-            MixedMessage::FromScript(ref inner_msg) => match *inner_msg {
+            MixedMessage::FromScript(inner_msg) => match *inner_msg {
                 MainThreadScriptMsg::Common(CommonScriptMsg::Task(_, _, pipeline_id, _)) => {
                     pipeline_id
                 },

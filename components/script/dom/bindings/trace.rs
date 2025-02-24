@@ -88,23 +88,23 @@ pub(crate) unsafe trait CustomTraceable {
 
 unsafe impl<T: CustomTraceable> CustomTraceable for Box<T> {
     #[inline]
-    unsafe fn trace(&self, trc: *mut JSTracer) {
+    unsafe fn trace(&self, trc: *mut JSTracer) { unsafe {
         (**self).trace(trc);
-    }
+    }}
 }
 
 unsafe impl<T: CustomTraceable> CustomTraceable for DomRefCell<T> {
-    unsafe fn trace(&self, trc: *mut JSTracer) {
+    unsafe fn trace(&self, trc: *mut JSTracer) { unsafe {
         (*self).borrow().trace(trc)
-    }
+    }}
 }
 
 unsafe impl<T: JSTraceable> CustomTraceable for OnceCell<T> {
-    unsafe fn trace(&self, tracer: *mut JSTracer) {
+    unsafe fn trace(&self, tracer: *mut JSTracer) { unsafe {
         if let Some(value) = self.get() {
             value.trace(tracer)
         }
-    }
+    }}
 }
 
 unsafe impl<T> CustomTraceable for Sender<T> {
@@ -244,11 +244,11 @@ where
 #[allow(unsafe_code)]
 unsafe impl<K, V: JSTraceable, S> JSTraceable for HashMapTracedValues<K, V, S> {
     #[inline]
-    unsafe fn trace(&self, trc: *mut ::js::jsapi::JSTracer) {
+    unsafe fn trace(&self, trc: *mut ::js::jsapi::JSTracer) { unsafe {
         for v in self.0.values() {
             v.trace(trc);
         }
-    }
+    }}
 }
 
 unsafe_no_jsmanaged_fields!(Box<dyn TaskBox>);
@@ -299,41 +299,41 @@ pub(crate) fn trace_string(tracer: *mut JSTracer, description: &str, s: &Heap<*m
 }
 
 unsafe impl<T: JSTraceable> CustomTraceable for ServoArc<T> {
-    unsafe fn trace(&self, trc: *mut JSTracer) {
+    unsafe fn trace(&self, trc: *mut JSTracer) { unsafe {
         (**self).trace(trc)
-    }
+    }}
 }
 
 unsafe impl<T: JSTraceable> CustomTraceable for RwLock<T> {
-    unsafe fn trace(&self, trc: *mut JSTracer) {
+    unsafe fn trace(&self, trc: *mut JSTracer) { unsafe {
         self.read().trace(trc)
-    }
+    }}
 }
 
 unsafe impl<T: JSTraceable> JSTraceable for DomRefCell<T> {
-    unsafe fn trace(&self, trc: *mut JSTracer) {
+    unsafe fn trace(&self, trc: *mut JSTracer) { unsafe {
         (*self).borrow().trace(trc)
-    }
+    }}
 }
 
 unsafe impl<T: JSTraceable + Eq + Hash> CustomTraceable for indexmap::IndexSet<T> {
     #[inline]
-    unsafe fn trace(&self, trc: *mut JSTracer) {
+    unsafe fn trace(&self, trc: *mut JSTracer) { unsafe {
         for e in self.iter() {
             e.trace(trc);
         }
-    }
+    }}
 }
 
 // XXXManishearth Check if the following three are optimized to no-ops
 // if e.trace() is a no-op (e.g it is an unsafe_no_jsmanaged_fields type)
 unsafe impl<T: JSTraceable + 'static> CustomTraceable for SmallVec<[T; 1]> {
     #[inline]
-    unsafe fn trace(&self, trc: *mut JSTracer) {
+    unsafe fn trace(&self, trc: *mut JSTracer) { unsafe {
         for e in self.iter() {
             e.trace(trc);
         }
-    }
+    }}
 }
 
 unsafe impl<K, V, S> CustomTraceable for IndexMap<K, V, S>
@@ -343,12 +343,12 @@ where
     S: BuildHasher,
 {
     #[inline]
-    unsafe fn trace(&self, trc: *mut JSTracer) {
+    unsafe fn trace(&self, trc: *mut JSTracer) { unsafe {
         for (k, v) in self {
             k.trace(trc);
             v.trace(trc);
         }
-    }
+    }}
 }
 
 unsafe_no_jsmanaged_fields!(TrustedPromise);
@@ -369,40 +369,40 @@ unsafe impl<S> CustomTraceable for DocumentStylesheetSet<S>
 where
     S: JSTraceable + ::style::stylesheets::StylesheetInDocument + PartialEq + 'static,
 {
-    unsafe fn trace(&self, tracer: *mut JSTracer) {
+    unsafe fn trace(&self, tracer: *mut JSTracer) { unsafe {
         for (s, _origin) in self.iter() {
             s.trace(tracer)
         }
-    }
+    }}
 }
 
 unsafe impl<S> CustomTraceable for AuthorStylesheetSet<S>
 where
     S: JSTraceable + ::style::stylesheets::StylesheetInDocument + PartialEq + 'static,
 {
-    unsafe fn trace(&self, tracer: *mut JSTracer) {
+    unsafe fn trace(&self, tracer: *mut JSTracer) { unsafe {
         for s in self.iter() {
             s.trace(tracer)
         }
-    }
+    }}
 }
 
 unsafe impl<S> CustomTraceable for AuthorStyles<S>
 where
     S: JSTraceable + ::style::stylesheets::StylesheetInDocument + PartialEq + 'static,
 {
-    unsafe fn trace(&self, tracer: *mut JSTracer) {
+    unsafe fn trace(&self, tracer: *mut JSTracer) { unsafe {
         self.stylesheets.trace(tracer)
-    }
+    }}
 }
 
 unsafe impl<Sink> CustomTraceable for LossyDecoder<Sink>
 where
     Sink: JSTraceable + TendrilSink<UTF8>,
 {
-    unsafe fn trace(&self, tracer: *mut JSTracer) {
+    unsafe fn trace(&self, tracer: *mut JSTracer) { unsafe {
         self.inner_sink().trace(tracer);
-    }
+    }}
 }
 
 #[cfg(feature = "webxr")]
@@ -469,9 +469,9 @@ where
 pub(crate) struct RootedTraceableBox<T: JSTraceable + 'static>(js::gc::RootedTraceableBox<T>);
 
 unsafe impl<T: JSTraceable + 'static> JSTraceable for RootedTraceableBox<T> {
-    unsafe fn trace(&self, tracer: *mut JSTracer) {
+    unsafe fn trace(&self, tracer: *mut JSTracer) { unsafe {
         self.0.trace(tracer);
-    }
+    }}
 }
 
 impl<T: JSTraceable + 'static> RootedTraceableBox<T> {

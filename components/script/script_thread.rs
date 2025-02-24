@@ -175,12 +175,12 @@ pub(crate) fn with_script_thread<R: Default>(f: impl FnOnce(&ScriptThread) -> R)
 /// The `JSTracer` argument must point to a valid `JSTracer` in memory. In addition,
 /// implementors of this method must ensure that all active objects are properly traced
 /// or else the garbage collector may end up collecting objects that are still reachable.
-pub(crate) unsafe fn trace_thread(tr: *mut JSTracer) {
+pub(crate) unsafe fn trace_thread(tr: *mut JSTracer) { unsafe {
     with_script_thread(|script_thread| {
         trace!("tracing fields of ScriptThread");
         script_thread.trace(tr);
     })
-}
+}}
 
 // We borrow the incomplete parser contexts mutably during parsing,
 // which is fine except that parsing can trigger evaluation,
@@ -1378,23 +1378,22 @@ impl ScriptThread {
                                     new_layout_info.load_data.url.as_str() != "about:srcdoc";
                             let origin = if not_an_about_blank_and_about_srcdoc_load {
                                 MutableOrigin::new(new_layout_info.load_data.url.origin())
-                            } else if let Some(parent) =
-                                new_layout_info.parent_info.and_then(|pipeline_id| {
+                            } else { match new_layout_info.parent_info.and_then(|pipeline_id| {
                                     self.documents.borrow().find_document(pipeline_id)
                                 })
-                            {
+                            { Some(parent) => {
                                 parent.origin().clone()
-                            } else if let Some(creator) = new_layout_info
+                            } _ => { match new_layout_info
                                 .load_data
                                 .creator_pipeline_id
                                 .and_then(|pipeline_id| {
                                     self.documents.borrow().find_document(pipeline_id)
                                 })
-                            {
+                            { Some(creator) => {
                                 creator.origin().clone()
-                            } else {
+                            } _ => {
                                 MutableOrigin::new(ImmutableOrigin::new_opaque())
-                            };
+                            }}}}};
 
                             self.handle_new_layout(new_layout_info, origin);
                         },
@@ -1415,15 +1414,15 @@ impl ScriptThread {
                     pipeline_id,
                     tick_type,
                 )) => {
-                    if let Some(document) = self.documents.borrow().find_document(pipeline_id) {
+                    match self.documents.borrow().find_document(pipeline_id) { Some(document) => {
                         document.note_pending_animation_tick(tick_type);
                         compositor_requested_update_the_rendering = true;
-                    } else {
+                    } _ => {
                         warn!(
                             "Trying to note pending animation tick for closed pipeline {}.",
                             pipeline_id
                         )
-                    }
+                    }}
                 },
                 MixedMessage::FromConstellation(ScriptThreadMessage::SendInputEvent(id, event)) => {
                     self.handle_input_event(id, event)
@@ -3607,12 +3606,12 @@ impl ScriptThread {
         action: MediaSessionActionType,
         can_gc: CanGc,
     ) {
-        if let Some(window) = self.documents.borrow().find_window(pipeline_id) {
+        match self.documents.borrow().find_window(pipeline_id) { Some(window) => {
             let media_session = window.Navigator().MediaSession();
             media_session.handle_action(action, can_gc);
-        } else {
+        } _ => {
             warn!("No MediaSession for this pipeline ID");
-        };
+        }};
     }
 
     pub(crate) fn enqueue_microtask(job: Microtask) {

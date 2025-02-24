@@ -757,7 +757,7 @@ impl HTMLScriptElement {
         // TODO: Step 23: environment settings object.
 
         let base_url = doc.base_url();
-        if let Some(src) = element.get_attribute(&ns!(), &local_name!("src")) {
+        match element.get_attribute(&ns!(), &local_name!("src")) { Some(src) => {
             // Step 26.
 
             // Step 26.1.
@@ -833,7 +833,7 @@ impl HTMLScriptElement {
                     };
                 },
             }
-        } else {
+        } _ => {
             // Step 27.
             assert!(!text.is_empty());
 
@@ -885,7 +885,7 @@ impl HTMLScriptElement {
                     );
                 },
             }
-        }
+        }}
     }
 
     fn substitute_with_local_script(&self, script: &mut ScriptOrigin) {

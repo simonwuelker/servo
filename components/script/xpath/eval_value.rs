@@ -144,7 +144,7 @@ impl Value {
 }
 
 macro_rules! from_impl {
-    ($raw:ty, $variant:expr) => {
+    ($raw:ty, $variant:expr_2021) => {
         impl From<$raw> for Value {
             fn from(other: $raw) -> Value {
                 $variant(other)
@@ -164,7 +164,7 @@ impl<'a> From<&'a str> for Value {
 from_impl!(Vec<DomRoot<Node>>, Value::Nodeset);
 
 macro_rules! partial_eq_impl {
-    ($raw:ty, $variant:pat => $b:expr) => {
+    ($raw:ty, $variant:pat => $b:expr_2021) => {
         impl PartialEq<$raw> for Value {
             fn eq(&self, other: &$raw) -> bool {
                 match *self {

@@ -184,7 +184,7 @@ pub(crate) enum CSSModificationAccess {
 }
 
 macro_rules! css_properties(
-    ( $([$getter:ident, $setter:ident, $id:expr],)* ) => (
+    ( $([$getter:ident, $setter:ident, $id:expr_2021],)* ) => (
         $(
             fn $getter(&self) -> DOMString {
                 debug_assert!(

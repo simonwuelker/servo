@@ -25,11 +25,11 @@ fn local_name(node: &Node) -> Option<String> {
 fn name(node: &Node) -> Option<String> {
     if matches!(Node::type_id(node), NodeTypeId::Element(_)) {
         let element = node.downcast::<Element>().unwrap();
-        if let Some(prefix) = element.prefix().as_ref() {
+        match element.prefix().as_ref() { Some(prefix) => {
             Some(format!("{}:{}", prefix, element.local_name()))
-        } else {
+        } _ => {
             Some(element.local_name().to_string())
-        }
+        }}
     } else {
         None
     }

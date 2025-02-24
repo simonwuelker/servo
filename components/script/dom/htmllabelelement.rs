@@ -121,15 +121,15 @@ impl HTMLLabelElementMethods<crate::DomTypeHolder> for HTMLLabelElement {
             .GetRootNode(&GetRootNodeOptions::empty())
             .traverse_preorder(ShadowIncluding::No)
             .find_map(|e| {
-                if let Some(htmle) = e.downcast::<HTMLElement>() {
+                match e.downcast::<HTMLElement>() { Some(htmle) => {
                     if htmle.upcast::<Element>().Id() == for_value {
                         Some(DomRoot::from_ref(htmle))
                     } else {
                         None
                     }
-                } else {
+                } _ => {
                     None
-                }
+                }}
             });
         // We now have the element that we would return, but only return it
         // if it's labelable.

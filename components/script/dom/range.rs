@@ -591,7 +591,7 @@ impl RangeMethods<crate::DomTypeHolder> for Range {
 
         if let Some(child) = first_partially_contained_child {
             // Step 13.
-            if let Some(cdata) = child.downcast::<CharacterData>() {
+            match child.downcast::<CharacterData>() { Some(cdata) => {
                 assert!(child == start_node);
                 // Steps 13.1-2.
                 let data = cdata
@@ -600,7 +600,7 @@ impl RangeMethods<crate::DomTypeHolder> for Range {
                 let clone = cdata.clone_with_data(data, &start_node.owner_doc(), can_gc);
                 // Step 13.3.
                 fragment.upcast::<Node>().AppendChild(&clone)?;
-            } else {
+            } _ => {
                 // Step 14.1.
                 let clone = child.CloneNode(/* deep */ false, can_gc)?;
                 // Step 14.2.
@@ -618,7 +618,7 @@ impl RangeMethods<crate::DomTypeHolder> for Range {
                 let subfragment = subrange.CloneContents(can_gc)?;
                 // Step 14.5.
                 clone.AppendChild(subfragment.upcast())?;
-            }
+            }}
         }
 
         // Step 15.
@@ -631,14 +631,14 @@ impl RangeMethods<crate::DomTypeHolder> for Range {
 
         if let Some(child) = last_partially_contained_child {
             // Step 16.
-            if let Some(cdata) = child.downcast::<CharacterData>() {
+            match child.downcast::<CharacterData>() { Some(cdata) => {
                 assert!(child == end_node);
                 // Steps 16.1-2.
                 let data = cdata.SubstringData(0, end_offset).unwrap();
                 let clone = cdata.clone_with_data(data, &start_node.owner_doc(), can_gc);
                 // Step 16.3.
                 fragment.upcast::<Node>().AppendChild(&clone)?;
-            } else {
+            } _ => {
                 // Step 17.1.
                 let clone = child.CloneNode(/* deep */ false, can_gc)?;
                 // Step 17.2.
@@ -650,7 +650,7 @@ impl RangeMethods<crate::DomTypeHolder> for Range {
                 let subfragment = subrange.CloneContents(can_gc)?;
                 // Step 17.5.
                 clone.AppendChild(subfragment.upcast())?;
-            }
+            }}
         }
 
         // Step 18.
@@ -718,7 +718,7 @@ impl RangeMethods<crate::DomTypeHolder> for Range {
         };
 
         if let Some(child) = first_partially_contained_child {
-            if let Some(start_data) = child.downcast::<CharacterData>() {
+            match child.downcast::<CharacterData>() { Some(start_data) => {
                 assert!(child == start_node);
                 // Step 15.1.
                 let clone = start_node.CloneNode(/* deep */ true, can_gc)?;
@@ -736,7 +736,7 @@ impl RangeMethods<crate::DomTypeHolder> for Range {
                     start_node.len() - start_offset,
                     DOMString::new(),
                 )?;
-            } else {
+            } _ => {
                 // Step 16.1.
                 let clone = child.CloneNode(/* deep */ false, can_gc)?;
                 // Step 16.2.
@@ -754,7 +754,7 @@ impl RangeMethods<crate::DomTypeHolder> for Range {
                 let subfragment = subrange.ExtractContents(can_gc)?;
                 // Step 16.5.
                 clone.AppendChild(subfragment.upcast())?;
-            }
+            }}
         }
 
         // Step 17.
@@ -763,7 +763,7 @@ impl RangeMethods<crate::DomTypeHolder> for Range {
         }
 
         if let Some(child) = last_partially_contained_child {
-            if let Some(end_data) = child.downcast::<CharacterData>() {
+            match child.downcast::<CharacterData>() { Some(end_data) => {
                 assert!(child == end_node);
                 // Step 18.1.
                 let clone = end_node.CloneNode(/* deep */ true, can_gc)?;
@@ -777,7 +777,7 @@ impl RangeMethods<crate::DomTypeHolder> for Range {
                 fragment.upcast::<Node>().AppendChild(&clone)?;
                 // Step 18.4.
                 end_data.ReplaceData(0, end_offset, DOMString::new())?;
-            } else {
+            } _ => {
                 // Step 19.1.
                 let clone = child.CloneNode(/* deep */ false, can_gc)?;
                 // Step 19.2.
@@ -789,7 +789,7 @@ impl RangeMethods<crate::DomTypeHolder> for Range {
                 let subfragment = subrange.ExtractContents(can_gc)?;
                 // Step 19.5.
                 clone.AppendChild(subfragment.upcast())?;
-            }
+            }}
         }
 
         // Step 20.
@@ -1374,7 +1374,7 @@ impl MallocSizeOf for WeakRangeVec {
 
 #[allow(unsafe_code)]
 unsafe impl JSTraceable for WeakRangeVec {
-    unsafe fn trace(&self, _: *mut JSTracer) {
+    unsafe fn trace(&self, _: *mut JSTracer) { unsafe {
         (*self.cell.get()).retain_alive()
-    }
+    }}
 }

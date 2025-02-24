@@ -97,11 +97,11 @@ impl<'dom> ServoLayoutElement<'dom> {
     ///
     /// This function accesses and modifies the underlying DOM object and should
     /// not be used by more than a single thread at once.
-    pub unsafe fn unset_snapshot_flags(&self) {
+    pub unsafe fn unset_snapshot_flags(&self) { unsafe {
         self.as_node()
             .node
             .set_flag(NodeFlags::HAS_SNAPSHOT | NodeFlags::HANDLED_SNAPSHOT, false);
-    }
+    }}
 
     /// Unset the snapshot flags on the underlying DOM object for this element.
     ///
@@ -109,9 +109,9 @@ impl<'dom> ServoLayoutElement<'dom> {
     ///
     /// This function accesses and modifies the underlying DOM object and should
     /// not be used by more than a single thread at once.
-    pub unsafe fn set_has_snapshot(&self) {
+    pub unsafe fn set_has_snapshot(&self) { unsafe {
         self.as_node().node.set_flag(NodeFlags::HAS_SNAPSHOT, true);
-    }
+    }}
 
     /// Returns true if this element is the body child of an html element root element.
     fn is_body_element_of_html_element_root(&self) -> bool {
@@ -307,24 +307,24 @@ impl<'dom> style::dom::TElement for ServoLayoutElement<'dom> {
         unsafe { self.as_node().node.get_flag(NodeFlags::HANDLED_SNAPSHOT) }
     }
 
-    unsafe fn set_handled_snapshot(&self) {
+    unsafe fn set_handled_snapshot(&self) { unsafe {
         self.as_node()
             .node
             .set_flag(NodeFlags::HANDLED_SNAPSHOT, true);
-    }
+    }}
 
-    unsafe fn set_dirty_descendants(&self) {
+    unsafe fn set_dirty_descendants(&self) { unsafe {
         debug_assert!(self.as_node().is_connected());
         self.as_node()
             .node
             .set_flag(NodeFlags::HAS_DIRTY_DESCENDANTS, true)
-    }
+    }}
 
-    unsafe fn unset_dirty_descendants(&self) {
+    unsafe fn unset_dirty_descendants(&self) { unsafe {
         self.as_node()
             .node
             .set_flag(NodeFlags::HAS_DIRTY_DESCENDANTS, false)
-    }
+    }}
 
     fn store_children_to_process(&self, n: isize) {
         let data = self.get_style_data().unwrap();
@@ -343,14 +343,14 @@ impl<'dom> style::dom::TElement for ServoLayoutElement<'dom> {
         old_value - 1
     }
 
-    unsafe fn clear_data(&self) {
+    unsafe fn clear_data(&self) { unsafe {
         self.as_node().get_jsmanaged().clear_style_and_layout_data()
-    }
+    }}
 
-    unsafe fn ensure_data(&self) -> AtomicRefMut<ElementData> {
+    unsafe fn ensure_data(&self) -> AtomicRefMut<ElementData> { unsafe {
         self.as_node().get_jsmanaged().initialize_style_data();
         self.mutate_data().unwrap()
-    }
+    }}
 
     /// Whether there is an ElementData container.
     fn has_data(&self) -> bool {

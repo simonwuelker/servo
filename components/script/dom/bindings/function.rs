@@ -9,7 +9,7 @@
 /// ```
 #[macro_export]
 macro_rules! native_fn {
-    ($call:expr, $name:expr, $nargs:expr, $flags:expr) => {{
+    ($call:expr_2021, $name:expr_2021, $nargs:expr_2021, $flags:expr_2021) => {{
         let cx = $crate::dom::types::GlobalScope::get_cx();
         let fun_obj = $crate::native_raw_obj_fn!(cx, $call, $name, $nargs, $flags);
         #[allow(unsafe_code)]
@@ -26,12 +26,12 @@ macro_rules! native_fn {
 /// ```
 #[macro_export]
 macro_rules! native_raw_obj_fn {
-    ($cx:expr, $call:expr, $name:expr, $nargs:expr, $flags:expr) => {{
+    ($cx:expr_2021, $call:expr_2021, $name:expr_2021, $nargs:expr_2021, $flags:expr_2021) => {{
         #[allow(unsafe_code)]
         #[allow(clippy::macro_metavars_in_unsafe)]
-        unsafe extern "C" fn wrapper(cx: *mut JSContext, argc: u32, vp: *mut JSVal) -> bool {
+        unsafe extern "C" fn wrapper(cx: *mut JSContext, argc: u32, vp: *mut JSVal) -> bool { unsafe {
             $call(cx, argc, vp)
-        }
+        }}
         #[allow(unsafe_code)]
         #[allow(clippy::macro_metavars_in_unsafe)]
         unsafe {

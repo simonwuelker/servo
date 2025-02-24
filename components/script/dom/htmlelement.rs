@@ -775,11 +775,11 @@ impl HTMLElement {
 
     /// <https://html.spec.whatwg.org/multipage/#form-associated-custom-element>
     pub(crate) fn is_form_associated_custom_element(&self) -> bool {
-        if let Some(definition) = self.as_element().get_custom_element_definition() {
+        match self.as_element().get_custom_element_definition() { Some(definition) => {
             definition.is_autonomous() && definition.form_associated
-        } else {
+        } _ => {
             false
-        }
+        }}
     }
 
     /// <https://html.spec.whatwg.org/multipage/#category-listed>

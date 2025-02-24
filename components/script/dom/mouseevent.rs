@@ -333,12 +333,12 @@ impl MouseEventMethods<crate::DomTypeHolder> for MouseEvent {
         if event.dispatching() {
             match event.GetTarget() {
                 Some(target) => {
-                    if let Some(node) = target.downcast::<Node>() {
+                    match target.downcast::<Node>() { Some(node) => {
                         let rect = node.client_rect(can_gc);
                         self.client_x.get() - rect.origin.x
-                    } else {
+                    } _ => {
                         self.offset_x.get()
-                    }
+                    }}
                 },
                 None => self.offset_x.get(),
             }
@@ -353,12 +353,12 @@ impl MouseEventMethods<crate::DomTypeHolder> for MouseEvent {
         if event.dispatching() {
             match event.GetTarget() {
                 Some(target) => {
-                    if let Some(node) = target.downcast::<Node>() {
+                    match target.downcast::<Node>() { Some(node) => {
                         let rect = node.client_rect(can_gc);
                         self.client_y.get() - rect.origin.y
-                    } else {
+                    } _ => {
                         self.offset_y.get()
-                    }
+                    }}
                 },
                 None => self.offset_y.get(),
             }

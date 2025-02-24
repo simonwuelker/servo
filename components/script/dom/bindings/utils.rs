@@ -154,7 +154,7 @@ pub(crate) unsafe fn get_property_on_prototype(
     id: HandleId,
     found: *mut bool,
     vp: MutableHandleValue,
-) -> bool {
+) -> bool { unsafe {
     rooted!(in(cx) let mut proto = ptr::null_mut::<JSObject>());
     if !JS_GetPrototype(cx, proxy, proto.handle_mut()) || proto.is_null() {
         *found = false;
@@ -170,11 +170,11 @@ pub(crate) unsafe fn get_property_on_prototype(
     }
 
     JS_ForwardGetPropertyTo(cx, proto.handle(), id, receiver, vp)
-}
+}}
 
 /// Get an array index from the given `jsid`. Returns `None` if the given
 /// `jsid` is not an integer.
-pub(crate) unsafe fn get_array_index_from_id(_cx: *mut JSContext, id: HandleId) -> Option<u32> {
+pub(crate) unsafe fn get_array_index_from_id(_cx: *mut JSContext, id: HandleId) -> Option<u32> { unsafe {
     let raw_id = *id;
     if raw_id.is_int() {
         return Some(raw_id.to_int() as u32);
@@ -230,7 +230,7 @@ pub(crate) unsafe fn get_array_index_from_id(_cx: *mut JSContext, id: HandleId) 
     } else {
         None
     }*/
-}
+}}
 
 /// Find the enum equivelent of a string given by `v` in `pairs`.
 /// Returns `Err(())` on JSAPI failure (there is a pending exception), and
@@ -239,7 +239,7 @@ pub(crate) unsafe fn find_enum_value<'a, T>(
     cx: *mut JSContext,
     v: HandleValue,
     pairs: &'a [(&'static str, T)],
-) -> Result<(Option<&'a T>, DOMString), ()> {
+) -> Result<(Option<&'a T>, DOMString), ()> { unsafe {
     match ptr::NonNull::new(ToString(cx, v)) {
         Some(jsstr) => {
             let search = jsstring_to_str(cx, jsstr);
@@ -253,7 +253,7 @@ pub(crate) unsafe fn find_enum_value<'a, T>(
         },
         None => Err(()),
     }
-}
+}}
 
 /// Returns wether `obj` is a platform object using dynamic unwrap
 /// <https://heycam.github.io/webidl/#dfn-platform-object>
@@ -369,17 +369,17 @@ pub(crate) unsafe fn has_property_on_prototype(
     proxy: HandleObject,
     id: HandleId,
     found: &mut bool,
-) -> bool {
+) -> bool { unsafe {
     rooted!(in(cx) let mut proto = ptr::null_mut::<JSObject>());
     if !JS_GetPrototype(cx, proxy, proto.handle_mut()) {
         return false;
     }
     assert!(!proto.is_null());
     JS_HasPropertyById(cx, proto.handle(), id, found)
-}
+}}
 
 /// Drop the resources held by reserved slots of a global object
-pub(crate) unsafe fn finalize_global(obj: *mut JSObject) {
+pub(crate) unsafe fn finalize_global(obj: *mut JSObject) { unsafe {
     let protolist = get_proto_or_iface_array(obj);
     let list = (*protolist).as_mut_ptr();
     for idx in 0..PROTO_OR_IFACE_LENGTH as isize {
@@ -388,10 +388,10 @@ pub(crate) unsafe fn finalize_global(obj: *mut JSObject) {
         <*mut JSObject>::post_barrier(entry, value, ptr::null_mut());
     }
     let _: Box<ProtoOrIfaceArray> = Box::from_raw(protolist);
-}
+}}
 
 /// Trace the resources held by reserved slots of a global object
-pub(crate) unsafe fn trace_global(tracer: *mut JSTracer, obj: *mut JSObject) {
+pub(crate) unsafe fn trace_global(tracer: *mut JSTracer, obj: *mut JSObject) { unsafe {
     let array = get_proto_or_iface_array(obj);
     for proto in (*array).iter() {
         if !proto.is_null() {
@@ -402,7 +402,7 @@ pub(crate) unsafe fn trace_global(tracer: *mut JSTracer, obj: *mut JSObject) {
             );
         }
     }
-}
+}}
 
 /// Enumerate lazy properties of a global object.
 pub(crate) unsafe extern "C" fn enumerate_global(
@@ -410,7 +410,7 @@ pub(crate) unsafe extern "C" fn enumerate_global(
     obj: RawHandleObject,
     _props: RawMutableHandleIdVector,
     _enumerable_only: bool,
-) -> bool {
+) -> bool { unsafe {
     assert!(JS_IsGlobalObject(obj.get()));
     if !JS_EnumerateStandardClasses(cx, obj) {
         return false;
@@ -419,7 +419,7 @@ pub(crate) unsafe extern "C" fn enumerate_global(
         init_fun(SafeJSContext::from_ptr(cx), Handle::from_raw(obj));
     }
     true
-}
+}}
 
 /// Resolve a lazy global property, for interface objects and named constructors.
 pub(crate) unsafe extern "C" fn resolve_global(
@@ -427,7 +427,7 @@ pub(crate) unsafe extern "C" fn resolve_global(
     obj: RawHandleObject,
     id: RawHandleId,
     rval: *mut bool,
-) -> bool {
+) -> bool { unsafe {
     assert!(JS_IsGlobalObject(obj.get()));
     if !JS_ResolveStandardClass(cx, obj, id, rval) {
         return false;
@@ -457,7 +457,7 @@ pub(crate) unsafe extern "C" fn resolve_global(
         *rval = false;
     }
     true
-}
+}}
 
 /// Deletes the property `id` from `object`.
 pub(crate) unsafe fn delete_property_by_id(
@@ -465,9 +465,9 @@ pub(crate) unsafe fn delete_property_by_id(
     object: HandleObject,
     id: HandleId,
     bp: *mut ObjectOpResult,
-) -> bool {
+) -> bool { unsafe {
     JS_DeletePropertyById(cx, object, id, bp)
-}
+}}
 
 unsafe fn generic_call<const EXCEPTION_TO_REJECTION: bool>(
     cx: *mut JSContext,
@@ -482,7 +482,7 @@ unsafe fn generic_call<const EXCEPTION_TO_REJECTION: bool>(
         u32,
         *mut JSVal,
     ) -> bool,
-) -> bool {
+) -> bool { unsafe {
     let args = CallArgs::from_vp(vp, argc);
 
     let info = RUST_FUNCTION_VALUE_TO_JITINFO(JS_CALLEE(cx, vp));
@@ -531,34 +531,34 @@ unsafe fn generic_call<const EXCEPTION_TO_REJECTION: bool>(
         argc,
         vp,
     )
-}
+}}
 
 /// Generic method of IDL interface.
 pub(crate) unsafe extern "C" fn generic_method<const EXCEPTION_TO_REJECTION: bool>(
     cx: *mut JSContext,
     argc: libc::c_uint,
     vp: *mut JSVal,
-) -> bool {
+) -> bool { unsafe {
     generic_call::<EXCEPTION_TO_REJECTION>(cx, argc, vp, false, CallJitMethodOp)
-}
+}}
 
 /// Generic getter of IDL interface.
 pub(crate) unsafe extern "C" fn generic_getter<const EXCEPTION_TO_REJECTION: bool>(
     cx: *mut JSContext,
     argc: libc::c_uint,
     vp: *mut JSVal,
-) -> bool {
+) -> bool { unsafe {
     generic_call::<EXCEPTION_TO_REJECTION>(cx, argc, vp, false, CallJitGetterOp)
-}
+}}
 
 /// Generic lenient getter of IDL interface.
 pub(crate) unsafe extern "C" fn generic_lenient_getter<const EXCEPTION_TO_REJECTION: bool>(
     cx: *mut JSContext,
     argc: libc::c_uint,
     vp: *mut JSVal,
-) -> bool {
+) -> bool { unsafe {
     generic_call::<EXCEPTION_TO_REJECTION>(cx, argc, vp, true, CallJitGetterOp)
-}
+}}
 
 unsafe extern "C" fn call_setter(
     info: *const JSJitInfo,
@@ -567,41 +567,41 @@ unsafe extern "C" fn call_setter(
     this: *mut libc::c_void,
     argc: u32,
     vp: *mut JSVal,
-) -> bool {
+) -> bool { unsafe {
     if !CallJitSetterOp(info, cx, handle, this, argc, vp) {
         return false;
     }
     *vp = UndefinedValue();
     true
-}
+}}
 
 /// Generic setter of IDL interface.
 pub(crate) unsafe extern "C" fn generic_setter(
     cx: *mut JSContext,
     argc: libc::c_uint,
     vp: *mut JSVal,
-) -> bool {
+) -> bool { unsafe {
     generic_call::<false>(cx, argc, vp, false, call_setter)
-}
+}}
 
 /// Generic lenient setter of IDL interface.
 pub(crate) unsafe extern "C" fn generic_lenient_setter(
     cx: *mut JSContext,
     argc: libc::c_uint,
     vp: *mut JSVal,
-) -> bool {
+) -> bool { unsafe {
     generic_call::<false>(cx, argc, vp, true, call_setter)
-}
+}}
 
 unsafe extern "C" fn instance_class_has_proto_at_depth(
     clasp: *const js::jsapi::JSClass,
     proto_id: u32,
     depth: u32,
-) -> bool {
+) -> bool { unsafe {
     let domclass: *const DOMJSClass = clasp as *const _;
     let domclass = &*domclass;
     domclass.dom_class.interface_chain[depth as usize] as u32 == proto_id
-}
+}}
 
 #[allow(missing_docs)] // FIXME
 pub(crate) const DOM_CALLBACKS: DOMCallbacks = DOMCallbacks {
@@ -634,7 +634,7 @@ pub(crate) unsafe extern "C" fn generic_static_promise_method(
     cx: *mut JSContext,
     argc: libc::c_uint,
     vp: *mut JSVal,
-) -> bool {
+) -> bool { unsafe {
     let args = CallArgs::from_vp(vp, argc);
 
     let info = RUST_FUNCTION_VALUE_TO_JITINFO(JS_CALLEE(cx, vp));
@@ -646,26 +646,26 @@ pub(crate) unsafe extern "C" fn generic_static_promise_method(
         return true;
     }
     exception_to_promise(cx, args.rval())
-}
+}}
 
 /// Coverts exception to promise rejection
 ///
 /// <https://searchfox.org/mozilla-central/rev/b220e40ff2ee3d10ce68e07d8a8a577d5558e2a2/dom/bindings/BindingUtils.cpp#3315>
-pub(crate) unsafe fn exception_to_promise(cx: *mut JSContext, rval: RawMutableHandleValue) -> bool {
+pub(crate) unsafe fn exception_to_promise(cx: *mut JSContext, rval: RawMutableHandleValue) -> bool { unsafe {
     rooted!(in(cx) let mut exception = UndefinedValue());
     if !JS_GetPendingException(cx, exception.handle_mut()) {
         return false;
     }
     JS_ClearPendingException(cx);
-    if let Some(promise) = NonNull::new(CallOriginalPromiseReject(cx, exception.handle())) {
+    match NonNull::new(CallOriginalPromiseReject(cx, exception.handle())) { Some(promise) => {
         promise.to_jsval(cx, MutableHandleValue::from_raw(rval));
         true
-    } else {
+    } _ => {
         // We just give up.  Put the exception back.
         JS_SetPendingException(cx, exception.handle(), ExceptionStackBehavior::Capture);
         false
-    }
-}
+    }}
+}}
 
 /// Operations that must be invoked from the generated bindings.
 pub(crate) trait DomHelpers<D: DomTypes> {
@@ -701,9 +701,9 @@ impl DomHelpers<crate::DomTypeHolder> for crate::DomTypeHolder {
         proto_id: PrototypeList::ID,
         creator: unsafe fn(SafeJSContext, HandleObject, *mut ProtoOrIfaceArray),
         can_gc: CanGc,
-    ) -> bool {
+    ) -> bool { unsafe {
         call_html_constructor::<T>(cx, args, global, proto_id, creator, can_gc)
-    }
+    }}
 
     fn settings_stack() -> &'static LocalKey<RefCell<Vec<StackEntry<crate::DomTypeHolder>>>> {
         &settings_stack::STACK

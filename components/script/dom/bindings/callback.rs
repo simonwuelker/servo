@@ -77,7 +77,7 @@ impl<D: DomTypes> CallbackObject<D> {
     }
 
     #[allow(unsafe_code)]
-    unsafe fn init(&mut self, cx: JSContext, callback: *mut JSObject) {
+    unsafe fn init(&mut self, cx: JSContext, callback: *mut JSObject) { unsafe {
         self.callback.set(callback);
         self.permanent_js_root.set(ObjectValue(callback));
         assert!(AddRawValueRoot(
@@ -85,7 +85,7 @@ impl<D: DomTypes> CallbackObject<D> {
             self.permanent_js_root.get_unsafe(),
             b"CallbackObject::root\n".as_c_char_ptr()
         ));
-    }
+    }}
 }
 
 impl<D: DomTypes> Drop for CallbackObject<D> {
@@ -150,9 +150,9 @@ impl<D: DomTypes> CallbackFunction<D> {
 
     /// Initialize the callback function with a value.
     /// Should be called once this object is done moving.
-    pub(crate) unsafe fn init(&mut self, cx: JSContext, callback: *mut JSObject) {
+    pub(crate) unsafe fn init(&mut self, cx: JSContext, callback: *mut JSObject) { unsafe {
         self.object.init(cx, callback);
-    }
+    }}
 }
 
 /// A common base class for representing IDL callback interface types.
@@ -179,9 +179,9 @@ impl<D: DomTypes> CallbackInterface<D> {
 
     /// Initialize the callback function with a value.
     /// Should be called once this object is done moving.
-    pub(crate) unsafe fn init(&mut self, cx: JSContext, callback: *mut JSObject) {
+    pub(crate) unsafe fn init(&mut self, cx: JSContext, callback: *mut JSObject) { unsafe {
         self.object.init(cx, callback);
-    }
+    }}
 
     /// Returns the property with the given `name`, if it is a callable object,
     /// or an error otherwise.

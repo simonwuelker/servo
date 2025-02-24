@@ -114,7 +114,7 @@ impl HTMLSelectElement {
     }
 
     // https://html.spec.whatwg.org/multipage/#concept-select-option-list
-    pub(crate) fn list_of_options(&self) -> impl Iterator<Item = DomRoot<HTMLOptionElement>> {
+    pub(crate) fn list_of_options(&self) -> impl Iterator<Item = DomRoot<HTMLOptionElement>> + use<> {
         self.upcast::<Node>().children().flat_map(|node| {
             if node.is::<HTMLOptionElement>() {
                 let node = DomRoot::downcast::<HTMLOptionElement>(node).unwrap();
@@ -168,13 +168,13 @@ impl HTMLSelectElement {
             }
         }
 
-        if let Some(last_selected) = last_selected {
+        match last_selected { Some(last_selected) => {
             last_selected.set_selectedness(true);
-        } else if self.display_size() == 1 {
+        } _ => if self.display_size() == 1 {
             if let Some(first_enabled) = first_enabled {
                 first_enabled.set_selectedness(true);
             }
-        }
+        }}
     }
 
     pub(crate) fn push_form_data(&self, data_set: &mut Vec<FormDatum>) {

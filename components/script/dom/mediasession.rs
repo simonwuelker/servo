@@ -111,16 +111,16 @@ impl MediaSession {
 
     pub(crate) fn update_title(&self, title: String) {
         let mut metadata = self.metadata.borrow_mut();
-        if let Some(ref mut metadata) = *metadata {
+        match *metadata { Some(ref mut metadata) => {
             // We only update the title with the data provided by the media
             // player and iff the user did not provide a title.
             if !metadata.title.is_empty() {
                 return;
             }
             metadata.title = title;
-        } else {
+        } _ => {
             *metadata = Some(EmbedderMediaMetadata::new(title));
-        }
+        }}
         self.send_event(MediaSessionEvent::SetMetadata(
             metadata.as_ref().unwrap().clone(),
         ));
@@ -130,16 +130,16 @@ impl MediaSession {
 impl MediaSessionMethods<crate::DomTypeHolder> for MediaSession {
     /// <https://w3c.github.io/mediasession/#dom-mediasession-metadata>
     fn GetMetadata(&self, can_gc: CanGc) -> Option<DomRoot<MediaMetadata>> {
-        if let Some(ref metadata) = *self.metadata.borrow() {
+        match *self.metadata.borrow() { Some(ref metadata) => {
             let mut init = MediaMetadataInit::empty();
             init.title = DOMString::from_string(metadata.title.clone());
             init.artist = DOMString::from_string(metadata.artist.clone());
             init.album = DOMString::from_string(metadata.album.clone());
             let global = self.global();
             Some(MediaMetadata::new(global.as_window(), &init, can_gc))
-        } else {
+        } _ => {
             None
-        }
+        }}
     }
 
     /// <https://w3c.github.io/mediasession/#dom-mediasession-metadata>

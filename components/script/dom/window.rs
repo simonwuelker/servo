@@ -2901,9 +2901,9 @@ pub(crate) struct LayoutValue<T: MallocSizeOf> {
 
 #[allow(unsafe_code)]
 unsafe impl<T: JSTraceable + MallocSizeOf> JSTraceable for LayoutValue<T> {
-    unsafe fn trace(&self, trc: *mut js::jsapi::JSTracer) {
+    unsafe fn trace(&self, trc: *mut js::jsapi::JSTracer) { unsafe {
         self.value.trace(trc)
-    }
+    }}
 }
 
 impl<T: Copy + MallocSizeOf> LayoutValue<T> {
@@ -2998,7 +2998,7 @@ impl Window {
             let obj = this.reflector().get_jsobject();
             let _ac = JSAutoRealm::new(*cx, obj.get());
             rooted!(in(*cx) let mut message_clone = UndefinedValue());
-            if let Ok(ports) = structuredclone::read(this.upcast(), data, message_clone.handle_mut()) {
+            match structuredclone::read(this.upcast(), data, message_clone.handle_mut()) { Ok(ports) => {
                 // Step 7.6, 7.7
                 MessageEvent::dispatch_jsval(
                     this.upcast(),
@@ -3009,14 +3009,14 @@ impl Window {
                     ports,
                     CanGc::note()
                 );
-            } else {
+            } _ => {
                 // Step 4, fire messageerror.
                 MessageEvent::dispatch_error(
                     this.upcast(),
                     this.upcast(),
                     CanGc::note()
                 );
-            }
+            }}
         });
         // TODO(#12718): Use the "posted message task source".
         self.as_global_scope()
@@ -3088,8 +3088,8 @@ fn is_named_element_with_id_attribute(elem: &Element) -> bool {
 }
 
 #[allow(unsafe_code)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// Helper for interactive debugging sessions in lldb/gdb.
-unsafe extern "C" fn dump_js_stack(cx: *mut RawJSContext) {
+unsafe extern "C" fn dump_js_stack(cx: *mut RawJSContext) { unsafe {
     DumpJSStack(cx, true, false, false);
-}
+}}

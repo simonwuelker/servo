@@ -167,7 +167,7 @@ impl Location {
         // > this `Location` object's relevant global object's browsing
         // > context's active document, if this `Location` object's relevant
         // > global object's browsing context is non-null, and null otherwise.
-        if let Some(window_proxy) = self.window.Document().browsing_context() {
+        match self.window.Document().browsing_context() { Some(window_proxy) => {
             // `Location`'s many other operations:
             //
             // > If this `Location` object's relevant `Document` is non-null and
@@ -177,19 +177,19 @@ impl Location {
             // FIXME: We should still return the active document if it's same
             //        origin but not fully active. `WindowProxy::document`
             //        currently returns `None` in this case.
-            if let Some(document) = window_proxy.document().filter(|document| {
+            match window_proxy.document().filter(|document| {
                 self.entry_settings_object()
                     .origin()
                     .same_origin_domain(document.origin())
-            }) {
+            }) { Some(document) => {
                 Ok(Some(document))
-            } else {
+            } _ => {
                 Err(Error::Security)
-            }
-        } else {
+            }}
+        } _ => {
             // The browsing context is null
             Ok(None)
-        }
+        }}
     }
 
     /// Get this `Location` object's [relevant url][1] or
@@ -200,11 +200,11 @@ impl Location {
     /// [1]: https://html.spec.whatwg.org/multipage/#concept-location-url
     /// [2]: https://html.spec.whatwg.org/multipage/#relevant-document
     fn get_url_if_same_origin(&self) -> Fallible<ServoUrl> {
-        Ok(if let Some(document) = self.document_if_same_origin()? {
+        Ok(match self.document_if_same_origin()? { Some(document) => {
             document.url()
-        } else {
+        } _ => {
             ServoUrl::parse("about:blank").unwrap()
-        })
+        }})
     }
 
     fn entry_settings_object(&self) -> DomRoot<GlobalScope> {

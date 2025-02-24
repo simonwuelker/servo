@@ -107,11 +107,11 @@ impl CSSRuleList {
         parse_relative_rule_type: Option<CssRuleType>,
         can_gc: CanGc,
     ) -> Fallible<u32> {
-        let css_rules = if let RulesSource::Rules(ref rules) = self.rules {
+        let css_rules = match self.rules { RulesSource::Rules(ref rules) => {
             rules
-        } else {
+        } _ => {
             panic!("Called insert_rule on non-CssRule-backed CSSRuleList");
-        };
+        }};
 
         let global = self.global();
         let window = global.as_window();

@@ -82,9 +82,9 @@ impl<'dom> ServoLayoutNode<'dom> {
     /// # Safety
     ///
     /// The address pointed to by `address` should point to a valid node in memory.
-    pub unsafe fn new(address: &TrustedNodeAddress) -> Self {
+    pub unsafe fn new(address: &TrustedNodeAddress) -> Self { unsafe {
         ServoLayoutNode::from_layout_js(LayoutDom::from_trusted_node_address(*address))
-    }
+    }}
 
     pub(super) fn script_type_id(&self) -> NodeTypeId {
         self.node.type_id_for_layout()
@@ -195,7 +195,7 @@ impl<'dom> LayoutNode<'dom> for ServoLayoutNode<'dom> {
         NodeTypeIdWrapper(self.script_type_id()).into()
     }
 
-    unsafe fn initialize_style_and_layout_data<RequestedLayoutDataType: LayoutDataTrait>(&self) {
+    unsafe fn initialize_style_and_layout_data<RequestedLayoutDataType: LayoutDataTrait>(&self) { unsafe {
         let inner = self.get_jsmanaged();
         if inner.style_data().is_none() {
             inner.initialize_style_data();
@@ -203,7 +203,7 @@ impl<'dom> LayoutNode<'dom> for ServoLayoutNode<'dom> {
         if inner.layout_data().is_none() {
             inner.initialize_layout_data(Box::<RequestedLayoutDataType>::default());
         }
-    }
+    }}
 
     fn initialize_layout_data<RequestedLayoutDataType: LayoutDataTrait>(&self) {
         let inner = self.get_jsmanaged();
@@ -257,21 +257,21 @@ impl<'dom> ServoThreadSafeLayoutNode<'dom> {
 
     /// Get the first child of this node. Important: this is not safe for
     /// layout to call, so it should *never* be made public.
-    unsafe fn dangerous_first_child(&self) -> Option<Self> {
+    unsafe fn dangerous_first_child(&self) -> Option<Self> { unsafe {
         self.get_jsmanaged()
             .first_child_ref()
             .map(ServoLayoutNode::from_layout_js)
             .map(Self::new)
-    }
+    }}
 
     /// Get the next sibling of this node. Important: this is not safe for
     /// layout to call, so it should *never* be made public.
-    unsafe fn dangerous_next_sibling(&self) -> Option<Self> {
+    unsafe fn dangerous_next_sibling(&self) -> Option<Self> { unsafe {
         self.get_jsmanaged()
             .next_sibling_ref()
             .map(ServoLayoutNode::from_layout_js)
             .map(Self::new)
-    }
+    }}
 }
 
 impl style::dom::NodeInfo for ServoThreadSafeLayoutNode<'_> {

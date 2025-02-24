@@ -148,19 +148,19 @@ impl NodeListMethods<crate::DomTypeHolder> for NodeList {
 
 impl NodeList {
     pub(crate) fn as_children_list(&self) -> &ChildrenList {
-        if let NodeListType::Children(ref list) = self.list_type {
+        match self.list_type { NodeListType::Children(ref list) => {
             list
-        } else {
+        } _ => {
             panic!("called as_children_list() on a non-children node list")
-        }
+        }}
     }
 
     pub(crate) fn as_radio_list(&self) -> &RadioList {
-        if let NodeListType::Radio(ref list) = self.list_type {
+        match self.list_type { NodeListType::Radio(ref list) => {
             list
-        } else {
+        } _ => {
             panic!("called as_radio_list() on a non-radio node list")
-        }
+        }}
     }
 
     pub(crate) fn iter(&self) -> impl Iterator<Item = DomRoot<Node>> + '_ {

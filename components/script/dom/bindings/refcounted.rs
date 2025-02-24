@@ -261,7 +261,7 @@ impl LiveDOMReferences {
     /// This is not enforced by the type system to reduce duplicated generic code,
     /// which is acceptable since this method is internal to this module.
     #[allow(clippy::arc_with_non_send_sync)]
-    unsafe fn addref(&self, ptr: *const libc::c_void) -> Arc<TrustedReference> {
+    unsafe fn addref(&self, ptr: *const libc::c_void) -> Arc<TrustedReference> { unsafe {
         let mut table = self.reflectable_table.borrow_mut();
         let capacity = table.capacity();
         let len = table.len();
@@ -285,7 +285,7 @@ impl LiveDOMReferences {
                 refcount
             },
         }
-    }
+    }}
 }
 
 /// Remove null entries from the live references table
@@ -303,7 +303,7 @@ fn remove_nulls<K: Eq + Hash + Clone, V>(table: &mut HashMap<K, Weak<V>>) {
 
 /// A JSTraceDataOp for tracing reflectors held in LIVE_REFERENCES
 #[cfg_attr(crown, allow(crown::unrooted_must_root))]
-pub(crate) unsafe fn trace_refcounted_objects(tracer: *mut JSTracer) {
+pub(crate) unsafe fn trace_refcounted_objects(tracer: *mut JSTracer) { unsafe {
     trace!("tracing live refcounted references");
     LIVE_REFERENCES.with(|r| {
         let r = r.borrow();
@@ -324,4 +324,4 @@ pub(crate) unsafe fn trace_refcounted_objects(tracer: *mut JSTracer) {
             }
         }
     });
-}
+}}

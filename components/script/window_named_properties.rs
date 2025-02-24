@@ -83,7 +83,7 @@ unsafe extern "C" fn get_own_property_descriptor(
     id: HandleId,
     desc: MutableHandle<PropertyDescriptor>,
     is_none: *mut bool,
-) -> bool {
+) -> bool { unsafe {
     let cx = SafeJSContext::from_ptr(cx);
 
     if id.is_symbol() {
@@ -143,21 +143,21 @@ unsafe extern "C" fn get_own_property_descriptor(
         );
     }
     true
-}
+}}
 
 #[allow(unsafe_code)]
 unsafe extern "C" fn own_property_keys(
     cx: *mut JSContext,
     _proxy: HandleObject,
     props: MutableHandleIdVector,
-) -> bool {
+) -> bool { unsafe {
     // TODO is this all we need to return? compare with gecko:
     // https://searchfox.org/mozilla-central/rev/af78418c4b5f2c8721d1a06486cf4cf0b33e1e8d/dom/base/WindowNamedPropertiesHandler.cpp#175-232
     // see also https://github.com/whatwg/html/issues/9068
     rooted!(in(cx) let mut rooted = SymbolId(GetWellKnownSymbol(cx, SymbolCode::toStringTag)));
     AppendToIdVector(props, rooted.handle().into());
     true
-}
+}}
 
 #[allow(unsafe_code)]
 unsafe extern "C" fn define_property(
@@ -166,10 +166,10 @@ unsafe extern "C" fn define_property(
     _id: HandleId,
     _desc: Handle<PropertyDescriptor>,
     result: *mut ObjectOpResult,
-) -> bool {
+) -> bool { unsafe {
     (*result).code_ = JSErrNum::JSMSG_CANT_DEFINE_WINDOW_NAMED_PROPERTY as usize;
     true
-}
+}}
 
 #[allow(unsafe_code)]
 unsafe extern "C" fn delete(
@@ -177,10 +177,10 @@ unsafe extern "C" fn delete(
     _proxy: HandleObject,
     _id: HandleId,
     result: *mut ObjectOpResult,
-) -> bool {
+) -> bool { unsafe {
     (*result).code_ = JSErrNum::JSMSG_CANT_DELETE_WINDOW_NAMED_PROPERTY as usize;
     true
-}
+}}
 
 #[allow(unsafe_code)]
 unsafe extern "C" fn get_prototype_if_ordinary(
@@ -188,31 +188,31 @@ unsafe extern "C" fn get_prototype_if_ordinary(
     proxy: HandleObject,
     is_ordinary: *mut bool,
     proto: MutableHandleObject,
-) -> bool {
+) -> bool { unsafe {
     *is_ordinary = true;
     proto.set(js::jsapi::GetStaticPrototype(proxy.get()));
     true
-}
+}}
 
 #[allow(unsafe_code)]
 unsafe extern "C" fn prevent_extensions(
     _cx: *mut JSContext,
     _proxy: HandleObject,
     result: *mut ObjectOpResult,
-) -> bool {
+) -> bool { unsafe {
     (*result).code_ = JSErrNum::JSMSG_CANT_PREVENT_EXTENSIONS as usize;
     true
-}
+}}
 
 #[allow(unsafe_code)]
 unsafe extern "C" fn is_extensible(
     _cx: *mut JSContext,
     _proxy: HandleObject,
     extensible: *mut bool,
-) -> bool {
+) -> bool { unsafe {
     *extensible = true;
     true
-}
+}}
 
 #[allow(unsafe_code)]
 unsafe extern "C" fn class_name(_cx: *mut JSContext, _proxy: HandleObject) -> *const libc::c_char {

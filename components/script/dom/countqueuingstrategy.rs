@@ -89,12 +89,12 @@ pub(crate) unsafe fn count_queuing_strategy_size(
     _cx: *mut JSContext,
     argc: u32,
     vp: *mut JSVal,
-) -> bool {
+) -> bool { unsafe {
     let args = CallArgs::from_vp(vp, argc);
     // Step 1.1. Return 1.
     args.rval().set(Int32Value(1));
     true
-}
+}}
 
 /// Extract the high water mark from a QueuingStrategy.
 /// If the high water mark is not set, return the default value.

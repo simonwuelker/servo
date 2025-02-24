@@ -63,7 +63,7 @@ unsafe fn html_constructor(
     proto_id: PrototypeList::ID,
     creator: unsafe fn(SafeJSContext, HandleObject, *mut ProtoOrIfaceArray),
     can_gc: CanGc,
-) -> Result<(), ()> {
+) -> Result<(), ()> { unsafe {
     let window = global.downcast::<Window>().unwrap();
     let document = window.Document();
 
@@ -228,7 +228,7 @@ unsafe fn html_constructor(
 
     result.to_jsval(*cx, MutableHandleValue::from_raw(call_args.rval()));
     Ok(())
-}
+}}
 
 /// Returns the constructor object for the element associated with the
 /// given local name. This list should only include elements marked with the
@@ -388,7 +388,7 @@ pub(crate) unsafe fn call_html_constructor<T: DerivedFrom<Element> + DomObject>(
     proto_id: PrototypeList::ID,
     creator: unsafe fn(SafeJSContext, HandleObject, *mut ProtoOrIfaceArray),
     can_gc: CanGc,
-) -> bool {
+) -> bool { unsafe {
     fn element_derives_interface<T: DerivedFrom<Element>>(element: &Element) -> bool {
         element.is::<T>()
     }
@@ -403,7 +403,7 @@ pub(crate) unsafe fn call_html_constructor<T: DerivedFrom<Element> + DomObject>(
         can_gc,
     )
     .is_ok()
-}
+}}
 
 pub(crate) unsafe fn call_default_constructor<D: crate::DomTypes>(
     cx: JSContext,

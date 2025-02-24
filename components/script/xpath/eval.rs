@@ -235,13 +235,13 @@ impl TryFrom<&ParserQualName> for QualName {
 
     fn try_from(qname: &ParserQualName) -> Result<Self, Self::Error> {
         let qname_as_str = qname.to_string();
-        if let Ok((ns, prefix, local)) = validate_and_extract(None, &qname_as_str) {
+        match validate_and_extract(None, &qname_as_str) { Ok((ns, prefix, local)) => {
             Ok(QualName { prefix, ns, local })
-        } else {
+        } _ => {
             Err(Error::InvalidQName {
                 qname: qname.clone(),
             })
-        }
+        }}
     }
 }
 
@@ -447,7 +447,7 @@ impl Evaluatable for StepExpr {
 
 impl Evaluatable for PredicateListExpr {
     fn evaluate(&self, context: &EvaluationCtx) -> Result<Value, Error> {
-        if let Some(ref predicate_nodes) = context.predicate_nodes {
+        match context.predicate_nodes { Some(ref predicate_nodes) => {
             // Initializing: every node the predicates act on is matched
             let mut matched_nodes: Vec<DomRoot<Node>> = predicate_nodes.clone();
 
@@ -467,12 +467,12 @@ impl Evaluatable for PredicateListExpr {
                 );
             }
             Ok(Value::Nodeset(matched_nodes))
-        } else {
+        } _ => {
             Err(Error::Internal {
                 msg: "[PredicateListExpr] No nodes on stack for predicate to operate on"
                     .to_string(),
             })
-        }
+        }}
     }
 
     fn is_primitive(&self) -> bool {
@@ -485,7 +485,7 @@ impl Evaluatable for PredicateExpr {
         let narrowed_nodes: Result<Vec<DomRoot<Node>>, Error> = context
             .subcontext_iter_for_nodes()
             .filter_map(|ctx| {
-                if let Some(predicate_ctx) = ctx.predicate_ctx {
+                match ctx.predicate_ctx { Some(predicate_ctx) => {
                     let eval_result = self.expr.evaluate(&ctx);
 
                     let v = match eval_result {
@@ -499,11 +499,11 @@ impl Evaluatable for PredicateExpr {
                         Ok(false) => None,
                         Err(e) => Some(Err(e)),
                     }
-                } else {
+                } _ => {
                     Some(Err(Error::Internal {
                         msg: "[PredicateExpr] No predicate context set".to_string(),
                     }))
-                }
+                }}
             })
             .collect();
 

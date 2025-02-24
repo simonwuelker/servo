@@ -443,8 +443,8 @@ impl ServiceWorkerGlobalScope {
                 let target = self.upcast();
                 let _ac = enter_realm(scope);
                 rooted!(in(*scope.get_cx()) let mut message = UndefinedValue());
-                if let Ok(ports) = structuredclone::read(scope.upcast(), data, message.handle_mut())
-                {
+                match structuredclone::read(scope.upcast(), data, message.handle_mut())
+                { Ok(ports) => {
                     ExtendableMessageEvent::dispatch_jsval(
                         target,
                         scope.upcast(),
@@ -452,9 +452,9 @@ impl ServiceWorkerGlobalScope {
                         ports,
                         can_gc,
                     );
-                } else {
+                } _ => {
                     ExtendableMessageEvent::dispatch_error(target, scope.upcast(), can_gc);
-                }
+                }}
             },
             CommonWorker(WorkerScriptMsg::Common(msg)) => {
                 self.upcast::<WorkerGlobalScope>().process_event(msg);
@@ -483,7 +483,7 @@ impl ServiceWorkerGlobalScope {
 }
 
 #[allow(unsafe_code)]
-unsafe extern "C" fn interrupt_callback(cx: *mut JSContext) -> bool {
+unsafe extern "C" fn interrupt_callback(cx: *mut JSContext) -> bool { unsafe {
     let in_realm_proof = AlreadyInRealm::assert_for_cx(SafeJSContext::from_ptr(cx));
     let global = GlobalScope::from_context(cx, InRealm::Already(&in_realm_proof));
     let worker =
@@ -492,7 +492,7 @@ unsafe extern "C" fn interrupt_callback(cx: *mut JSContext) -> bool {
 
     // A false response causes the script to terminate
     !worker.is_closing()
-}
+}}
 
 impl ServiceWorkerGlobalScopeMethods<crate::DomTypeHolder> for ServiceWorkerGlobalScope {
     // https://w3c.github.io/ServiceWorker/#dom-serviceworkerglobalscope-onmessage

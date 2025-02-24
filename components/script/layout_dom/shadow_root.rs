@@ -58,8 +58,8 @@ impl<'dom> ServoShadowRoot<'dom> {
         &self,
         stylist: &mut Stylist,
         guard: &StyleSharedRwLockReadGuard,
-    ) {
+    ) { unsafe {
         self.shadow_root
             .flush_stylesheets::<ServoLayoutElement>(stylist, guard)
-    }
+    }}
 }

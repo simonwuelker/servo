@@ -2215,12 +2215,12 @@ impl Document {
         // spec: https://w3c.github.io/uievents/#compositionend
         // > Event.target : focused element processing the composition
         let focused = self.get_focused_element();
-        let target = if let Some(elem) = &focused {
+        let target = match &focused { Some(elem) => {
             elem.upcast()
-        } else {
+        } _ => {
             // Event is only dispatched if there is a focused element.
             return;
-        };
+        }};
 
         let cancelable = composition_event.state == keyboard_types::CompositionState::Start;
 
@@ -2992,12 +2992,12 @@ impl Document {
             if self.script_blocking_stylesheets_count.get() > 0 {
                 return;
             }
-            if let Some((element, result)) = self.deferred_scripts.take_next_ready_to_be_executed()
-            {
+            match self.deferred_scripts.take_next_ready_to_be_executed()
+            { Some((element, result)) => {
                 element.execute(result, can_gc);
-            } else {
+            } _ => {
                 break;
-            }
+            }}
         }
         if self.deferred_scripts.is_empty() {
             // https://html.spec.whatwg.org/multipage/#the-end step 4.
@@ -3283,12 +3283,12 @@ impl Document {
     }
 
     pub(crate) fn unregister_media_controls(&self, id: &str) {
-        if let Some(ref media_controls) = self.media_controls.borrow_mut().remove(id) {
+        match self.media_controls.borrow_mut().remove(id) { Some(ref media_controls) => {
             let media_controls = DomRoot::from_ref(&**media_controls);
             media_controls.Host().detach_shadow();
-        } else {
+        } _ => {
             debug_assert!(false, "Trying to unregister unknown media controls");
-        }
+        }}
     }
 
     pub(crate) fn add_dirty_webgl_canvas(&self, context: &WebGLRenderingContext) {

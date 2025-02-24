@@ -354,18 +354,18 @@ impl HTMLTableElementMethods<crate::DomTypeHolder> for HTMLTableElement {
 
         if number_of_row_elements == 0 {
             // append new row to last or new tbody in table
-            if let Some(last_tbody) = node
+            match node
                 .rev_children()
                 .filter_map(DomRoot::downcast::<Element>)
                 .find(|n| {
                     n.is::<HTMLTableSectionElement>() && n.local_name() == &local_name!("tbody")
                 })
-            {
+            { Some(last_tbody) => {
                 last_tbody
                     .upcast::<Node>()
                     .AppendChild(new_row.upcast::<Node>())
                     .expect("InsertRow failed to append first row.");
-            } else {
+            } _ => {
                 let tbody = self.CreateTBody(can_gc);
                 node.AppendChild(tbody.upcast())
                     .expect("InsertRow failed to append new tbody.");
@@ -374,7 +374,7 @@ impl HTMLTableElementMethods<crate::DomTypeHolder> for HTMLTableElement {
                     .upcast::<Node>()
                     .AppendChild(new_row.upcast::<Node>())
                     .expect("InsertRow failed to append first row.");
-            }
+            }}
         } else if index == number_of_row_elements as i32 || index == -1 {
             // append new row to parent of last row in table
             let last_row = rows

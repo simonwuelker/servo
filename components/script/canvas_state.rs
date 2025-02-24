@@ -452,7 +452,7 @@ impl CanvasState {
 
         let smoothing_enabled = self.state.borrow().image_smoothing_enabled;
 
-        if let Some(context) = canvas.context() {
+        match canvas.context() { Some(context) => {
             match *context {
                 OffscreenCanvasContext::OffscreenContext2d(ref context) => {
                     context.send_canvas_2d_msg(Canvas2dMsg::DrawImageInOther(
@@ -464,13 +464,13 @@ impl CanvasState {
                     ));
                 },
             }
-        } else {
+        } _ => {
             self.send_canvas_2d_msg(Canvas2dMsg::DrawEmptyImage(
                 image_size,
                 dest_rect,
                 source_rect,
             ));
-        }
+        }}
 
         self.mark_as_dirty(htmlcanvas);
         Ok(())
@@ -512,7 +512,7 @@ impl CanvasState {
 
         let smoothing_enabled = self.state.borrow().image_smoothing_enabled;
 
-        if let Some(context) = canvas.context() {
+        match canvas.context() { Some(context) => {
             match *context {
                 CanvasContext::Context2d(ref context) => {
                     context.send_canvas_2d_msg(Canvas2dMsg::DrawImageInOther(
@@ -540,13 +540,13 @@ impl CanvasState {
                 },
                 _ => return Err(Error::InvalidState),
             }
-        } else {
+        } _ => {
             self.send_canvas_2d_msg(Canvas2dMsg::DrawEmptyImage(
                 image_size,
                 dest_rect,
                 source_rect,
             ));
-        }
+        }}
 
         self.mark_as_dirty(htmlcanvas);
         Ok(())

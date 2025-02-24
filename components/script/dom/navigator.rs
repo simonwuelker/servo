@@ -117,13 +117,13 @@ impl Navigator {
     /// <https://www.w3.org/TR/gamepad/#dfn-selecting-an-unused-gamepad-index>
     pub(crate) fn select_gamepad_index(&self) -> u32 {
         let mut gamepad_list = self.gamepads.borrow_mut();
-        if let Some(index) = gamepad_list.iter().position(|g| g.get().is_none()) {
+        match gamepad_list.iter().position(|g| g.get().is_none()) { Some(index) => {
             index as u32
-        } else {
+        } _ => {
             let len = gamepad_list.len();
             gamepad_list.resize_with(len + 1, Default::default);
             len as u32
-        }
+        }}
     }
 
     fn shrink_gamepads_list(&self) {

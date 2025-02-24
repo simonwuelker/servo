@@ -58,7 +58,7 @@ unsafe fn read_blob(
     r: *mut JSStructuredCloneReader,
     sc_reader: &mut StructuredDataReader,
     can_gc: CanGc,
-) -> *mut JSObject {
+) -> *mut JSObject { unsafe {
     let mut name_space: u32 = 0;
     let mut index: u32 = 0;
     assert!(JS_ReadUint32Pair(
@@ -80,14 +80,14 @@ unsafe fn read_blob(
         owner.get_url()
     );
     ptr::null_mut()
-}
+}}
 
 unsafe fn write_blob(
     owner: &GlobalScope,
     blob: DomRoot<Blob>,
     w: *mut JSStructuredCloneWriter,
     sc_writer: &mut StructuredDataWriter,
-) -> bool {
+) -> bool { unsafe {
     if let Ok(storage_key) = blob.serialize(sc_writer) {
         assert!(JS_WriteUint32Pair(
             w,
@@ -106,7 +106,7 @@ unsafe fn write_blob(
         owner.get_url()
     );
     false
-}
+}}
 
 unsafe extern "C" fn read_callback(
     cx: *mut JSContext,
@@ -115,7 +115,7 @@ unsafe extern "C" fn read_callback(
     tag: u32,
     _data: u32,
     closure: *mut raw::c_void,
-) -> *mut JSObject {
+) -> *mut JSObject { unsafe {
     assert!(
         tag < StructuredCloneTags::Max as u32,
         "tag should be lower than StructuredCloneTags::Max"
@@ -134,7 +134,7 @@ unsafe extern "C" fn read_callback(
         );
     }
     ptr::null_mut()
-}
+}}
 
 unsafe extern "C" fn write_callback(
     cx: *mut JSContext,
@@ -142,7 +142,7 @@ unsafe extern "C" fn write_callback(
     obj: RawHandleObject,
     _same_process_scope_required: *mut bool,
     closure: *mut raw::c_void,
-) -> bool {
+) -> bool { unsafe {
     if let Ok(blob) = root_from_object::<Blob>(*obj, cx) {
         let in_realm_proof = AlreadyInRealm::assert_for_cx(SafeJSContext::from_ptr(cx));
         return write_blob(
@@ -153,7 +153,7 @@ unsafe extern "C" fn write_callback(
         );
     }
     false
-}
+}}
 
 unsafe extern "C" fn read_transfer_callback(
     cx: *mut JSContext,
@@ -164,7 +164,7 @@ unsafe extern "C" fn read_transfer_callback(
     extra_data: u64,
     closure: *mut raw::c_void,
     return_object: RawMutableHandleObject,
-) -> bool {
+) -> bool { unsafe {
     if tag == StructuredCloneTags::MessagePort as u32 {
         let sc_reader = &mut *(closure as *mut StructuredDataReader);
         let in_realm_proof = AlreadyInRealm::assert_for_cx(SafeJSContext::from_ptr(cx));
@@ -181,7 +181,7 @@ unsafe extern "C" fn read_transfer_callback(
         }
     }
     false
-}
+}}
 
 /// <https://html.spec.whatwg.org/multipage/#structuredserializewithtransfer>
 unsafe extern "C" fn write_transfer_callback(
@@ -192,7 +192,7 @@ unsafe extern "C" fn write_transfer_callback(
     ownership: *mut TransferableOwnership,
     _content: *mut *mut raw::c_void,
     extra_data: *mut u64,
-) -> bool {
+) -> bool { unsafe {
     if let Ok(port) = root_from_object::<MessagePort>(*obj, cx) {
         *tag = StructuredCloneTags::MessagePort as u32;
         *ownership = TransferableOwnership::SCTAG_TMO_CUSTOM;
@@ -203,7 +203,7 @@ unsafe extern "C" fn write_transfer_callback(
         }
     }
     false
-}
+}}
 
 unsafe extern "C" fn free_transfer_callback(
     _tag: u32,
@@ -219,12 +219,12 @@ unsafe extern "C" fn can_transfer_callback(
     obj: RawHandleObject,
     _same_process_scope_required: *mut bool,
     _closure: *mut raw::c_void,
-) -> bool {
+) -> bool { unsafe {
     if let Ok(_port) = root_from_object::<MessagePort>(*obj, cx) {
         return true;
     }
     false
-}
+}}
 
 unsafe extern "C" fn report_error_callback(
     _cx: *mut JSContext,

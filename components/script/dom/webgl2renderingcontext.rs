@@ -795,7 +795,7 @@ impl WebGL2RenderingContext {
             },
         };
 
-        if let Some(fb) = fb_slot.get() {
+        match fb_slot.get() { Some(fb) => {
             if fb.check_status() != constants::FRAMEBUFFER_COMPLETE {
                 return false;
             }
@@ -816,14 +816,14 @@ impl WebGL2RenderingContext {
                     _ => return false,
                 }
             }
-        } else {
+        } _ => {
             for &attachment in attachments {
                 match attachment {
                     constants::COLOR | constants::DEPTH | constants::STENCIL => {},
                     _ => return false,
                 }
             }
-        }
+        }}
 
         true
     }
@@ -1208,7 +1208,7 @@ impl WebGL2RenderingContextMethods<crate::DomTypeHolder> for WebGL2RenderingCont
             },
         };
 
-        if let Some(fb) = fb_slot.get() {
+        match fb_slot.get() { Some(fb) => {
             // A selected framebuffer is bound to the target
             handle_potential_webgl_error!(
                 self.base,
@@ -1220,14 +1220,14 @@ impl WebGL2RenderingContextMethods<crate::DomTypeHolder> for WebGL2RenderingCont
                 self.get_specific_fb_attachment_param(cx, &fb, target, attachment, pname, rval),
                 rval.set(NullValue())
             )
-        } else {
+        } _ => {
             // The default framebuffer is bound to the target
             handle_potential_webgl_error!(
                 self.base,
                 self.get_default_fb_attachment_param(attachment, pname, rval),
                 rval.set(NullValue())
             )
-        }
+        }}
     }
 
     /// <https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.7>
@@ -4629,9 +4629,9 @@ impl WebGL2RenderingContextMethods<crate::DomTypeHolder> for WebGL2RenderingCont
             _ => return self.base.webgl_error(InvalidEnum),
         }
 
-        if let Some(fb) = self.base.get_read_framebuffer_slot().get() {
+        match self.base.get_read_framebuffer_slot().get() { Some(fb) => {
             handle_potential_webgl_error!(self.base, fb.set_read_buffer(src))
-        } else {
+        } _ => {
             match src {
                 constants::NONE | constants::BACK => {},
                 _ => return self.base.webgl_error(InvalidOperation),
@@ -4639,14 +4639,14 @@ impl WebGL2RenderingContextMethods<crate::DomTypeHolder> for WebGL2RenderingCont
 
             self.default_fb_readbuffer.set(src);
             self.base.send_command(WebGLCommand::ReadBuffer(src));
-        }
+        }}
     }
 
     /// <https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.11>
     fn DrawBuffers(&self, buffers: Vec<u32>) {
-        if let Some(fb) = self.base.get_draw_framebuffer_slot().get() {
+        match self.base.get_draw_framebuffer_slot().get() { Some(fb) => {
             handle_potential_webgl_error!(self.base, fb.set_draw_buffers(buffers))
-        } else {
+        } _ => {
             if buffers.len() != 1 {
                 return self.base.webgl_error(InvalidOperation);
             }
@@ -4658,7 +4658,7 @@ impl WebGL2RenderingContextMethods<crate::DomTypeHolder> for WebGL2RenderingCont
 
             self.default_fb_drawbuffer.set(buffers[0]);
             self.base.send_command(WebGLCommand::DrawBuffers(buffers));
-        }
+        }}
     }
 
     /// <https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.6>

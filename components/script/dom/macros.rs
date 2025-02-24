@@ -28,7 +28,7 @@ macro_rules! make_bool_getter(
 
 #[macro_export]
 macro_rules! make_limited_int_setter(
-    ($attr:ident, $htmlname:tt, $default:expr) => (
+    ($attr:ident, $htmlname:tt, $default:expr_2021) => (
         fn $attr(&self, value: i32) -> $crate::dom::bindings::error::ErrorResult {
             use $crate::dom::bindings::inheritance::Castable;
             use $crate::dom::element::Element;
@@ -49,7 +49,7 @@ macro_rules! make_limited_int_setter(
 
 #[macro_export]
 macro_rules! make_int_setter(
-    ($attr:ident, $htmlname:tt, $default:expr) => (
+    ($attr:ident, $htmlname:tt, $default:expr_2021) => (
         fn $attr(&self, value: i32) {
             use $crate::dom::bindings::inheritance::Castable;
             use $crate::dom::element::Element;
@@ -66,7 +66,7 @@ macro_rules! make_int_setter(
 
 #[macro_export]
 macro_rules! make_int_getter(
-    ($attr:ident, $htmlname:tt, $default:expr) => (
+    ($attr:ident, $htmlname:tt, $default:expr_2021) => (
         fn $attr(&self) -> i32 {
             use $crate::dom::bindings::inheritance::Castable;
             use $crate::dom::element::Element;
@@ -82,7 +82,7 @@ macro_rules! make_int_getter(
 
 #[macro_export]
 macro_rules! make_uint_getter(
-    ($attr:ident, $htmlname:tt, $default:expr) => (
+    ($attr:ident, $htmlname:tt, $default:expr_2021) => (
         fn $attr(&self) -> u32 {
             use $crate::dom::bindings::inheritance::Castable;
             use $crate::dom::element::Element;
@@ -271,7 +271,7 @@ macro_rules! make_bool_setter(
 
 #[macro_export]
 macro_rules! make_uint_setter(
-    ($attr:ident, $htmlname:tt, $default:expr) => (
+    ($attr:ident, $htmlname:tt, $default:expr_2021) => (
         fn $attr(&self, value: u32) {
             use $crate::dom::bindings::inheritance::Castable;
             use $crate::dom::element::Element;
@@ -293,7 +293,7 @@ macro_rules! make_uint_setter(
 
 #[macro_export]
 macro_rules! make_limited_uint_setter(
-    ($attr:ident, $htmlname:tt, $default:expr) => (
+    ($attr:ident, $htmlname:tt, $default:expr_2021) => (
         fn $attr(&self, value: u32) -> $crate::dom::bindings::error::ErrorResult {
             use $crate::dom::bindings::inheritance::Castable;
             use $crate::dom::element::Element;
@@ -643,11 +643,11 @@ macro_rules! rooted_vec {
         let mut root = $crate::dom::bindings::trace::RootableVec::new_unrooted();
         let mut $name = $crate::dom::bindings::trace::RootedVec::new(&mut root);
     };
-    (let $name:ident <- $iter:expr) => {
+    (let $name:ident <- $iter:expr_2021) => {
         let mut root = $crate::dom::bindings::trace::RootableVec::new_unrooted();
         let $name = $crate::dom::bindings::trace::RootedVec::from_iter(&mut root, $iter);
     };
-    (let mut $name:ident <- $iter:expr) => {
+    (let mut $name:ident <- $iter:expr_2021) => {
         let mut root = $crate::dom::bindings::trace::RootableVec::new_unrooted();
         let mut $name = $crate::dom::bindings::trace::RootedVec::from_iter(&mut root, $iter);
     };
@@ -655,7 +655,7 @@ macro_rules! rooted_vec {
 
 /// DOM struct implementation for simple interfaces inheriting from PerformanceEntry.
 macro_rules! impl_performance_entry_struct(
-    ($binding:ident, $struct:ident, $type:expr) => (
+    ($binding:ident, $struct:ident, $type:expr_2021) => (
         use base::cross_process_instant::CrossProcessInstant;
         use time::Duration;
 
@@ -696,7 +696,7 @@ macro_rules! impl_performance_entry_struct(
 );
 
 macro_rules! handle_potential_webgl_error {
-    ($context:expr, $call:expr, $return_on_error:expr) => {
+    ($context:expr_2021, $call:expr_2021, $return_on_error:expr_2021) => {
         match $call {
             Ok(ret) => ret,
             Err(error) => {
@@ -705,7 +705,7 @@ macro_rules! handle_potential_webgl_error {
             },
         }
     };
-    ($context:expr, $call:expr) => {
+    ($context:expr_2021, $call:expr_2021) => {
         handle_potential_webgl_error!($context, $call, ())
     };
 }

@@ -110,59 +110,59 @@ impl Selection {
 impl SelectionMethods<crate::DomTypeHolder> for Selection {
     // https://w3c.github.io/selection-api/#dom-selection-anchornode
     fn GetAnchorNode(&self) -> Option<DomRoot<Node>> {
-        if let Some(range) = self.range.get() {
+        match self.range.get() { Some(range) => {
             match self.direction.get() {
                 Direction::Forwards => Some(range.start_container()),
                 _ => Some(range.end_container()),
             }
-        } else {
+        } _ => {
             None
-        }
+        }}
     }
 
     // https://w3c.github.io/selection-api/#dom-selection-anchoroffset
     fn AnchorOffset(&self) -> u32 {
-        if let Some(range) = self.range.get() {
+        match self.range.get() { Some(range) => {
             match self.direction.get() {
                 Direction::Forwards => range.start_offset(),
                 _ => range.end_offset(),
             }
-        } else {
+        } _ => {
             0
-        }
+        }}
     }
 
     // https://w3c.github.io/selection-api/#dom-selection-focusnode
     fn GetFocusNode(&self) -> Option<DomRoot<Node>> {
-        if let Some(range) = self.range.get() {
+        match self.range.get() { Some(range) => {
             match self.direction.get() {
                 Direction::Forwards => Some(range.end_container()),
                 _ => Some(range.start_container()),
             }
-        } else {
+        } _ => {
             None
-        }
+        }}
     }
 
     // https://w3c.github.io/selection-api/#dom-selection-focusoffset
     fn FocusOffset(&self) -> u32 {
-        if let Some(range) = self.range.get() {
+        match self.range.get() { Some(range) => {
             match self.direction.get() {
                 Direction::Forwards => range.end_offset(),
                 _ => range.start_offset(),
             }
-        } else {
+        } _ => {
             0
-        }
+        }}
     }
 
     // https://w3c.github.io/selection-api/#dom-selection-iscollapsed
     fn IsCollapsed(&self) -> bool {
-        if let Some(range) = self.range.get() {
+        match self.range.get() { Some(range) => {
             range.collapsed()
-        } else {
+        } _ => {
             true
-        }
+        }}
     }
 
     // https://w3c.github.io/selection-api/#dom-selection-rangecount
@@ -176,26 +176,26 @@ impl SelectionMethods<crate::DomTypeHolder> for Selection {
 
     // https://w3c.github.io/selection-api/#dom-selection-type
     fn Type(&self) -> DOMString {
-        if let Some(range) = self.range.get() {
+        match self.range.get() { Some(range) => {
             if range.collapsed() {
                 DOMString::from("Caret")
             } else {
                 DOMString::from("Range")
             }
-        } else {
+        } _ => {
             DOMString::from("None")
-        }
+        }}
     }
 
     // https://w3c.github.io/selection-api/#dom-selection-getrangeat
     fn GetRangeAt(&self, index: u32) -> Fallible<DomRoot<Range>> {
         if index != 0 {
             Err(Error::IndexSize)
-        } else if let Some(range) = self.range.get() {
+        } else { match self.range.get() { Some(range) => {
             Ok(DomRoot::from_ref(&range))
-        } else {
+        } _ => {
             Err(Error::IndexSize)
-        }
+        }}}
     }
 
     // https://w3c.github.io/selection-api/#dom-selection-addrange
@@ -281,24 +281,24 @@ impl SelectionMethods<crate::DomTypeHolder> for Selection {
 
     // https://w3c.github.io/selection-api/#dom-selection-collapsetostart
     fn CollapseToStart(&self, can_gc: CanGc) -> ErrorResult {
-        if let Some(range) = self.range.get() {
+        match self.range.get() { Some(range) => {
             self.Collapse(
                 Some(&*range.start_container()),
                 range.start_offset(),
                 can_gc,
             )
-        } else {
+        } _ => {
             Err(Error::InvalidState)
-        }
+        }}
     }
 
     // https://w3c.github.io/selection-api/#dom-selection-collapsetoend
     fn CollapseToEnd(&self, can_gc: CanGc) -> ErrorResult {
-        if let Some(range) = self.range.get() {
+        match self.range.get() { Some(range) => {
             self.Collapse(Some(&*range.end_container()), range.end_offset(), can_gc)
-        } else {
+        } _ => {
             Err(Error::InvalidState)
-        }
+        }}
     }
 
     // https://w3c.github.io/selection-api/#dom-selection-extend
@@ -309,7 +309,7 @@ impl SelectionMethods<crate::DomTypeHolder> for Selection {
             // Step 1
             return Ok(());
         }
-        if let Some(range) = self.range.get() {
+        match self.range.get() { Some(range) => {
             if node.is_doctype() {
                 // w3c/selection-api#118
                 return Err(Error::InvalidNodeType);
@@ -367,10 +367,10 @@ impl SelectionMethods<crate::DomTypeHolder> for Selection {
                     self.direction.set(Direction::Backwards);
                 }
             };
-        } else {
+        } _ => {
             // Step 2
             return Err(Error::InvalidState);
-        }
+        }}
         Ok(())
     }
 
@@ -473,7 +473,7 @@ impl SelectionMethods<crate::DomTypeHolder> for Selection {
         if !self.is_same_root(node) {
             return false;
         }
-        if let Some(range) = self.range.get() {
+        match self.range.get() { Some(range) => {
             let start_node = &*range.start_container();
             if !self.is_same_root(start_node) {
                 // node can't be contained in a range with a different root
@@ -511,10 +511,10 @@ impl SelectionMethods<crate::DomTypeHolder> for Selection {
                 }
                 true
             }
-        } else {
+        } _ => {
             // No range
             false
-        }
+        }}
     }
 
     // https://w3c.github.io/selection-api/#dom-selection-stringifier
@@ -523,10 +523,10 @@ impl SelectionMethods<crate::DomTypeHolder> for Selection {
         // "See W3C bug 10583." for this method.
         // Stringifying the range seems at least approximately right
         // and passes the non-style-dependent case in the WPT tests.
-        if let Some(range) = self.range.get() {
+        match self.range.get() { Some(range) => {
             range.Stringifier()
-        } else {
+        } _ => {
             DOMString::from("")
-        }
+        }}
     }
 }
