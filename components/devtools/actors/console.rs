@@ -19,7 +19,7 @@ use devtools_traits::{
     CachedConsoleMessage, CachedConsoleMessageTypes, ConsoleLog, ConsoleMessage,
     DevtoolScriptControlMsg, PageError,
 };
-use ipc_channel::ipc::{self, IpcSender};
+use ipc_channel::ipc;
 use log::debug;
 use serde::Serialize;
 use serde_json::{self, Map, Number, Value};
@@ -28,7 +28,6 @@ use uuid::Uuid;
 use crate::actor::{Actor, ActorMessageStatus, ActorRegistry};
 use crate::actors::browsing_context::BrowsingContextActor;
 use crate::actors::object::ObjectActor;
-use crate::actors::worker::WorkerActor;
 use crate::protocol::JsonPacketStream;
 use crate::{StreamId, UniqueId};
 
@@ -137,28 +136,6 @@ pub(crate) struct ConsoleActor {
 }
 
 impl ConsoleActor {
-    fn script_chan<'a>(
-        &self,
-        registry: &'a ActorRegistry,
-    ) -> &'a IpcSender<DevtoolScriptControlMsg> {
-        match &self.root {
-            Root::BrowsingContext(bc) => &registry.find::<BrowsingContextActor>(bc).script_chan,
-            Root::DedicatedWorker(worker) => &registry.find::<WorkerActor>(worker).script_chan,
-        }
-    }
-
-    fn current_unique_id(&self, registry: &ActorRegistry) -> UniqueId {
-        match &self.root {
-            Root::BrowsingContext(bc) => UniqueId::Pipeline(
-                registry
-                    .find::<BrowsingContextActor>(bc)
-                    .active_pipeline
-                    .get(),
-            ),
-            Root::DedicatedWorker(w) => UniqueId::Worker(registry.find::<WorkerActor>(w).id),
-        }
-    }
-
     fn evaluate_js(
         &self,
         registry: &ActorRegistry,
@@ -168,11 +145,12 @@ impl ConsoleActor {
         let (chan, port) = ipc::channel().unwrap();
         // FIXME: Redesign messages so we don't have to fake pipeline ids when
         //        communicating with workers.
-        let pipeline = match self.current_unique_id(registry) {
+        let pipeline = match registry.current_unique_id_for(&self.root) {
             UniqueId::Pipeline(p) => p,
             UniqueId::Worker(_) => TEST_PIPELINE_ID,
         };
-        self.script_chan(registry)
+        registry
+            .script_channel_for(&self.root)
             .send(DevtoolScriptControlMsg::EvaluateJS(
                 pipeline,
                 input.clone(),
@@ -257,7 +235,7 @@ impl ConsoleActor {
             .entry(id.clone())
             .or_default()
             .push(CachedConsoleMessage::PageError(page_error.clone()));
-        if id == self.current_unique_id(registry) {
+        if id == registry.current_unique_id_for(&self.root) {
             if let Root::BrowsingContext(bc) = &self.root {
                 registry
                     .find::<BrowsingContextActor>(bc)
@@ -278,7 +256,7 @@ impl ConsoleActor {
             .entry(id.clone())
             .or_default()
             .push(CachedConsoleMessage::ConsoleLog(log_message.clone()));
-        if id == self.current_unique_id(registry) {
+        if id == registry.current_unique_id_for(&self.root) {
             if let Root::BrowsingContext(bc) = &self.root {
                 registry
                     .find::<BrowsingContextActor>(bc)
@@ -305,7 +283,7 @@ impl Actor for ConsoleActor {
             "clearMessagesCache" => {
                 self.cached_events
                     .borrow_mut()
-                    .remove(&self.current_unique_id(registry));
+                    .remove(&registry.current_unique_id_for(&self.root));
                 ActorMessageStatus::Processed
             },
 
@@ -331,7 +309,7 @@ impl Actor for ConsoleActor {
                 for event in self
                     .cached_events
                     .borrow()
-                    .get(&self.current_unique_id(registry))
+                    .get(&registry.current_unique_id_for(&self.root))
                     .unwrap_or(&vec![])
                     .iter()
                 {

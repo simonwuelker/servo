@@ -10,11 +10,13 @@ use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 
 use base::cross_process_instant::CrossProcessInstant;
+use devtools_traits::DevtoolScriptControlMsg;
+use ipc_channel::ipc::IpcSender;
 use log::debug;
 use serde_json::{Map, Value};
 
 /// General actor system infrastructure.
-use crate::StreamId;
+use crate::{BrowsingContextActor, Root, StreamId, UniqueId, WorkerActor};
 
 #[derive(PartialEq)]
 pub enum ActorMessageStatus {
@@ -214,5 +216,24 @@ impl ActorRegistry {
     pub fn drop_actor_later(&self, name: String) {
         let mut actors = self.old_actors.borrow_mut();
         actors.push(name);
+    }
+
+    pub(crate) fn script_channel_for<'a>(
+        &'a self,
+        root: &Root,
+    ) -> &'a IpcSender<DevtoolScriptControlMsg> {
+        match root {
+            Root::BrowsingContext(bc) => &self.find::<BrowsingContextActor>(bc).script_chan,
+            Root::DedicatedWorker(worker) => &self.find::<WorkerActor>(worker).script_chan,
+        }
+    }
+
+    pub(crate) fn current_unique_id_for(&self, root: &Root) -> UniqueId {
+        match root {
+            Root::BrowsingContext(bc) => {
+                UniqueId::Pipeline(self.find::<BrowsingContextActor>(bc).active_pipeline.get())
+            },
+            Root::DedicatedWorker(w) => UniqueId::Worker(self.find::<WorkerActor>(w).id),
+        }
     }
 }
