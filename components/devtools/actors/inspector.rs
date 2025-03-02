@@ -8,11 +8,12 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::net::TcpStream;
 
+use compatibility::CompatibilityActor;
 use devtools_traits::DevtoolScriptControlMsg;
 use devtools_traits::DevtoolScriptControlMsg::GetRootNode;
 use ipc_channel::ipc::{self, IpcSender};
 use serde::Serialize;
-use serde_json::{self, Map, Value};
+use serde_json::{self, json, Map, Value};
 
 use crate::actor::{Actor, ActorMessageStatus, ActorRegistry};
 use crate::actors::browsing_context::BrowsingContextActor;
@@ -31,6 +32,7 @@ pub mod node;
 pub mod page_style;
 pub mod style_rule;
 pub mod walker;
+pub mod compatibility;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,6 +61,10 @@ struct GetHighlighterReply {
 
 pub struct InspectorActor {
     pub name: String,
+
+    /// The name of the [CompatibilityActor], if any
+    pub compatibility: RefCell<Option<String>>,
+
     pub walker: RefCell<Option<String>>,
     pub page_style: RefCell<Option<String>>,
     pub highlighter: RefCell<Option<String>>,
@@ -82,6 +88,25 @@ impl Actor for InspectorActor {
         let browsing_context = registry.find::<BrowsingContextActor>(&self.browsing_context);
         let pipeline = browsing_context.active_pipeline.get();
         Ok(match msg_type {
+            "getCompatibility" => {
+                if self.compatibility.borrow().is_none() {
+                    let compatibility_actor = CompatibilityActor {
+                        name: registry.new_name("compatibility"),
+                    };
+                    let mut compatibility = self.compatibility.borrow_mut();
+                    *compatibility = Some(compatibility_actor.name());
+                    registry.register_later(Box::new(compatibility_actor));
+                }
+
+                let msg = json!({
+                    "from": self.name(),
+                    "compatibility": {
+                        "actor": self.compatibility.borrow().clone().unwrap()
+                    },
+                });
+                let _ = stream.write_json_packet(&msg);
+                ActorMessageStatus::Processed
+            },
             "getWalker" => {
                 let (tx, rx) = ipc::channel().unwrap();
                 self.script_chan.send(GetRootNode(pipeline, tx)).unwrap();
