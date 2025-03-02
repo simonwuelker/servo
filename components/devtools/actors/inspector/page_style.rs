@@ -15,7 +15,7 @@ use devtools_traits::DevtoolScriptControlMsg::{GetLayout, GetSelectors};
 use devtools_traits::{ComputedNodeLayout, DevtoolScriptControlMsg};
 use ipc_channel::ipc::{self, IpcSender};
 use serde::Serialize;
-use serde_json::{self, Map, Value};
+use serde_json::{self, json, Map, Value};
 
 use crate::actor::{Actor, ActorMessageStatus, ActorRegistry};
 use crate::actors::inspector::node::NodeActor;
@@ -111,6 +111,8 @@ impl Actor for PageStyleActor {
     ///
     /// - `getLayout`: Returns the box layout properties for a node.
     ///
+    /// - `getUsedFontFaces`: Get the font faces used in an element
+    ///
     /// - `isPositionEditable`: Informs whether you can change a style property in the inspector.
     fn handle_message(
         &self,
@@ -124,6 +126,14 @@ impl Actor for PageStyleActor {
             "getApplied" => self.get_applied(msg, registry, stream)?,
             "getComputed" => self.get_computed(msg, registry, stream)?,
             "getLayout" => self.get_layout(msg, registry, stream)?,
+            "getUsedFontFaces" => {
+                let msg = json!({
+                    "from": &self.name,
+                    "fontFaces": [],
+                });
+                let _ = stream.write_json_packet(&msg);
+                ActorMessageStatus::Processed
+            }
             "isPositionEditable" => self.is_position_editable(stream),
             _ => ActorMessageStatus::Ignored,
         })
