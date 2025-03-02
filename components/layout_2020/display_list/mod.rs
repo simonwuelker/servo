@@ -12,6 +12,7 @@ use euclid::{Point2D, SideOffsets2D, Size2D, UnknownUnit};
 use fonts::GlyphStore;
 use gradient::WebRenderGradient;
 use net_traits::image_cache::UsePlaceholder;
+use script_layout_interface::TrustedNodeAddress;
 use servo_geometry::MaxRect;
 use style::color::{AbsoluteColor, ColorSpace};
 use style::computed_values::border_image_outset::T as BorderImageOutset;
@@ -175,6 +176,7 @@ impl DisplayList {
         context: &LayoutContext,
         fragment_tree: &FragmentTree,
         root_stacking_context: &StackingContext,
+        highlighted_dom_node: Option<OpaqueNode>,
     ) -> bool {
         #[cfg(feature = "tracing")]
         let _span = tracing::trace_span!("display_list::build", servo_profiling = true).entered();
@@ -188,6 +190,34 @@ impl DisplayList {
             display_list: self,
         };
         fragment_tree.build_display_list(&mut builder, root_stacking_context);
+
+        if let Some(highlighted_dom_node) = highlighted_dom_node {
+            // Draw highlights around the node that is currently hovered in the devtools
+            let mut content_boxes = vec![];
+            let tag_to_find = Tag::new(highlighted_dom_node);
+            fragment_tree.find(|fragment, _, containing_block| {
+                if fragment.tag() != Some(tag_to_find) {
+                    return None::<()>;
+                }
+
+                let fragment_relative_rect = match fragment {
+                    Fragment::Box(fragment) | Fragment::Float(fragment) => {
+                        fragment.borrow().border_rect()
+                    },
+                    Fragment::Positioning(fragment) => fragment.borrow().rect,
+                    Fragment::Text(fragment) => fragment.borrow().rect,
+                    Fragment::AbsoluteOrFixedPositioned(_) |
+                    Fragment::Image(_) |
+                    Fragment::IFrame(_) => return None,
+                };
+
+                let rect = fragment_relative_rect.translate(containing_block.origin.to_vector());
+
+                content_boxes.push(rect.to_untyped());
+                None::<()>
+            });
+        }
+
         builder.is_contentful
     }
 }

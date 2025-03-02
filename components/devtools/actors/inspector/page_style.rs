@@ -133,7 +133,7 @@ impl Actor for PageStyleActor {
                 });
                 let _ = stream.write_json_packet(&msg);
                 ActorMessageStatus::Processed
-            }
+            },
             "isPositionEditable" => self.is_position_editable(stream),
             _ => ActorMessageStatus::Ignored,
         })

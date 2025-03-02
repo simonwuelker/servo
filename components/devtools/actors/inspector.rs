@@ -25,6 +25,7 @@ use crate::protocol::JsonPacketStream;
 use crate::StreamId;
 
 pub mod accessibility;
+pub mod compatibility;
 pub mod css_properties;
 pub mod highlighter;
 pub mod layout;
@@ -32,7 +33,6 @@ pub mod node;
 pub mod page_style;
 pub mod style_rule;
 pub mod walker;
-pub mod compatibility;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -191,6 +191,8 @@ impl Actor for InspectorActor {
                 if self.highlighter.borrow().is_none() {
                     let highlighter_actor = HighlighterActor {
                         name: registry.new_name("highlighter"),
+                        pipeline,
+                        script_channel: self.script_chan.clone(),
                     };
                     let mut highlighter = self.highlighter.borrow_mut();
                     *highlighter = Some(highlighter_actor.name());

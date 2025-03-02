@@ -518,6 +518,9 @@ pub(crate) struct Document {
     inherited_insecure_requests_policy: Cell<Option<InsecureRequestsPolicy>>,
     /// <https://w3c.github.io/IntersectionObserver/#document-intersectionobservertaskqueued>
     intersection_observer_task_queued: Cell<bool>,
+
+    /// The node that is currently highlighted by the devtools
+    highlighted_dom_node: MutNullableDom<Node>,
 }
 
 #[allow(non_snake_case)]
@@ -3756,6 +3759,7 @@ impl Document {
             is_initial_about_blank: Cell::new(is_initial_about_blank),
             inherited_insecure_requests_policy: Cell::new(inherited_insecure_requests_policy),
             intersection_observer_task_queued: Cell::new(false),
+            highlighted_dom_node: Default::default(),
         }
     }
 
@@ -4611,6 +4615,19 @@ impl Document {
     /// <https://html.spec.whatwg.org/multipage/#is-initial-about:blank>
     pub(crate) fn is_initial_about_blank(&self) -> bool {
         self.is_initial_about_blank.get()
+    }
+
+    pub(crate) fn highlight_dom_node(&self, node: Option<&Node>) {
+        println!("Set highlighted node to {:?}", node.map(|n| n.type_id()));
+        self.highlighted_dom_node.set(node);
+
+        // TODO: Node highlights don't affect layout. Is there a less destructive
+        // way to repaint?
+        self.upcast::<Node>().dirty(NodeDamage::OtherNodeDamage);
+    }
+
+    pub(crate) fn highlighted_dom_node(&self) -> Option<DomRoot<Node>> {
+        self.highlighted_dom_node.get()
     }
 }
 

@@ -607,10 +607,6 @@ impl LayoutThread {
     }
 
     /// The high-level routine that performs layout.
-    #[cfg_attr(
-        feature = "tracing",
-        tracing::instrument(skip_all, fields(servo_profiling = true), level = "trace")
-    )]
     fn handle_reflow(&mut self, mut reflow_request: ReflowRequest) -> Option<ReflowResult> {
         let document = unsafe { ServoLayoutNode::new(&reflow_request.document) };
         let document = document.as_document().unwrap();
@@ -797,6 +793,7 @@ impl LayoutThread {
                 root.clone(),
                 &reflow_request.reflow_goal,
                 &mut layout_context,
+                reflow_request.highlighted_dom_node
             );
         }
 
@@ -831,6 +828,7 @@ impl LayoutThread {
         fragment_tree: Arc<FragmentTree>,
         reflow_goal: &ReflowGoal,
         context: &mut LayoutContext,
+        highlighted_dom_node: Option<OpaqueNode>,
     ) {
         Self::cancel_animations_for_nodes_not_in_fragment_tree(
             &context.style_context.animations,

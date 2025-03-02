@@ -2,7 +2,9 @@ use std::net::TcpStream;
 
 use serde_json::{json, Map, Value};
 
-use crate::{actor::{ActorMessageStatus, ActorRegistry}, protocol::JsonPacketStream, Actor, StreamId};
+use crate::actor::{ActorMessageStatus, ActorRegistry};
+use crate::protocol::JsonPacketStream;
+use crate::{Actor, StreamId};
 
 /// Computes issues with CSS declarations
 ///
@@ -40,7 +42,8 @@ impl Actor for CompatibilityActor {
                 };
 
                 // TODO: Actually compute issues
-                let compatibility_issues = vec![Vec::<()>::default(); dom_rules_declarations_list.len()];
+                let compatibility_issues =
+                    vec![Vec::<()>::default(); dom_rules_declarations_list.len()];
 
                 let msg = json!({
                     "from": &self.name,
