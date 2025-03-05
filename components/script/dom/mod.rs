@@ -422,6 +422,7 @@ pub(crate) mod intersectionobserverentry;
 pub(crate) mod intersectionobserverrootmargin;
 pub(crate) mod keyboardevent;
 pub(crate) mod location;
+pub(crate) mod mathmlelement;
 pub(crate) mod mediadeviceinfo;
 pub(crate) mod mediadevices;
 pub(crate) mod mediaelementaudiosourcenode;
