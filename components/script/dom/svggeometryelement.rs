@@ -4,10 +4,13 @@
 
 use dom_struct::dom_struct;
 use html5ever::{LocalName, Prefix};
+use script_bindings::inheritance::Castable;
 
 use crate::dom::document::Document;
 use crate::dom::svggraphicselement::SVGGraphicsElement;
+use crate::dom::virtualmethods::VirtualMethods;
 
+/// <https://svgwg.org/svg2-draft/types.html#InterfaceSVGGeometryElement>
 #[dom_struct]
 pub(crate) struct SVGGeometryElement {
     svggraphicselement: SVGGraphicsElement,
@@ -22,5 +25,11 @@ impl SVGGeometryElement {
         SVGGeometryElement {
             svggraphicselement: SVGGraphicsElement::new_inherited(tag_name, prefix, document),
         }
+    }
+}
+
+impl VirtualMethods for SVGGeometryElement {
+    fn super_type(&self) -> Option<&dyn VirtualMethods> {
+        Some(self.upcast::<SVGGraphicsElement>() as &dyn VirtualMethods)
     }
 }
