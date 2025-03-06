@@ -21,12 +21,12 @@ use crate::positioned::PositioningContext;
 use crate::replaced::ReplacedContents;
 use crate::sizing::{self, ComputeInlineContentSizes, InlineContentSizesResult};
 use crate::style_ext::{AspectRatio, DisplayInside, LayoutStyle};
+use crate::svg::SVGFormattingContext;
 use crate::table::Table;
 use crate::taffy::TaffyContainer;
 use crate::{
     ConstraintSpace, ContainingBlock, IndefiniteContainingBlock, LogicalVec2, PropagatedBoxTreeData,
 };
-
 /// <https://drafts.csswg.org/css-display/#independent-formatting-context>
 #[derive(Debug)]
 pub(crate) struct IndependentFormattingContext {
@@ -48,6 +48,7 @@ pub(crate) enum IndependentNonReplacedContents {
     Flex(FlexContainer),
     Grid(TaffyContainer),
     Table(Table),
+    Svg(SVGFormattingContext),
     // Other layout modes go here
 }
 
@@ -279,6 +280,13 @@ impl IndependentNonReplacedContents {
                 containing_block_for_children,
                 containing_block,
             ),
+            IndependentNonReplacedContents::Svg(svg_formatting_context) => svg_formatting_context
+                .layout(
+                    layout_context,
+                    positioning_context,
+                    containing_block_for_children,
+                    containing_block,
+                ),
         }
     }
 
@@ -289,6 +297,7 @@ impl IndependentNonReplacedContents {
             IndependentNonReplacedContents::Flex(fc) => fc.layout_style(),
             IndependentNonReplacedContents::Grid(fc) => fc.layout_style(),
             IndependentNonReplacedContents::Table(fc) => fc.layout_style(None),
+            IndependentNonReplacedContents::Svg(fc) => fc.layout_style(),
         }
     }
 
@@ -321,6 +330,9 @@ impl ComputeInlineContentSizes for IndependentNonReplacedContents {
                 inner.compute_inline_content_sizes(layout_context, constraint_space)
             },
             Self::Table(inner) => {
+                inner.compute_inline_content_sizes(layout_context, constraint_space)
+            },
+            Self::Svg(inner) => {
                 inner.compute_inline_content_sizes(layout_context, constraint_space)
             },
         }
