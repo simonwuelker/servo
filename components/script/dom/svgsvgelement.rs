@@ -22,6 +22,7 @@ use crate::script_runtime::CanGc;
 const DEFAULT_WIDTH: u32 = 300;
 const DEFAULT_HEIGHT: u32 = 150;
 
+/// <https://svgwg.org/svg2-draft/struct.html#InterfaceSVGSVGElement>
 #[dom_struct]
 pub(crate) struct SVGSVGElement {
     svggraphicselement: SVGGraphicsElement,

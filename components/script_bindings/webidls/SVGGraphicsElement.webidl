@@ -3,6 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 // https://svgwg.org/svg2-draft/types.html#InterfaceSVGGraphicsElement
+
 //dictionary SVGBoundingBoxOptions {
 //  boolean fill = true;
 //  boolean stroke = false;

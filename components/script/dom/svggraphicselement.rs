@@ -11,6 +11,7 @@ use crate::dom::document::Document;
 use crate::dom::svgelement::SVGElement;
 use crate::dom::virtualmethods::VirtualMethods;
 
+/// <https://svgwg.org/svg2-draft/types.html#InterfaceSVGGraphicsElement>
 #[dom_struct]
 pub(crate) struct SVGGraphicsElement {
     svgelement: SVGElement,
