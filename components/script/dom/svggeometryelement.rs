@@ -5,8 +5,8 @@
 use dom_struct::dom_struct;
 use html5ever::{LocalName, Prefix};
 
-use crate::dom::svggraphicselement::SVGGraphicsElement;
 use crate::dom::document::Document;
+use crate::dom::svggraphicselement::SVGGraphicsElement;
 
 #[dom_struct]
 pub(crate) struct SVGGeometryElement {
@@ -19,6 +19,8 @@ impl SVGGeometryElement {
         prefix: Option<Prefix>,
         document: &Document,
     ) -> SVGGeometryElement {
-        SVGGeometryElement { svggraphicselement: SVGGraphicsElement::new_inherited(tag_name, prefix, document) }
+        SVGGeometryElement {
+            svggraphicselement: SVGGraphicsElement::new_inherited(tag_name, prefix, document),
+        }
     }
 }
