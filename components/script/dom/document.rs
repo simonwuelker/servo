@@ -196,6 +196,7 @@ use crate::dom::window::Window;
 use crate::dom::windowproxy::WindowProxy;
 use crate::dom::xpathevaluator::XPathEvaluator;
 use crate::drag_data_store::{DragDataStore, Kind, Mode};
+use crate::editing_host_manager::EditingHostManager;
 use crate::fetch::FetchCanceller;
 use crate::iframe_collection::IFrameCollection;
 use crate::messaging::{CommonScriptMsg, MainThreadScriptMsg};
@@ -518,6 +519,11 @@ pub(crate) struct Document {
     inherited_insecure_requests_policy: Cell<Option<InsecureRequestsPolicy>>,
     /// <https://w3c.github.io/IntersectionObserver/#document-intersectionobservertaskqueued>
     intersection_observer_task_queued: Cell<bool>,
+
+    /// Keeps track of the documents `"contenteditable"` elements
+    ///
+    /// This is in an `Option` because the manager is lazily initialized
+    editing_host_manager: RefCell<Option<EditingHostManager>>,
 }
 
 #[allow(non_snake_case)]
@@ -1144,6 +1150,9 @@ impl Document {
             if elem.input_method_type().is_some() {
                 self.send_to_embedder(EmbedderMsg::HideIME(self.webview_id()));
             }
+
+            self.editing_host_manager()
+                .set_focused_contenteditable_element(None);
         }
 
         self.focused.set(possibly_focused.as_deref());
@@ -1192,6 +1201,13 @@ impl Document {
                     multiline,
                     DeviceIntRect::from_untyped(&rect.to_box2d()),
                 ));
+            }
+
+            if let Some(html_element) = elem.downcast::<HTMLElement>() {
+                if html_element.IsContentEditable() {
+                    self.editing_host_manager()
+                        .set_focused_contenteditable_element(Some(html_element));
+                }
             }
         }
     }
@@ -3754,6 +3770,7 @@ impl Document {
             is_initial_about_blank: Cell::new(is_initial_about_blank),
             inherited_insecure_requests_policy: Cell::new(inherited_insecure_requests_policy),
             intersection_observer_task_queued: Cell::new(false),
+            editing_host_manager: Default::default(),
         }
     }
 
@@ -4609,6 +4626,10 @@ impl Document {
     /// <https://html.spec.whatwg.org/multipage/#is-initial-about:blank>
     pub(crate) fn is_initial_about_blank(&self) -> bool {
         self.is_initial_about_blank.get()
+    }
+
+    pub(crate) fn editing_host_manager(&self) -> RefMut<EditingHostManager> {
+        RefMut::map(self.editing_host_manager.borrow_mut(), |manager| manager.get_or_insert(EditingHostManager::new(self)))
     }
 }
 
