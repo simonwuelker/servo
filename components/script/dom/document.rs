@@ -5289,9 +5289,42 @@ impl DocumentMethods<crate::DomTypeHolder> for Document {
         ))
     }
 
-    // https://w3c.github.io/editing/ActiveDocuments/execCommand.html#querycommandsupported()
-    fn QueryCommandSupported(&self, _command: DOMString) -> bool {
-        false
+    /// <https://w3c.github.io/editing/docs/execCommand/#execcommand()>
+    fn ExecCommand(&self, commandId: DOMString, showUI: bool, value: DOMString) -> bool {
+        _ = commandId;
+        _ = showUI;
+        _ = value;
+        todo!()
+    }
+
+    /// <https://w3c.github.io/editing/docs/execCommand/#querycommandenabled()>
+    fn QueryCommandEnabled(&self, commandId: DOMString) -> bool {
+        _ = commandId;
+        todo!()
+    }
+
+    /// <https://w3c.github.io/editing/docs/execCommand/#querycommandindeterm()>
+    fn QueryCommandIndeterm(&self, commandId: DOMString) -> bool {
+        _ = commandId;
+        todo!()
+    }
+
+    /// <https://w3c.github.io/editing/docs/execCommand/#querycommandstate()>
+    fn QueryCommandState(&self, commandId: DOMString) -> bool {
+        _ = commandId;
+        todo!()
+    }
+
+    /// <https://w3c.github.io/editing/docs/execCommand/#querycommandsupported()>
+    fn QueryCommandSupported(&self, commandId: DOMString) -> bool {
+        _ = commandId;
+        todo!()
+    }
+
+    /// <https://w3c.github.io/editing/docs/execCommand/#querycommandvalue()>
+    fn QueryCommandValue(&self, commandId: DOMString) -> DOMString {
+        _ = commandId;
+        todo!()
     }
 
     // https://drafts.csswg.org/cssom/#dom-document-stylesheets
