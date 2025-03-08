@@ -75,6 +75,7 @@ mod window_named_properties;
 mod unminify;
 
 mod drag_data_store;
+mod editing_host_manager;
 mod links;
 mod xpath;
 

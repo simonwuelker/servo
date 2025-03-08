@@ -198,6 +198,7 @@ use crate::dom::window::Window;
 use crate::dom::windowproxy::WindowProxy;
 use crate::dom::xpathevaluator::XPathEvaluator;
 use crate::drag_data_store::{DragDataStore, Kind, Mode};
+use crate::editing_host_manager::EditingHostManager;
 use crate::fetch::FetchCanceller;
 use crate::iframe_collection::IFrameCollection;
 use crate::image_animation::ImageAnimationManager;
@@ -567,6 +568,10 @@ pub(crate) struct Document {
     active_keyboard_modifiers: Cell<Modifiers>,
     /// The node that is currently highlighted by the devtools
     highlighted_dom_node: MutNullableDom<Node>,
+    /// Keeps track of the documents `"contenteditable"` elements
+    ///
+    /// This is in an `Option` because the manager is lazily initialized
+    editing_host_manager: RefCell<Option<EditingHostManager>>,
 }
 
 #[allow(non_snake_case)]
@@ -1279,6 +1284,9 @@ impl Document {
                     focus chain"
                 );
             }
+
+            self.editing_host_manager()
+                .set_focused_contenteditable_element(None);
         }
 
         let old_focused = self.focused.get();
@@ -1427,6 +1435,40 @@ impl Document {
                         .unwrap_or(&"(none)"),
                 );
 
+                let (text, multiline) = if let Some(input) = elem.downcast::<HTMLInputElement>() {
+                    (
+                        Some((
+                            input.Value().to_string(),
+                            input.GetSelectionEnd().unwrap_or(0) as i32,
+                        )),
+                        false,
+                    )
+                } else if let Some(textarea) = elem.downcast::<HTMLTextAreaElement>() {
+                    (
+                        Some((
+                            textarea.Value().to_string(),
+                            textarea.GetSelectionEnd().unwrap_or(0) as i32,
+                        )),
+                        true,
+                    )
+                } else {
+                    (None, false)
+                };
+                self.send_to_embedder(EmbedderMsg::ShowIME(
+                    self.webview_id(),
+                    kind,
+                    text,
+                    multiline,
+                    DeviceIntRect::from_untyped(&rect.to_box2d()),
+                ));
+
+                if let Some(html_element) = elem.downcast::<HTMLElement>() {
+                    if html_element.IsContentEditable() {
+                        self.editing_host_manager()
+                            .set_focused_contenteditable_element(Some(html_element));
+                    }
+                }
+
                 self.window()
                     .send_to_constellation(ScriptToConstellationMessage::Focus(
                         child_browsing_context_id,
@@ -1442,7 +1484,7 @@ impl Document {
                     "Can't lose the document's focus without specifying \
                     another one to focus"
                 );
-            },
+            }
         }
     }
 
@@ -4228,6 +4270,7 @@ impl Document {
             intersection_observers: Default::default(),
             active_keyboard_modifiers: Cell::new(Modifiers::empty()),
             highlighted_dom_node: Default::default(),
+            editing_host_manager: Default::default(),
         }
     }
 
@@ -5228,6 +5271,14 @@ impl Document {
     pub(crate) fn is_initial_about_blank(&self) -> bool {
         self.is_initial_about_blank.get()
     }
+<<<<<<< HEAD
+=======
+
+    pub(crate) fn editing_host_manager(&self) -> RefMut<EditingHostManager> {
+        RefMut::map(self.editing_host_manager.borrow_mut(), |manager| manager.get_or_insert(EditingHostManager::new(self)))
+    }
+}
+>>>>>>> 22ebab778af (Stub out an editing host manager)
 
     /// <https://dom.spec.whatwg.org/#document-allow-declarative-shadow-roots>
     pub fn allow_declarative_shadow_roots(&self) -> bool {
