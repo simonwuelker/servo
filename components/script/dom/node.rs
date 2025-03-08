@@ -46,7 +46,6 @@ use uuid::Uuid;
 use webrender_traits::UntrustedNodeAddress as CompositorUntrustedNodeAddress;
 use xml5ever::serialize as xml_serialize;
 
-use super::globalscope::GlobalScope;
 use crate::conversions::Convert;
 use crate::document_loader::DocumentLoader;
 use crate::dom::attr::Attr;
@@ -66,6 +65,7 @@ use crate::dom::bindings::codegen::Bindings::ShadowRootBinding::{
     ShadowRootMode, SlotAssignmentMode,
 };
 use crate::dom::bindings::codegen::Bindings::WindowBinding::WindowMethods;
+use crate::dom::bindings::codegen::GenericBindings::HTMLElementBinding::HTMLElement_Binding::HTMLElementMethods;
 use crate::dom::bindings::codegen::InheritTypes::DocumentFragmentTypeId;
 use crate::dom::bindings::codegen::UnionTypes::NodeOrString;
 use crate::dom::bindings::conversions::{self, DerivedFrom};
@@ -88,6 +88,7 @@ use crate::dom::documenttype::DocumentType;
 use crate::dom::element::{CustomElementCreationMode, Element, ElementCreator, SelectorWrapper};
 use crate::dom::event::{Event, EventBubbles, EventCancelable};
 use crate::dom::eventtarget::EventTarget;
+use crate::dom::globalscope::GlobalScope;
 use crate::dom::htmlbodyelement::HTMLBodyElement;
 use crate::dom::htmlcanvaselement::{HTMLCanvasElement, LayoutHTMLCanvasElementHelpers};
 use crate::dom::htmlcollection::HTMLCollection;
@@ -1430,6 +1431,38 @@ impl Node {
         SimpleNodeIterator {
             current: Some(DomRoot::from_ref(self)),
             next_node: move |n| n.parent_in_flat_tree(),
+        }
+    }
+
+    /// <https://w3c.github.io/editing/docs/execCommand/#editable>
+    pub(crate) fn is_editable(&self) -> bool {
+        // Something is editable if it is a node; it is not an editing host; it does not have a contenteditable
+        // attribute set to the false state; its parent is an editing host or editable; and either it is an
+        // HTML element, or it is an svg or math element, or it is not an Element and its parent is an HTML element.
+        if let Some(html_element) = self.downcast::<HTMLElement>() {
+            if html_element.ContentEditable() != "inherit" {
+                return false;
+            }
+        }
+
+        let Some(parent_node) = self.GetParentNode() else {
+            return false;
+        };
+
+        // TODO: Consider math elements here once they are implemented
+        let is_html_or_svg_or_math_element = matches!(
+            self.type_id(),
+            NodeTypeId::Element(ElementTypeId::HTMLElement(_) | ElementTypeId::SVGElement(_))
+        );
+        if is_html_or_svg_or_math_element ||
+            (!self.is::<Element>() && parent_node.is::<HTMLElement>())
+        {
+            parent_node
+                .downcast::<HTMLElement>()
+                .is_some_and(HTMLElement::is_editing_host) ||
+                parent_node.is_editable()
+        } else {
+            return false;
         }
     }
 }

@@ -135,6 +135,15 @@ impl HTMLElement {
 
         DOMString::from(text)
     }
+
+    /// <https://html.spec.whatwg.org/multipage/interaction.html#editing-host>
+    pub(crate) fn is_editing_host(&self) -> bool {
+        // > An editing host is either an HTML element with its contenteditable attribute in the true state
+        // > or plaintext-only state, or a child HTML element of a Document whose design mode enabled is true.
+        // TODO: consider document design mode
+
+        matches!(self.ContentEditable().str(), "true" | "plaintext-only")
+    }
 }
 
 impl HTMLElementMethods<crate::DomTypeHolder> for HTMLElement {
@@ -619,8 +628,9 @@ impl HTMLElementMethods<crate::DomTypeHolder> for HTMLElement {
 
     /// <https://html.spec.whatwg.org/multipage/#dom-contenteditable>
     fn IsContentEditable(&self) -> bool {
-        // TODO: https://github.com/servo/servo/issues/12776
-        false
+        // > The isContentEditable IDL attribute, on getting, must return true if the element is
+        // > either an editing host or editable, and false otherwise.
+        self.is_editing_host() || self.upcast::<Node>().is_editable()
     }
 
     // https://html.spec.whatwg.org/multipage/#input-modalities:-the-inputmode-attribute

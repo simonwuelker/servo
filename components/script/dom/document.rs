@@ -76,8 +76,6 @@ use webgpu::swapchain::WebGPUContextId;
 use webrender_api::units::DeviceIntRect;
 use webrender_traits::CompositorHitTestResult;
 
-use super::bindings::codegen::Bindings::XPathEvaluatorBinding::XPathEvaluatorMethods;
-use super::clipboardevent::ClipboardEventType;
 use crate::DomTypes;
 use crate::animation_timeline::AnimationTimeline;
 use crate::animations::Animations;
@@ -105,7 +103,9 @@ use crate::dom::bindings::codegen::Bindings::TouchBinding::TouchMethods;
 use crate::dom::bindings::codegen::Bindings::WindowBinding::{
     FrameRequestCallback, ScrollBehavior, WindowMethods,
 };
+use crate::dom::bindings::codegen::Bindings::XPathEvaluatorBinding::XPathEvaluatorMethods;
 use crate::dom::bindings::codegen::Bindings::XPathNSResolverBinding::XPathNSResolver;
+use crate::dom::bindings::codegen::GenericBindings::HTMLElementBinding::HTMLElement_Binding::HTMLElementMethods;
 use crate::dom::bindings::codegen::UnionTypes::{NodeOrString, StringOrElementCreationOptions};
 use crate::dom::bindings::error::{Error, ErrorInfo, ErrorResult, Fallible};
 use crate::dom::bindings::inheritance::{Castable, ElementTypeId, HTMLElementTypeId, NodeTypeId};
@@ -121,7 +121,7 @@ use crate::dom::bindings::xmlname::{
     matches_name_production, namespace_from_domstring, validate_and_extract,
 };
 use crate::dom::cdatasection::CDATASection;
-use crate::dom::clipboardevent::ClipboardEvent;
+use crate::dom::clipboardevent::{ClipboardEvent, ClipboardEventType};
 use crate::dom::comment::Comment;
 use crate::dom::compositionevent::CompositionEvent;
 use crate::dom::cssstylesheet::CSSStyleSheet;
