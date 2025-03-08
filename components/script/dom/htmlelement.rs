@@ -25,6 +25,7 @@ use crate::dom::bindings::codegen::Bindings::HTMLLabelElementBinding::HTMLLabelE
 use crate::dom::bindings::codegen::Bindings::NodeBinding::Node_Binding::NodeMethods;
 use crate::dom::bindings::codegen::Bindings::ShadowRootBinding::ShadowRoot_Binding::ShadowRootMethods;
 use crate::dom::bindings::codegen::Bindings::WindowBinding::WindowMethods;
+use crate::dom::bindings::codegen::GenericBindings::AttrBinding::Attr_Binding::AttrMethods;
 use crate::dom::bindings::error::{Error, ErrorResult, Fallible};
 use crate::dom::bindings::inheritance::{Castable, ElementTypeId, HTMLElementTypeId, NodeTypeId};
 use crate::dom::bindings::root::{Dom, DomRoot, MutNullableDom};
@@ -577,17 +578,35 @@ impl HTMLElementMethods<crate::DomTypeHolder> for HTMLElement {
 
     // https://html.spec.whatwg.org/multipage/#dom-contenteditable
     fn ContentEditable(&self) -> DOMString {
-        // TODO: https://github.com/servo/servo/issues/12776
-        self.as_element()
+        // We can't use the make_enumerated_getter attribute here because the empty string also represents
+        // the "true" state, and the macro can't represent that
+        let Some(attr) = self
+            .upcast::<Element>()
             .get_attribute(&ns!(), &local_name!("contenteditable"))
-            .map(|attr| DOMString::from(&**attr.value()))
-            .unwrap_or_else(|| DOMString::from("inherit"))
+        else {
+            return "inherit".into();
+        };
+
+        match attr.Value().to_ascii_lowercase().as_str() {
+            "true" | "" => "true".into(),
+            "plaintext-only" => "plaintext-only".into(),
+            "false" => "false".into(),
+            _ => "inherit".into(),
+        }
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-contenteditable
-    fn SetContentEditable(&self, _: DOMString) {
-        // TODO: https://github.com/servo/servo/issues/12776
-        warn!("The contentEditable attribute is not implemented yet");
+    fn SetContentEditable(&self, value: DOMString) -> Result<(), Error> {
+        if !matches!(value.str(), "true" | "plaintext-only" | "false" | "inherit") {
+            return Err(Error::Syntax);
+        }
+
+        self.as_element().set_string_attribute(
+            &local_name!("contenteditable"),
+            value,
+            CanGc::note(),
+        );
+        Ok(())
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-contenteditable
