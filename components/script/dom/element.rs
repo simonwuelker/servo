@@ -77,6 +77,7 @@ use crate::dom::bindings::codegen::Bindings::ShadowRootBinding::{
 use crate::dom::bindings::codegen::Bindings::WindowBinding::{
     ScrollBehavior, ScrollToOptions, WindowMethods,
 };
+use crate::dom::bindings::codegen::GenericBindings::HTMLElementBinding::HTMLElement_Binding::HTMLElementMethods;
 use crate::dom::bindings::codegen::UnionTypes::NodeOrString;
 use crate::dom::bindings::conversions::DerivedFrom;
 use crate::dom::bindings::error::{Error, ErrorResult, Fallible};
@@ -1474,6 +1475,7 @@ impl Element {
             Some(InputMethodType::Text)
         } else {
             // Other focusable elements that are not input fields.
+            // FIXME: Handle elements with contenteditable here
             None
         }
     }
@@ -1488,7 +1490,7 @@ impl Element {
         }
 
         // <a>, <input>, <select>, and <textrea> are inherently focusable.
-        matches!(
+        let inherently_focusable = matches!(
             node.type_id(),
             NodeTypeId::Element(ElementTypeId::HTMLElement(
                 HTMLElementTypeId::HTMLAnchorElement,
@@ -1499,7 +1501,14 @@ impl Element {
             )) | NodeTypeId::Element(ElementTypeId::HTMLElement(
                 HTMLElementTypeId::HTMLTextAreaElement,
             ))
-        )
+        );
+        if inherently_focusable {
+            return true;
+        }
+
+        // HTML elements are focusable if they are editable
+        self.downcast::<HTMLElement>()
+            .is_some_and(HTMLElement::IsContentEditable)
     }
 
     pub(crate) fn is_actually_disabled(&self) -> bool {
