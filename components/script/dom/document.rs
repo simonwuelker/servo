@@ -75,6 +75,7 @@ use uuid::Uuid;
 use webgpu_traits::WebGPUContextId;
 use webrender_api::units::DeviceIntRect;
 
+use crate::DomTypes;
 use crate::animation_timeline::AnimationTimeline;
 use crate::animations::Animations;
 use crate::canvas_context::CanvasContext as _;
@@ -106,6 +107,8 @@ use crate::dom::bindings::codegen::Bindings::XPathNSResolverBinding::XPathNSReso
 use crate::dom::bindings::codegen::UnionTypes::{
     NodeOrString, StringOrElementCreationOptions, TrustedHTMLOrString,
 };
+use crate::dom::bindings::codegen::GenericBindings::HTMLElementBinding::HTMLElement_Binding::HTMLElementMethods;
+use crate::dom::bindings::codegen::UnionTypes::{NodeOrString, StringOrElementCreationOptions};
 use crate::dom::bindings::error::{Error, ErrorInfo, ErrorResult, Fallible};
 use crate::dom::bindings::inheritance::{Castable, ElementTypeId, HTMLElementTypeId, NodeTypeId};
 use crate::dom::bindings::num::Finite;
@@ -5271,14 +5274,11 @@ impl Document {
     pub(crate) fn is_initial_about_blank(&self) -> bool {
         self.is_initial_about_blank.get()
     }
-<<<<<<< HEAD
-=======
 
     pub(crate) fn editing_host_manager(&self) -> RefMut<EditingHostManager> {
         RefMut::map(self.editing_host_manager.borrow_mut(), |manager| manager.get_or_insert(EditingHostManager::new(self)))
     }
 }
->>>>>>> 22ebab778af (Stub out an editing host manager)
 
     /// <https://dom.spec.whatwg.org/#document-allow-declarative-shadow-roots>
     pub fn allow_declarative_shadow_roots(&self) -> bool {
