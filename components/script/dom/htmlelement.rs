@@ -571,7 +571,7 @@ impl HTMLElementMethods<crate::DomTypeHolder> for HTMLElement {
         );
     }
 
-    // https://html.spec.whatwg.org/multipage/#dom-contenteditable
+    /// <https://html.spec.whatwg.org/multipage/#dom-contenteditable>
     fn ContentEditable(&self) -> DOMString {
         // TODO: https://github.com/servo/servo/issues/12776
         self.as_element()
@@ -580,17 +580,42 @@ impl HTMLElementMethods<crate::DomTypeHolder> for HTMLElement {
             .unwrap_or_else(|| DOMString::from("inherit"))
     }
 
-    // https://html.spec.whatwg.org/multipage/#dom-contenteditable
+    /// <https://html.spec.whatwg.org/multipage/#dom-contenteditable>
     fn SetContentEditable(&self, _: DOMString) {
         // TODO: https://github.com/servo/servo/issues/12776
         warn!("The contentEditable attribute is not implemented yet");
     }
 
-    // https://html.spec.whatwg.org/multipage/#dom-contenteditable
+    // https://html.spec.whatwg.org/multipage/#input-modalities:-the-enterkeyhint-attribute
+    make_enumerated_getter!(
+        EnterKeyHint,
+        "enterkeyhint",
+        "enter" | "done" | "go" | "next" | "previous" | "search" | "find",
+        missing => "enter",
+        invalid => "enter"
+    );
+
+    // https://html.spec.whatwg.org/multipage/#input-modalities:-the-enterkeyhint-attribute
+    make_setter!(SetEnterKeyHint, "enterkeyhint");
+
+    /// <https://html.spec.whatwg.org/multipage/#dom-contenteditable>
     fn IsContentEditable(&self) -> bool {
         // TODO: https://github.com/servo/servo/issues/12776
         false
     }
+
+    // https://html.spec.whatwg.org/multipage/#input-modalities:-the-inputmode-attribute
+    make_enumerated_getter!(
+        InputMode,
+        "inputmode",
+        "none" | "text" | "tel" | "url" | "email" | "numeric" | "decimal" | "search",
+        missing => "text",
+        invalid => "text"
+    );
+
+    // https://html.spec.whatwg.org/multipage/#input-modalities:-the-inputmode-attribute
+    make_setter!(SetInputMode, "inputmode");
+
     /// <https://html.spec.whatwg.org/multipage#dom-attachinternals>
     fn AttachInternals(&self) -> Fallible<DomRoot<ElementInternals>> {
         let element = self.as_element();
