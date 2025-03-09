@@ -2617,11 +2617,9 @@ impl VirtualMethods for HTMLInputElement {
                         self.value_dirty.set(true);
                         self.update_placeholder_shown_state();
                         self.upcast::<Node>().dirty(NodeDamage::OtherNodeDamage);
-                        event.mark_as_handled();
                     },
                     RedrawSelection => {
                         self.upcast::<Node>().dirty(NodeDamage::OtherNodeDamage);
-                        event.mark_as_handled();
                     },
                     Nothing => (),
                 }
