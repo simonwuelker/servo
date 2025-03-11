@@ -11,6 +11,7 @@ use base::id::{BrowsingContextId, PipelineId};
 use canvas_traits::canvas::{CanvasId, CanvasMsg, FromLayoutMsg};
 use data_url::DataUrl;
 use euclid::Size2D;
+use html5ever::local_name;
 use ipc_channel::ipc::{self, IpcSender};
 use net_traits::image_cache::{ImageOrMetadataAvailable, UsePlaceholder};
 use pixels::Image;
@@ -18,6 +19,7 @@ use script_layout_interface::IFrameSize;
 use servo_arc::Arc as ServoArc;
 use style::Zero;
 use style::computed_values::object_fit::T as ObjectFit;
+use style::dom::TElement;
 use style::logical_geometry::{Direction, WritingMode};
 use style::properties::ComputedValues;
 use style::servo::url::ComputedUrl;
@@ -34,6 +36,7 @@ use crate::geom::{LogicalVec2, PhysicalPoint, PhysicalRect, PhysicalSize, Size, 
 use crate::layout_box_base::LayoutBoxBase;
 use crate::sizing::{ComputeInlineContentSizes, ContentSizes, InlineContentSizesResult};
 use crate::style_ext::{AspectRatio, Clamp, ComputedValuesExt, ContentBoxSizesAndPBM, LayoutStyle};
+use crate::svg::SVGFormattingContext;
 use crate::{ConstraintSpace, ContainingBlock, SizeConstraint};
 
 #[derive(Debug)]
@@ -140,6 +143,7 @@ pub(crate) enum ReplacedContentKind {
     IFrame(IFrameInfo),
     Canvas(CanvasInfo),
     Video(Option<VideoInfo>),
+    Svg(SVGFormattingContext),
 }
 
 impl ReplacedContents {
@@ -179,6 +183,13 @@ impl ReplacedContents {
                     natural_size_in_dots,
                 )
             } else {
+                if let Some(element) = element.as_element() {
+                    if element.is_svg_element() && element.local_name() == &local_name!("svg") {
+                        let formatting_context = SVGFormattingContext::build(element);
+                        let natural_size = formatting_context.natural_size();
+                        (ReplacedContentKind::Svg(formatting_context), natural_size)
+                    }
+                }
                 return None;
             }
         };
@@ -400,6 +411,15 @@ impl ReplacedContents {
                     clip,
                     image_key: Some(image_key),
                 }))]
+            },
+            ReplacedContentKind::Svg(svg_formatting_context) => {
+                if self.natural_size.width == Some(Au::zero()) ||
+                    self.natural_size.height == Some(Au::zero())
+                {
+                    return vec![];
+                }
+
+                svg_formatting_context.make_fragments()
             },
         }
     }
