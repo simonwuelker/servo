@@ -56,7 +56,7 @@ use net_traits::{
     RedirectStartValue, ReferrerPolicy, ResourceAttribute, ResourceFetchTiming, ResourceTimeValue,
 };
 use servo_arc::Arc;
-use servo_url::{ImmutableOrigin, ServoUrl};
+use servo_url::{ImmutableOrigin, ServoUrl, ServoUrlWithPotentialUnresolvedBlobReference};
 use tokio::sync::mpsc::{
     Receiver as TokioReceiver, Sender as TokioSender, UnboundedReceiver, UnboundedSender, channel,
     unbounded_channel,
@@ -857,12 +857,13 @@ pub async fn http_fetch(
             .headers
             .get(header::LOCATION)
             .and_then(|v| {
-                HeaderValue::to_str(v)
-                    .map(|l| {
-                        ServoUrl::parse_with_base(response.actual_response().url(), l)
-                            .map_err(|err| err.to_string())
-                    })
-                    .ok()
+                HeaderValue::to_str(v).ok()
+            })
+            .and_then(|v| {
+                ServoUrlWithPotentialUnresolvedBlobReference::parse_with_base(response.actual_response().url(), v)
+                .map(ServoUrlWithPotentialUnresolvedBlobReference::as_non_blob_url)
+                .map_err(|e| e.to_string())
+                .transpose()
             });
 
         // Substep 4.

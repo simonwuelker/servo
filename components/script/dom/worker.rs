@@ -165,6 +165,7 @@ impl WorkerMethods<crate::DomTypeHolder> for Worker {
         script_url: USVString,
         worker_options: &WorkerOptions,
     ) -> Fallible<DomRoot<Worker>> {
+        println!("constructing worker for url {:?}", script_url.0);
         // Step 2-4.
         let worker_url = match global.api_base_url().join(&script_url) {
             Ok(url) => url,
