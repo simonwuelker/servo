@@ -792,10 +792,14 @@ impl RemoteWebFontDownloader {
             None => return,
         };
 
+        use net_traits::resolve_blob_url;
+        use servo_url::ServoUrlWithPotentialUnresolvedBlobReference;
+        let servo_url = ServoUrlWithPotentialUnresolvedBlobReference::from(url.clone())
+            .resolving_blob_urls_with(|id, origin| resolve_blob_url(id, origin));
+
         // FIXME: This shouldn't use NoReferrer, but the current documents url
-        let request =
-            RequestBuilder::new(state.webview_id, url.clone().into(), Referrer::NoReferrer)
-                .destination(Destination::Font);
+        let request = RequestBuilder::new(state.webview_id, servo_url, Referrer::NoReferrer)
+            .destination(Destination::Font);
 
         let core_resource_thread_clone = state.core_resource_thread.clone();
 
@@ -865,7 +869,7 @@ impl RemoteWebFontDownloader {
             },
         };
 
-        let url: ServoUrl = self.url.clone().into();
+        let url: ServoUrl = todo!(); // self.url.clone().into();
         let identifier = FontIdentifier::Web(url.clone());
         let Ok(handle) = PlatformFont::new_from_data(identifier, &font_data, None) else {
             return false;

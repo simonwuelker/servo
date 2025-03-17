@@ -473,6 +473,15 @@ impl ResourceChannelManager {
                 let _ = sender.send(());
                 return false;
             },
+            CoreResourceMsg::ResolveBlobUrl(id, origin) => {
+                if let Err(err) = self.resource_manager.filemanager.resolve_blob_url(
+                    done_sender,
+                    &id,
+                    &origin,
+                ) {
+                    panic!("{:?}", err));
+                };
+            },
         }
         true
     }

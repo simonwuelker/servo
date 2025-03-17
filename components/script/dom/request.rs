@@ -182,12 +182,14 @@ impl RequestMethods<crate::DomTypeHolder> for Request {
             RequestInfo::USVString(USVString(ref usv_string)) => {
                 // Step 5.1
                 let parsed_url = base_url.join(usv_string);
+
                 // Step 5.2
-                if parsed_url.is_err() {
-                    return Err(Error::Type("Url could not be parsed".to_string()));
-                }
                 // Step 5.3
-                let url = parsed_url.unwrap();
+                let Ok(url) = parsed_url else {
+                    return Err(Error::Type("Url could not be parsed".to_string()));
+                };
+                println!("Constructing request object for URL {:?}", url);
+
                 if includes_credentials(&url) {
                     return Err(Error::Type("Url includes credentials".to_string()));
                 }

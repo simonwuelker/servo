@@ -26,6 +26,7 @@ use net_traits::http_percent_encode;
 use net_traits::response::{Response, ResponseBody};
 use servo_arc::Arc as ServoArc;
 use servo_config::pref;
+use servo_url::BlobUrlEntry;
 use tokio::sync::mpsc::UnboundedSender as TokioSender;
 use url::Url;
 use uuid::Uuid;
@@ -285,6 +286,115 @@ impl FileManager {
             });
     }
 
+    pub(crate) fn resolve_blob_url(&self, id: Uuid, origin: &FileOrigin, bounds: BlobBounds) -> Result<BlobUrlEntry, BlobURLStoreError> {
+        let file_impl = self.store.get_impl(&id, file_token, origin)?;
+
+        let mut is_range_requested = false;
+        match file_impl {
+            FileImpl::Memory(buf) => {
+                let bounds = match bounds {
+                    BlobBounds::Unresolved(range) => {
+                        if range.is_some() {
+                            is_range_requested = true;
+                        }
+                        get_range_request_bounds(range, buf.size)
+                    },
+                    BlobBounds::Resolved(bounds) => bounds,
+                };
+                let range = bounds
+                    .get_final(Some(buf.size))
+                    .map_err(|_| BlobURLStoreError::InvalidRange)?;
+
+                let range = range.to_abs_blob_range(buf.size as usize);
+                let len = range.len() as u64;
+                let content_range = if is_range_requested {
+                    ContentRange::bytes(range.start as u64..range.end as u64, buf.size).ok()
+                } else {
+                    None
+                };
+
+
+                let mut bytes = vec![];
+                bytes.extend_from_slice(buf.bytes.index(range));
+
+                let _ = done_sender.send(Data::Payload(bytes));
+                let _ = done_sender.send(Data::Done);
+
+                Ok(())
+            },
+            FileImpl::MetaDataOnly(metadata) => {
+                /* XXX: Snapshot state check (optional) https://w3c.github.io/FileAPI/#snapshot-state.
+                        Concretely, here we create another file, and this file might not
+                        has the same underlying file state (meta-info plus content) as the time
+                        create_entry is called.
+                */
+
+                let file = File::open(&metadata.path)
+                    .map_err(|e| BlobURLStoreError::External(e.to_string()))?;
+                let mut is_range_requested = false;
+                let bounds = match bounds {
+                    BlobBounds::Unresolved(range) => {
+                        if range.is_some() {
+                            is_range_requested = true;
+                        }
+                        get_range_request_bounds(range, metadata.size)
+                    },
+                    BlobBounds::Resolved(bounds) => bounds,
+                };
+                let range = bounds
+                    .get_final(Some(metadata.size))
+                    .map_err(|_| BlobURLStoreError::InvalidRange)?;
+
+                let mut reader = BufReader::with_capacity(FILE_CHUNK_SIZE, file);
+                if reader.seek(SeekFrom::Start(range.start as u64)).is_err() {
+                    return Err(BlobURLStoreError::External(
+                        "Unexpected method for blob".into(),
+                    ));
+                }
+
+                let filename = metadata
+                    .path
+                    .file_name()
+                    .and_then(|osstr| osstr.to_str())
+                    .map(|s| s.to_string());
+
+                let content_range = if is_range_requested {
+                    let abs_range = range.to_abs_blob_range(metadata.size as usize);
+                    ContentRange::bytes(abs_range.start as u64..abs_range.end as u64, metadata.size)
+                        .ok()
+                } else {
+                    None
+                };
+
+                self.fetch_file_in_chunks(
+                    &mut done_sender.clone(),
+                    reader,
+                    response.body.clone(),
+                    cancellation_listener,
+                    range,
+                );
+
+                Ok(())
+            },
+            FileImpl::Sliced(parent_id, inner_rel_pos) => {
+                // Next time we don't need to check validity since
+                // we have already done that for requesting URL if necessary.
+                let bounds = RangeRequestBounds::Final(
+                    RelativePos::full_range().slice_inner(&inner_rel_pos),
+                );
+                self.resolve_blob_url(
+                    done_sender,
+                    cancellation_listener,
+                    &parent_id,
+                    file_token,
+                    origin_in,
+                    BlobBounds::Resolved(bounds),
+                    response,
+                )
+            },
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn fetch_blob_buf(
         &self,
@@ -449,24 +559,24 @@ impl FileManagerStore {
         file_token: &FileTokenCheck,
         origin_in: &FileOrigin,
     ) -> Result<FileImpl, BlobURLStoreError> {
-        match self.entries.read().unwrap().get(id) {
-            Some(entry) => {
-                if *origin_in != *entry.origin {
-                    Err(BlobURLStoreError::InvalidOrigin)
-                } else {
-                    match file_token {
-                        FileTokenCheck::NotRequired => Ok(entry.file_impl.clone()),
-                        FileTokenCheck::Required(token) => {
-                            if entry.outstanding_tokens.contains(token) {
-                                return Ok(entry.file_impl.clone());
-                            }
-                            Err(BlobURLStoreError::InvalidFileID)
-                        },
-                        FileTokenCheck::ShouldFail => Err(BlobURLStoreError::InvalidFileID),
-                    }
+        let entries = self.entries.read().unwrap();
+        let Some(entry) = entries.get(id) else {
+            return Err(BlobURLStoreError::InvalidFileID);
+        };
+
+        if *origin_in != *entry.origin {
+            return Err(BlobURLStoreError::InvalidOrigin);
+        }
+
+        match file_token {
+            FileTokenCheck::NotRequired => Ok(entry.file_impl.clone()),
+            FileTokenCheck::Required(token) => {
+                if entry.outstanding_tokens.contains(token) {
+                    return Ok(entry.file_impl.clone());
                 }
+                Err(BlobURLStoreError::InvalidFileID)
             },
-            None => Err(BlobURLStoreError::InvalidFileID),
+            FileTokenCheck::ShouldFail => Err(BlobURLStoreError::InvalidFileID),
         }
     }
 

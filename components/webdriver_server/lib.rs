@@ -640,8 +640,8 @@ impl Handler {
     }
 
     fn handle_get(&self, parameters: &GetParameters) -> WebDriverResult<WebDriverResponse> {
-        let url = match ServoUrl::parse(&parameters.url[..]) {
-            Ok(url) => url,
+        let url = match ServoUrl::from_non_blob_url(&parameters.url[..]) {
+            Ok(url) => url.unwrap(),
             Err(_) => {
                 return Err(WebDriverError::new(
                     ErrorStatus::InvalidArgument,

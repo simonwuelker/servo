@@ -451,7 +451,9 @@ impl ImageCache for ImageCacheImpl {
                 pending_loads: AllPendingLoads::new(),
                 completed_loads: HashMap::new(),
                 placeholder_image: get_placeholder_image(&compositor_api, &rippy_data),
-                placeholder_url: ServoUrl::parse("chrome://resources/rippy.png").unwrap(),
+                placeholder_url: ServoUrl::from_non_blob_url("chrome://resources/rippy.png")
+                    .unwrap()
+                    .unwrap(),
                 compositor_api,
             })),
             thread_pool: Arc::new(CoreResourceThreadPool::new(

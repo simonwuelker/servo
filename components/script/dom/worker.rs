@@ -176,6 +176,7 @@ impl WorkerMethods<crate::DomTypeHolder> for Worker {
             "constructor",
             can_gc,
         )?;
+        println!("constructing worker for url {:?}", script_url.0);
         // Step 2-4.
         let worker_url = match global.api_base_url().join(&compliant_script_url) {
             Ok(url) => url,

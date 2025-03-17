@@ -830,7 +830,8 @@ async fn scheme_fetch(
     // Step 2: Let request be fetchParams’s request.
     let request = &mut fetch_params.request;
     let url = request.current_url();
-
+    println!("scheme fetch for {url:?}");
+    // panic!();
     let scheme = url.scheme();
     match scheme {
         "about" if url.path() == "blank" => create_blank_reply(url, request.timing_type()),

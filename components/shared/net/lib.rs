@@ -28,7 +28,8 @@ use request::RequestId;
 use rustls_pki_types::CertificateDer;
 use serde::{Deserialize, Serialize};
 use servo_rand::RngCore;
-use servo_url::{ImmutableOrigin, ServoUrl};
+use servo_url::{BlobUrlEntry, ImmutableOrigin, ServoUrl};
+use uuid::Uuid;
 
 use crate::filemanager_thread::FileManagerThreadMsg;
 use crate::http_status::HttpStatus;
@@ -525,6 +526,7 @@ pub enum CoreResourceMsg {
     NetworkMediator(IpcSender<CustomResponseMediator>, ImmutableOrigin),
     /// Message forwarded to file manager's handler
     ToFileManager(FileManagerThreadMsg),
+    ResolveBlobUrl(uuid::Uuid, String),
     /// Break the load handler loop, send a reply when done cleaning up local resources
     /// and exit
     Exit(IpcSender<()>),
@@ -1013,3 +1015,18 @@ pub fn set_default_accept_language(headers: &mut HeaderMap) {
 
 pub static PRIVILEGED_SECRET: LazyLock<u32> =
     LazyLock::new(|| servo_rand::ServoRng::default().next_u32());
+
+/// Resolve a blob url, blocking until the operation is complete.
+///
+/// This is intended to be used during URL parsing.
+pub fn resolve_blob_url(
+    id: Uuid,
+    origin: String,
+    core_resource_thread: &CoreResourceThread,
+) -> Option<BlobUrlEntry> {
+    let message = CoreResourceMsg::ResolveBlobUrl(id, origin);
+    core_resource_thread.send(message).unwrap();
+
+    let entry = todo!();
+    Some(entry)
+}

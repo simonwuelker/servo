@@ -60,7 +60,7 @@ pub fn parse_blob_url(url: &ServoUrl) -> Result<(Uuid, FileOrigin), &'static str
         let id = segs.first().ok_or("URL has no path segments")?;
         Uuid::from_str(id).map_err(|_| "Failed to parse UUID from path segment")?
     };
-    Ok((id, get_blob_origin(&ServoUrl::from_url(url_inner))))
+    Ok((id, get_blob_origin(&url_inner)))
 }
 
 /// Given an URL, returning the Origin that a Blob created under this
@@ -69,7 +69,7 @@ pub fn parse_blob_url(url: &ServoUrl) -> Result<(Uuid, FileOrigin), &'static str
 /// HACK(izgzhen): Not well-specified on spec, and it is a bit a hack
 /// both due to ambiguity of spec and that we have to serialization the
 /// Origin here.
-pub fn get_blob_origin(url: &ServoUrl) -> FileOrigin {
+pub fn get_blob_origin(url: &Url) -> FileOrigin {
     if url.scheme() == "file" {
         // NOTE: by default this is "null" (Opaque), which is not ideal
         "file://".to_string()
