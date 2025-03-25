@@ -524,12 +524,133 @@ fn parse_a_pattern_string(
     options: Options,
     encoding_callback: EncodingCallback,
 ) -> Fallible<Vec<Part>> {
-    // FIXME: Implement this algorithm
-    let _ = input;
-    let _ = options;
-    let _ = encoding_callback;
+    // Step 1. Let parser be a new pattern parser whose encoding callback is encoding callback and
+    // segment wildcard regexp is the result of running generate a segment wildcard regexp given options.
+    let mut parser = PatternParser::new(
+        generate_a_segment_wildcard_regexp(options),
+        encoding_callback,
+    );
 
-    Ok(vec![])
+    // Step 2. Set parser’s token list to the result of running tokenize given input and "strict".
+    parser.token_list = tokenize(input, TokenizePolicy::Strict)?;
+
+    // Step 3. While parser’s index is less than parser’s token list’s size:
+    while parser.index < parser.token_list.len() {
+        // Step 3.1 Let char token be the result of running try to consume a token given parser and "char".
+        let char_token = parser.try_to_consume_a_token(TokenType::Char);
+
+        // Step 3.2 Let name token be the result of running try to consume a token given parser and "name".
+        let mut name_token = parser.try_to_consume_a_token(TokenType::Name);
+
+        // Step 3.3 Let regexp or wildcard token be the result of running try to consume a
+        // regexp or wildcard token given parser and name token.
+        let mut regexp_or_wildcard_token =
+            parser.try_to_consume_a_regexp_or_wildcard_token(name_token);
+
+        // Step 3.4 If name token is not null or regexp or wildcard token is not null:
+        if name_token.is_some() || regexp_or_wildcard_token.is_some() {
+            // Step 3.4.1 Let prefix be the empty string.
+            let mut prefix = "";
+
+            // Step 3.4.2 If char token is not null then set prefix to char token’s value.
+            if let Some(char_token) = char_token {
+                prefix = char_token.value;
+            }
+
+            // Step 3.4.3 If prefix is not the empty string and not options’s prefix code point:
+            // TODO: Check prefix code point
+            if !prefix.is_empty() {
+                // Step 3.4.3.1 Append prefix to the end of parser’s pending fixed value.
+                parser.pending_fixed_value.push_str(prefix);
+
+                // Step 3.4.3.2 Set prefix to the empty string.
+                prefix = "";
+            }
+
+            // Step 3.4.4 Run maybe add a part from the pending fixed value given parser.
+            parser.maybe_add_a_part_from_the_pending_fixed_value()?;
+
+            // Step 3.4.5 Let modifier token be the result of running try to consume a modifier token given parser.
+            let modifier_token = parser.try_to_consume_a_modifier_token();
+
+            // Step 3.4.6 Run add a part given parser, prefix, name token, regexp or wildcard token,
+            // the empty string, and modifier token.
+            parser.add_a_part(
+                prefix,
+                name_token,
+                regexp_or_wildcard_token,
+                "",
+                modifier_token,
+            )?;
+
+            // Step 3.4.7 Continue.
+            continue;
+        }
+
+        // Step 3.5 Let fixed token be char token.
+        let mut fixed_token = char_token;
+
+        // Step 3.6 If fixed token is null, then set fixed token to the result of running
+        // try to consume a token given parser and "escaped-char".
+        if fixed_token.is_none() {
+            fixed_token = parser.try_to_consume_a_token(TokenType::EscapedChar);
+        }
+
+        // Step 3.7 If fixed token is not null:
+        if let Some(fixed_token) = fixed_token {
+            // Step 3.7.1 Append fixed token’s value to parser’s pending fixed value.
+            parser.pending_fixed_value.push_str(fixed_token.value);
+
+            // Step 3.7.2 Continue.
+            continue;
+        }
+
+        // Step 3.8 Let open token be the result of running try to consume a token given parser and "open".
+        let open_token = parser.try_to_consume_a_token(TokenType::Open);
+
+        // Step 3.9 If open token is not null:
+        if open_token.is_some() {
+            // Step 3.9.1 Let prefix be the result of running consume text given parser.
+            let prefix = parser.consume_text();
+
+            // Step 3.9.2 Set name token to the result of running try to consume a token given parser and "name".
+            name_token = parser.try_to_consume_a_token(TokenType::Name);
+
+            // Step 3.9.3 Set regexp or wildcard token to the result of running try to consume a regexp or wildcard
+            // token given parser and name token.
+            regexp_or_wildcard_token = parser.try_to_consume_a_regexp_or_wildcard_token(name_token);
+
+            // Step 3.9.4 Let suffix be the result of running consume text given parser.
+            let suffix = parser.consume_text();
+
+            // Step 3.9.5 Run consume a required token given parser and "close".
+            parser.consume_a_required_token(TokenType::Close)?;
+
+            // Step 3.9.6 Let modifier token be the result of running try to consume a modifier token given parser.
+            let modifier_token = parser.try_to_consume_a_modifier_token();
+
+            // Step 3.9.7 Run add a part given parser, prefix, name token, regexp or wildcard token,
+            // suffix, and modifier token.
+            parser.add_a_part(
+                &prefix,
+                name_token,
+                regexp_or_wildcard_token,
+                &suffix,
+                modifier_token,
+            )?;
+
+            // Step 3.9.8 Continue.
+            continue;
+        }
+
+        // Step 3.10 Run maybe add a part from the pending fixed value given parser.
+        parser.maybe_add_a_part_from_the_pending_fixed_value()?;
+
+        // Step 3.11 Run consume a required token given parser and "end".
+        parser.consume_a_required_token(TokenType::End)?;
+    }
+
+    Ok(parser.part_list)
 }
 
 /// <https://urlpattern.spec.whatwg.org/#generate-a-regular-expression-and-name-list>
@@ -980,6 +1101,87 @@ fn process_a_url_pattern_init(
 /// <https://urlpattern.spec.whatwg.org/#encoding-callback>
 type EncodingCallback = Box<dyn Fn(&str) -> Fallible<String>>;
 
+/// <https://urlpattern.spec.whatwg.org/#token>
+#[derive(Clone, Copy, Debug)]
+#[allow(dead_code)] // index isn't used yet, because constructor strings aren't parsed
+struct Token<'a> {
+    /// <https://urlpattern.spec.whatwg.org/#token-index>
+    index: usize,
+
+    /// <https://urlpattern.spec.whatwg.org/#token-value>
+    value: &'a str,
+
+    /// <https://urlpattern.spec.whatwg.org/#token-type>
+    token_type: TokenType,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TokenType {
+    /// <https://urlpattern.spec.whatwg.org/#token-type-open>
+    Open,
+
+    /// <https://urlpattern.spec.whatwg.org/#token-type-close>
+    Close,
+
+    /// <https://urlpattern.spec.whatwg.org/#token-type-regexp>
+    Regexp,
+
+    /// <https://urlpattern.spec.whatwg.org/#token-type-name>
+    Name,
+
+    /// <https://urlpattern.spec.whatwg.org/#token-type-char>
+    Char,
+
+    /// <https://urlpattern.spec.whatwg.org/#token-type-escaped-char>
+    EscapedChar,
+
+    /// <https://urlpattern.spec.whatwg.org/#token-type-other-modifier>
+    OtherModifier,
+
+    /// <https://urlpattern.spec.whatwg.org/#token-type-asterisk>
+    Asterisk,
+
+    /// <https://urlpattern.spec.whatwg.org/#token-type-end>
+    End,
+
+    /// <https://urlpattern.spec.whatwg.org/#token-type-invalid-char>
+    InvalidChar,
+}
+
+/// <https://urlpattern.spec.whatwg.org/#pattern-parser>
+struct PatternParser<'a> {
+    /// <https://urlpattern.spec.whatwg.org/#pattern-parser-token-list>
+    token_list: Vec<Token<'a>>,
+
+    /// <https://urlpattern.spec.whatwg.org/#pattern-parser-encoding-callback>
+    encoding_callback: EncodingCallback,
+
+    /// <https://urlpattern.spec.whatwg.org/#pattern-parser-segment-wildcard-regexp>
+    segment_wildcard_regexp: String,
+
+    /// <https://urlpattern.spec.whatwg.org/#pattern-parser-part-list>
+    part_list: Vec<Part>,
+
+    /// <https://urlpattern.spec.whatwg.org/#pattern-parser-pending-fixed-value>
+    pending_fixed_value: String,
+
+    /// <https://urlpattern.spec.whatwg.org/#pattern-parser-index>
+    index: usize,
+
+    /// <https://urlpattern.spec.whatwg.org/#pattern-parser-next-numeric-name>
+    next_numeric_name: usize,
+}
+
+/// <https://urlpattern.spec.whatwg.org/#tokenize-policy>
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TokenizePolicy {
+    /// <https://urlpattern.spec.whatwg.org/#tokenize-policy-strict>
+    Strict,
+
+    /// <https://urlpattern.spec.whatwg.org/#tokenize-policy-lenient>
+    Lenient,
+}
+
 // FIXME: Deduplicate this with the url crate
 /// <https://url.spec.whatwg.org/#special-scheme>
 fn default_port_for_special_scheme(scheme: &str) -> Option<u16> {
@@ -1053,6 +1255,781 @@ impl Options {
 enum PatternInitType {
     Pattern,
     Url,
+}
+
+impl<'a> PatternParser<'a> {
+    fn new(segment_wildcard_regexp: String, encoding_callback: EncodingCallback) -> Self {
+        Self {
+            token_list: vec![],
+            segment_wildcard_regexp,
+            part_list: vec![],
+            pending_fixed_value: String::new(),
+            index: 0,
+            next_numeric_name: 0,
+            encoding_callback,
+        }
+    }
+
+    /// <https://urlpattern.spec.whatwg.org/#try-to-consume-a-token>
+    fn try_to_consume_a_token(&mut self, token_type: TokenType) -> Option<Token<'a>> {
+        // Step 1. Assert: parser’s index is less than parser’s token list size.
+        debug_assert!(self.index < self.token_list.len());
+
+        // Step 2. Let next token be parser’s token list[parser’s index].
+        let next_token = self.token_list[self.index];
+
+        // Step 3. If next token’s type is not type return null.
+        if next_token.token_type != token_type {
+            return None;
+        }
+
+        // Step 4. Increment parser’s index by 1.
+        self.index += 1;
+
+        // Step 5. Return next token.
+        Some(next_token)
+    }
+
+    /// <https://urlpattern.spec.whatwg.org/#try-to-consume-a-modifier-token>
+    fn try_to_consume_a_modifier_token(&mut self) -> Option<Token<'a>> {
+        // Step 1. Let token be the result of running try to consume a token given parser and "other-modifier".
+        let token = self.try_to_consume_a_token(TokenType::OtherModifier);
+
+        // Step 2. If token is not null, then return token.
+        if token.is_some() {
+            return token;
+        }
+
+        // Step 3. Set token to the result of running try to consume a token given parser and "asterisk".
+        let token = self.try_to_consume_a_token(TokenType::Asterisk);
+
+        // Step 4. Return token.
+        token
+    }
+
+    /// <https://urlpattern.spec.whatwg.org/#consume-a-required-token>
+    fn consume_a_required_token(&mut self, token_type: TokenType) -> Fallible<Token<'a>> {
+        // Step 1. Let result be the result of running try to consume a token given parser and type.
+        let result = self.try_to_consume_a_token(token_type);
+
+        // Step 2. If result is null, then throw a TypeError.
+        let Some(result) = result else {
+            return Err(Error::Type(format!(
+                "Missing required token {token_type:?}"
+            )));
+        };
+
+        // Step 3. Return result.
+        Ok(result)
+    }
+
+    /// <https://urlpattern.spec.whatwg.org/#try-to-consume-a-regexp-or-wildcard-token>
+    fn try_to_consume_a_regexp_or_wildcard_token(
+        &mut self,
+        name_token: Option<Token<'a>>,
+    ) -> Option<Token<'a>> {
+        // Step 1. Let token be the result of running try to consume a token given parser and "regexp".
+        let mut token = self.try_to_consume_a_token(TokenType::Regexp);
+
+        // Step 2. If name token is null and token is null, then set token to the result of running
+        // try to consume a token given parser and "asterisk".
+        if name_token.is_none() && token.is_none() {
+            token = self.try_to_consume_a_token(TokenType::Asterisk);
+        }
+
+        // Step 3. Return token.
+        token
+    }
+
+    /// <https://urlpattern.spec.whatwg.org/#maybe-add-a-part-from-the-pending-fixed-value>
+    fn maybe_add_a_part_from_the_pending_fixed_value(&mut self) -> Fallible<()> {
+        // Step 1. If parser’s pending fixed value is the empty string, then return.
+        if self.pending_fixed_value.is_empty() {
+            return Ok(());
+        }
+
+        // Step 2. Let encoded value be the result of running parser’s encoding callback
+        // given parser’s pending fixed value.
+        let encoded_value = (self.encoding_callback)(&self.pending_fixed_value)?;
+
+        // Step 3. Set parser’s pending fixed value to the empty string.
+        self.pending_fixed_value.clear();
+
+        // Step 4. Let part be a new part whose type is "fixed-text", value is encoded value, and modifier is "none".
+        let part = Part::new(PartType::FixedText, encoded_value, PartModifier::None);
+
+        // Step 5. Append part to parser’s part list.
+        self.part_list.push(part);
+
+        Ok(())
+    }
+
+    /// <https://urlpattern.spec.whatwg.org/#add-a-part>
+    fn add_a_part(
+        &mut self,
+        prefix: &str,
+        name_token: Option<Token<'a>>,
+        regexp_or_wildcard_token: Option<Token<'a>>,
+        suffix: &str,
+        modifier_token: Option<Token<'a>>,
+    ) -> Fallible<()> {
+        // Step 1. Let modifier be "none".
+        let mut modifier = PartModifier::None;
+
+        // Step 2. If modifier token is not null:
+        if let Some(modifier_token) = modifier_token {
+            // Step 2.1 If modifier token’s value is "?" then set modifier to "optional".
+            if modifier_token.value == "?" {
+                modifier = PartModifier::Optional;
+            }
+            // Step 2.2 Otherwise if modifier token’s value is "*" then set modifier to "zero-or-more".
+            else if modifier_token.value == "*" {
+                modifier = PartModifier::ZeroOrMore;
+            }
+            // Step 2.3 Otherwise if modifier token’s value is "+" then set modifier to "one-or-more".
+            else if modifier_token.value == "+" {
+                modifier = PartModifier::OneOrMore;
+            }
+        }
+
+        // Step 3. If name token is null and regexp or wildcard token is null and modifier is "none":
+        if name_token.is_none() &&
+            regexp_or_wildcard_token.is_none() &&
+            modifier == PartModifier::None
+        {
+            // Step 3.1 Append prefix to the end of parser’s pending fixed value.
+            self.pending_fixed_value.push_str(prefix);
+
+            // Step 3.2 Return
+            return Ok(());
+        }
+
+        // Step 4. Run maybe add a part from the pending fixed value given parser.
+        self.maybe_add_a_part_from_the_pending_fixed_value()?;
+
+        // Step 5. If name token is null and regexp or wildcard token is null:
+        if name_token.is_none() && regexp_or_wildcard_token.is_none() {
+            // Step 5.1 Assert: suffix is the empty string.
+            debug_assert!(suffix.is_empty());
+
+            // Step 5.2 If prefix is the empty string, then return.
+            if prefix.is_empty() {
+                return Ok(());
+            }
+
+            // Step 5.3 Let encoded value be the result of running parser’s encoding callback given prefix.
+            let encoded_value = (self.encoding_callback)(prefix)?;
+
+            // Step 5.4 Let part be a new part whose type is "fixed-text",
+            // value is encoded value, and modifier is modifier.
+            let part = Part::new(PartType::FixedText, encoded_value, modifier);
+
+            // Step 5.5 Append part to parser’s part list.
+            self.part_list.push(part);
+
+            // Step 6. Return.
+            return Ok(());
+        }
+
+        // Step 6. Let regexp value be the empty string.
+        let mut regexp_value = {
+            // Step 7. If regexp or wildcard token is null, then set regexp value to parser’s segment wildcard regexp.
+            match regexp_or_wildcard_token {
+                None => self.segment_wildcard_regexp.clone(),
+                Some(token) => {
+                    // Step 8. Otherwise if regexp or wildcard token’s type is "asterisk",
+                    // then set regexp value to the full wildcard regexp value.
+                    if token.token_type == TokenType::Asterisk {
+                        FULL_WILDCARD_REGEXP_VALUE.into()
+                    }
+                    // Step 9. Otherwise set regexp value to regexp or wildcard token’s value.
+                    else {
+                        token.value.to_owned()
+                    }
+                },
+            }
+        };
+
+        // Step 10. Let type be "regexp".
+        let mut part_type = PartType::Regexp;
+
+        // Step 11. If regexp value is parser’s segment wildcard regexp:
+        if regexp_value == self.segment_wildcard_regexp {
+            // Step 11.1 Set type to "segment-wildcard".
+            part_type = PartType::SegmentWildcard;
+
+            // Step 11.2 Set regexp value to the empty string.
+            regexp_value.clear();
+        }
+        // Step 12. Otherwise if regexp value is the full wildcard regexp value:
+        else if regexp_value == FULL_WILDCARD_REGEXP_VALUE {
+            // Step 12.1 Set type to "full-wildcard".
+            part_type = PartType::FullWildcard;
+
+            // Step 12.2 Set regexp value to the empty string.
+            regexp_value.clear();
+        }
+
+        // Step 13. Let name be the empty string.
+        let mut name = String::new();
+
+        // Step 14. If name token is not null, then set name to name token’s value.
+        if let Some(name_token) = name_token {
+            name = name_token.value.to_owned();
+        }
+        // Step 15. Otherwise if regexp or wildcard token is not null:
+        else if regexp_or_wildcard_token.is_some() {
+            // Step 15.1 Set name to parser’s next numeric name, serialized.
+            name = self.next_numeric_name.to_string();
+
+            // Step 15.2 Increment parser’s next numeric name by 1.
+            self.next_numeric_name = self.next_numeric_name.wrapping_add(1);
+        }
+
+        // Step 16. If the result of running is a duplicate name given parser and name is true, then throw a TypeError.
+        if self.is_a_duplicate_name(&name) {
+            return Err(Error::Type(format!("Duplicate part name: {name:?}")));
+        }
+
+        // Step 17. Let encoded prefix be the result of running parser’s encoding callback given prefix.
+        let encoded_prefix = (self.encoding_callback)(prefix)?;
+
+        // Step 18. Let encoded suffix be the result of running parser’s encoding callback given suffix.
+        let encoded_suffix = (self.encoding_callback)(suffix)?;
+
+        // Step 19. Let part be a new part whose type is type, value is regexp value, modifier is modifier,
+        // name is name, prefix is encoded prefix, and suffix is encoded suffix.
+        let part = Part {
+            part_type,
+            value: regexp_value,
+            modifier,
+            name,
+            prefix: encoded_prefix,
+            suffix: encoded_suffix,
+        };
+
+        // Step 20. Append part to parser’s part list.
+        self.part_list.push(part);
+
+        Ok(())
+    }
+
+    // <https://urlpattern.spec.whatwg.org/#is-a-duplicate-name>
+    fn is_a_duplicate_name(&self, name: &str) -> bool {
+        // Step 1. For each part of parser’s part list:
+        for part in &self.part_list {
+            // Step 1.1 If part’s name is name, then return true.
+            if part.name == name {
+                return true;
+            }
+        }
+
+        // Step 2. Return false.
+        false
+    }
+
+    /// <https://urlpattern.spec.whatwg.org/#consume-text>
+    fn consume_text(&mut self) -> String {
+        // Step 1. Let result be the empty string.
+        let mut result = String::new();
+
+        // Step 2. While true:
+        loop {
+            // Step 2.1 Let token be the result of running try to consume a token given parser and "char".
+            let mut token = self.try_to_consume_a_token(TokenType::Char);
+
+            // Step 2.2 If token is null, then set token to the result of running
+            // try to consume a token given parser and "escaped-char".
+            if token.is_none() {
+                token = self.try_to_consume_a_token(TokenType::EscapedChar);
+            }
+
+            // Step 2.3 If token is null, then break.
+            let Some(token) = token else {
+                break;
+            };
+
+            // Step 2.4 Append token’s value to the end of result.
+            result.push_str(token.value);
+        }
+
+        // Step 3. Return result.
+        result
+    }
+}
+
+/// <https://urlpattern.spec.whatwg.org/#tokenizer>
+struct Tokenizer<'a> {
+    input: &'a str,
+
+    /// <https://urlpattern.spec.whatwg.org/#tokenizer-policy>
+    policy: TokenizePolicy,
+
+    /// <https://urlpattern.spec.whatwg.org/#tokenizer-index>
+    ///
+    /// Note that we deviate the from the spec and index bytes, not code points.
+    index: usize,
+
+    /// <https://urlpattern.spec.whatwg.org/#tokenizer-next-index>
+    ///
+    /// Note that we deviate the from the spec and index bytes, not code points.
+    next_index: usize,
+
+    /// <https://urlpattern.spec.whatwg.org/#tokenizer-token-list>
+    token_list: Vec<Token<'a>>,
+
+    /// <https://urlpattern.spec.whatwg.org/#tokenizer-code-point>
+    code_point: char,
+}
+
+/// <https://urlpattern.spec.whatwg.org/#tokenize>
+fn tokenize(input: &str, policy: TokenizePolicy) -> Fallible<Vec<Token>> {
+    // Step 1. Let tokenizer be a new tokenizer.
+    // Step 2. Set tokenizer’s input to input.
+    // Step 3. Set tokenizer’s policy to policy.
+    let mut tokenizer = Tokenizer {
+        input,
+        policy,
+        index: 0,
+        next_index: 0,
+        token_list: vec![],
+        code_point: char::MIN,
+    };
+
+    // Step 4. While tokenizer’s index is less than tokenizer’s input’s code point length:
+    while tokenizer.index < tokenizer.input.len() {
+        // Step 4.1 Run seek and get the next code point given tokenizer and tokenizer’s index.
+        tokenizer.seek_and_get_the_next_code_point(tokenizer.index);
+
+        match tokenizer.code_point {
+            // Step 4.2 If tokenizer’s code point is U+002A (*):
+            '*' => {
+                // Step 4.2.1 Run add a token with default position and length given tokenizer and "asterisk".
+                tokenizer.add_a_token_with_default_position_and_length(TokenType::Asterisk);
+
+                // Step 4.2.2 Continue.
+                continue;
+            },
+            // Step 4.3 If tokenizer’s code point is U+002B (+) or U+003F (?):
+            '+' | '?' => {
+                // Step 4.3.1 Run add a token with default position and length given tokenizer and "other-modifier".
+                tokenizer.add_a_token_with_default_position_and_length(TokenType::OtherModifier);
+
+                // Step 4.3.2 Continue.
+                continue;
+            },
+            // Step 4.4 If tokenizer’s code point is U+005C (\):
+            '\\' => {
+                // Step 4.4.1 If tokenizer’s index is equal to tokenizer’s input’s code point length − 1:
+                if tokenizer.is_done() {
+                    // Step 4.4.1.1 Run process a tokenizing error given tokenizer, tokenizer’s next index,
+                    // and tokenizer’s index.
+                    tokenizer.process_a_tokenizing_error(tokenizer.next_index, tokenizer.index)?;
+
+                    // Step 4.4.1.2 Continue.
+                    continue;
+                }
+
+                // Step 4.4.2 Let escaped index be tokenizer’s next index.
+                let escaped_index = tokenizer.index;
+
+                // Step 4.4.3 Run get the next code point given tokenizer.
+                tokenizer.get_the_next_code_point();
+
+                // Step 4.4.4 Run add a token with default length given tokenizer, "escaped-char",
+                // tokenizer’s next index, and escaped index.
+                tokenizer.add_a_token_with_default_length(
+                    TokenType::EscapedChar,
+                    tokenizer.next_index,
+                    escaped_index,
+                );
+
+                // Step 4.4.5 Continue.
+                continue;
+            },
+            // Step 4.5 If tokenizer’s code point is U+007B ({):
+            '{' => {
+                // Step 4.5.1 Run add a token with default position and length given tokenizer and "open".
+                tokenizer.add_a_token_with_default_position_and_length(TokenType::Open);
+
+                // Step 4.5.2 Continue.
+                continue;
+            },
+            // Step 4.6 If tokenizer’s code point is U+007D (}):
+            '}' => {
+                // Step 4.6.1 Run add a token with default position and length given tokenizer and "close".
+                tokenizer.add_a_token_with_default_position_and_length(TokenType::Close);
+
+                // Step 4.6.2 Continue.
+                continue;
+            },
+            // Step 4.7 If tokenizer’s code point is U+003A (:):
+            ':' => {
+                // Step 4.7.1 Let name position be tokenizer’s next index.
+                let mut name_position = tokenizer.next_index;
+
+                // Step 4.7.2 Let name start be name position.
+                let name_start = name_position;
+
+                // Step 4.7.3 While name position is less than tokenizer’s input’s code point length:
+                while name_position < tokenizer.input.len() {
+                    // Step 4.7.3.1 Run seek and get the next code point given tokenizer and name position.
+                    tokenizer.seek_and_get_the_next_code_point(name_position);
+
+                    // Step 4.7.3.2 Let first code point be true if name position equals name start
+                    // and false otherwise.
+                    let first_code_point = name_position == name_start;
+
+                    // Step 4.7.3.3 Let valid code point be the result of running is a valid name
+                    // code point given tokenizer’s code point and first code point.
+                    let valid_code_point =
+                        is_a_valid_name_code_point(tokenizer.code_point, first_code_point);
+
+                    // Step 4.7.3.4 If valid code point is false break.
+                    if !valid_code_point {
+                        break;
+                    }
+
+                    // Step 4.6.3.5 Set name position to tokenizer’s next index.
+                    name_position = tokenizer.next_index;
+                }
+
+                // Step 4.7.4 If name position is less than or equal to name start:
+                if name_position <= name_start {
+                    // Step 4.7.4.1 Run process a tokenizing error given tokenizer, name start, and tokenizer’s index.
+                    tokenizer.process_a_tokenizing_error(name_start, tokenizer.index)?;
+
+                    // Step 4.7.4.2 Continue.
+                    continue;
+                }
+
+                // Step 4.7.5 Run add a token with default length given tokenizer, "name", name position,
+                // and name start.
+                tokenizer.add_a_token_with_default_length(
+                    TokenType::Name,
+                    name_position,
+                    name_start,
+                );
+
+                // Step 4.7.6 Continue.
+                continue;
+            },
+            // Step 4.8 If tokenizer’s code point is U+0028 (():
+            '(' => {
+                // Step 4.8.1 Let depth be 1.
+                let mut depth = 1;
+
+                // Step 4.8.2 Let regexp position be tokenizer’s next index.
+                let mut regexp_position = tokenizer.next_index;
+
+                // Step 4.8.3 Let regexp start be regexp position.
+                let regexp_start = regexp_position;
+
+                // Step 4.8.4 Let error be false.
+                let mut error = false;
+
+                // Step 4.8.5 While regexp position is less than tokenizer’s input’s code point length:
+                while regexp_position < tokenizer.input.len() {
+                    // Step 4.8.5.1 Run seek and get the next code point given tokenizer and regexp position.
+                    tokenizer.seek_and_get_the_next_code_point(regexp_position);
+
+                    // Step 4.8.5.2 If tokenizer’s code point is not an ASCII code point:
+                    if !tokenizer.code_point.is_ascii() {
+                        // Step 4.8.5.1.1 Run process a tokenizing error given tokenizer, regexp start,
+                        // and tokenizer’s index.
+                        tokenizer.process_a_tokenizing_error(regexp_start, tokenizer.index)?;
+
+                        // Step 4.8.5.1.2 Set error to true.
+                        error = true;
+
+                        // Step 4.8.5.1.2 Break.
+                        break;
+                    }
+
+                    // Step 4.8.5.3 If regexp position equals regexp start and tokenizer’s code point is U+003F (?):
+                    if regexp_position == regexp_start && tokenizer.code_point == '?' {
+                        // Step 4.8.5.3.1 Run process a tokenizing error given tokenizer, regexp start,
+                        // and tokenizer’s index.
+                        tokenizer.process_a_tokenizing_error(regexp_start, tokenizer.index)?;
+
+                        // Step 4.8.5.3.2 Set error to true.
+                        error = true;
+
+                        // Step 4.8.5.3.3 Break.
+                        break;
+                    }
+
+                    // Step 4.8.5.4 If tokenizer’s code point is U+005C (\):
+                    if tokenizer.code_point == '\\' {
+                        // Step 4.8.5.4.1 If regexp position equals tokenizer’s input’s code point length − 1:
+                        if tokenizer.is_last_character(regexp_position) {
+                            // Step 4.8.5.4.1.1 Run process a tokenizing error given tokenizer, regexp start,
+                            // and tokenizer’s index.
+                            tokenizer.process_a_tokenizing_error(regexp_start, tokenizer.index)?;
+
+                            // Step 4.8.5.4.1.2 Set error to true.
+                            error = true;
+
+                            // Step 4.8.5.4.1.3 Break
+                            break;
+                        }
+
+                        // Step 4.8.5.4.2 Run get the next code point given tokenizer.
+                        tokenizer.get_the_next_code_point();
+
+                        // Step 4.8.5.4.3 If tokenizer’s code point is not an ASCII code point:
+                        if !tokenizer.code_point.is_ascii() {
+                            // Step 4.8.5.4.3.1 Run process a tokenizing error given tokenizer, regexp start,
+                            // and tokenizer’s index.
+                            tokenizer.process_a_tokenizing_error(regexp_start, tokenizer.index)?;
+
+                            // Step 4.8.5.4.3.2 Set error to true.
+                            error = true;
+
+                            // Step 4.8.5.4.3.3 Break
+                            break;
+                        }
+
+                        // Step 4.8.5.4.4 Set regexp position to tokenizer’s next index.
+                        regexp_position = tokenizer.next_index;
+
+                        // Step 4.8.5.4.5 Continue.
+                        continue;
+                    }
+
+                    // Step 4.8.5.5 If tokenizer’s code point is U+0029 ()):
+                    if tokenizer.code_point == ')' {
+                        // Step 4.8.5.5.1 Decrement depth by 1.
+                        depth -= 1;
+
+                        // Step 4.8.5.5.2 If depth is 0:
+                        if depth == 0 {
+                            // Step 4.8.5.5.2.1 Set regexp position to tokenizer’s next index.
+                            regexp_position = tokenizer.next_index;
+
+                            // Step 4.8.5.5.2.2 Break.
+                            break;
+                        }
+                    }
+                    // Step 4.8.5.6 Otherwise if tokenizer’s code point is U+0028 (():
+                    else if tokenizer.code_point == '(' {
+                        // Step 4.8.5.6.1 Increment depth by 1.
+                        depth += 1;
+
+                        // Step 4.8.5.6.2 If regexp position equals tokenizer’s input’s code point length − 1:
+                        if tokenizer.is_last_character(regexp_position) {
+                            // Step 4.8.5.6.2.1 Run process a tokenizing error given tokenizer, regexp start,
+                            // and tokenizer’s index.
+                            tokenizer.process_a_tokenizing_error(regexp_start, tokenizer.index)?;
+
+                            // Step 4.8.5.6.2.2 Set error to true.
+                            error = true;
+
+                            // Step 4.8.5.6.2.3 Break
+                            break;
+                        }
+
+                        // Step 4.8.5.6.3 Let temporary position be tokenizer’s next index.
+                        let temporary_position = tokenizer.next_index;
+
+                        // Step 4.8.5.6.4 Run get the next code point given tokenizer.
+                        tokenizer.get_the_next_code_point();
+
+                        // Step 4.8.5.6.5 If tokenizer’s code point is not U+003F (?):
+                        if tokenizer.code_point != '?' {
+                            // Step 4.8.5.6.5.1 Run process a tokenizing error given tokenizer, regexp start,
+                            // and tokenizer’s index.
+                            tokenizer.process_a_tokenizing_error(regexp_start, tokenizer.index)?;
+
+                            // Step 4.8.5.6.5.2 Set error to true.
+                            error = true;
+
+                            // Step 4.8.5.6.5.3 Break.
+                            break;
+                        }
+
+                        // Step 4.8.5.6.6 Set tokenizer’s next index to temporary position.
+                        tokenizer.next_index = temporary_position;
+                    }
+
+                    // Step 4.8.5.7 Set regexp position to tokenizer’s next index.
+                    regexp_position = tokenizer.next_index;
+                }
+
+                // Step 4.8.6 If error is true continue.
+                if error {
+                    continue;
+                }
+
+                // Step 4.8.7 If depth is not zero:
+                if depth != 0 {
+                    // Step 4.8.7.1 Run process a tokenizing error given tokenizer, regexp start,
+                    // and tokenizer’s index
+                    tokenizer.process_a_tokenizing_error(regexp_start, tokenizer.index)?;
+
+                    // Step 4.8.7.2 Continue.
+                    continue;
+                }
+
+                // Step 4.8.8 Let regexp length be regexp position − regexp start − 1.
+                let regexp_length = regexp_position - regexp_start - 1;
+
+                // Step 4.8.9 If regexp length is zero:
+                if regexp_length == 0 {
+                    // Step 4.8.9.1 Run process a tokenizing error given tokenizer, regexp start,
+                    // and tokenizer’s index.
+                    tokenizer.process_a_tokenizing_error(regexp_start, tokenizer.index)?;
+
+                    // Step 4.8.9.2 Continue.
+                    continue;
+                }
+
+                // Step 4.8.10 Run add a token given tokenizer, "regexp", regexp position,
+                // regexp start, and regexp length.
+                tokenizer.add_a_token(
+                    TokenType::Regexp,
+                    regexp_position,
+                    regexp_start,
+                    regexp_length,
+                );
+
+                // Step 4.8.11 Continue.
+                continue;
+            },
+            _ => {
+                // Step 4.9 Run add a token with default position and length given tokenizer and "char".
+                tokenizer.add_a_token_with_default_position_and_length(TokenType::Char);
+            },
+        }
+    }
+
+    // Step 5. Run add a token with default length given tokenizer, "end", tokenizer’s index, and tokenizer’s index.
+    tokenizer.add_a_token_with_default_length(TokenType::End, tokenizer.index, tokenizer.index);
+
+    // Step 6.Return tokenizer’s token list.
+    Ok(tokenizer.token_list)
+}
+
+/// <https://urlpattern.spec.whatwg.org/#is-a-valid-name-code-point>
+fn is_a_valid_name_code_point(code_point: char, first: bool) -> bool {
+    // FIXME: implement this check
+    _ = first;
+    code_point.is_alphabetic()
+}
+
+impl Tokenizer<'_> {
+    fn is_last_character(&self, position: usize) -> bool {
+        self.input[position..].chars().count() == 1
+    }
+
+    fn is_done(&self) -> bool {
+        self.input[self.next_index..].is_empty()
+    }
+
+    /// <https://urlpattern.spec.whatwg.org/#get-the-next-code-point>
+    fn get_the_next_code_point(&mut self) {
+        // Step 1. Set tokenizer’s code point to the Unicode code point in tokenizer’s
+        // input at the position indicated by tokenizer’s next index.
+        // TODO: This is O(n) and should be faster. We should consider using byte indices instead
+        // of code point indices like the spec tells us to.
+        self.code_point = self.input[self.next_index..]
+            .chars()
+            .next()
+            .expect("URLPattern tokenizer is trying to read out of bounds");
+
+        // Step 2. Increment tokenizer’s next index by 1.
+        self.next_index = self.next_index.wrapping_add(self.code_point.len_utf8());
+    }
+
+    /// <https://urlpattern.spec.whatwg.org/#seek-and-get-the-next-code-point>
+    fn seek_and_get_the_next_code_point(&mut self, index: usize) {
+        // Step 1. Set tokenizer’s next index to index.
+        self.next_index = index;
+
+        // Step 2. Run get the next code point given tokenizer.
+        self.get_the_next_code_point();
+    }
+
+    /// <https://urlpattern.spec.whatwg.org/#add-a-token>
+    fn add_a_token(
+        &mut self,
+        token_type: TokenType,
+        next_position: usize,
+        value_position: usize,
+        value_length: usize,
+    ) {
+        // Step 1. Let token be a new token.
+        // Step 2. Set token’s type to type.
+        // Step 3. Set token’s index to tokenizer’s index.
+        // Step 4. Set token’s value to the code point substring from value position
+        // with length value length within tokenizer’s input.
+        let token = Token {
+            token_type,
+            index: self.index,
+            value: &self.input[value_position..][..value_length],
+        };
+
+        // Step 5. Append token to the back of tokenizer’s token list.
+        self.token_list.push(token);
+
+        // Step 6. Set tokenizer’s index to next position.
+        self.index = next_position;
+    }
+
+    /// <https://urlpattern.spec.whatwg.org/#add-a-token-with-default-position-and-length>
+    fn add_a_token_with_default_position_and_length(&mut self, token_type: TokenType) {
+        // Step 1. Run add a token with default length given tokenizer, type,
+        // tokenizer’s next index, and tokenizer’s index.
+        self.add_a_token_with_default_length(token_type, self.next_index, self.index);
+    }
+
+    /// <https://urlpattern.spec.whatwg.org/#add-a-token-with-default-length>
+    fn add_a_token_with_default_length(
+        &mut self,
+        token_type: TokenType,
+        next_position: usize,
+        value_position: usize,
+    ) {
+        // Step 1. Let computed length be next position − value position.
+        let computed_length = next_position - value_position;
+
+        // Step 2. Run add a token given tokenizer, type, next position, value position, and computed length.
+        self.add_a_token(token_type, next_position, value_position, computed_length);
+    }
+
+    /// <https://urlpattern.spec.whatwg.org/#process-a-tokenizing-error>
+    fn process_a_tokenizing_error(
+        &mut self,
+        next_position: usize,
+        value_position: usize,
+    ) -> Fallible<()> {
+        // Step 1. If tokenizer’s policy is "strict", then throw a TypeError.
+        if self.policy == TokenizePolicy::Strict {
+            return Err(Error::Type("Failed to tokenize URL pattern".into()));
+        }
+
+        // Step 2. Assert: tokenizer’s policy is "lenient".
+        debug_assert_eq!(self.policy, TokenizePolicy::Lenient);
+
+        // Step 3. Run add a token with default length given tokenizer, "invalid-char",
+        // next position, and value position.
+        self.add_a_token_with_default_length(TokenType::InvalidChar, next_position, value_position);
+
+        Ok(())
+    }
+}
+
+impl Part {
+    fn new(part_type: PartType, value: String, modifier: PartModifier) -> Self {
+        Self {
+            part_type,
+            value,
+            modifier,
+            name: String::new(),
+            prefix: String::new(),
+            suffix: String::new(),
+        }
+    }
 }
 
 /// <https://urlpattern.spec.whatwg.org/#process-a-base-url-string>
@@ -1217,7 +2194,7 @@ fn process_search_for_init(value: &str, init_type: PatternInitType) -> String {
 /// <https://urlpattern.spec.whatwg.org/#process-hash-for-init>
 fn process_hash_for_init(value: &str, init_type: PatternInitType) -> String {
     // Step 1. Let strippedValue be the given value with a single leading U+0023 (#) removed, if any.
-    let stripped_value = value.strip_prefix('#').unwrap_or(value);
+    let stripped_value = value.strip_prefix('?').unwrap_or(value);
 
     // Step 2. If type is "pattern" then return strippedValue.
     if init_type == PatternInitType::Pattern {
