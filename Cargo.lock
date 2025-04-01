@@ -3264,8 +3264,9 @@ dependencies = [
 [[package]]
 name = "html5ever"
 version = "0.30.0"
-source = "git+https://github.com/simonwuelker/html5ever/?branch=bubble-scripts-up-in-xml5ever#c185ee9a426d9cd7af4b9cd3023477a76cebb5b0"
+source = "git+https://github.com/simonwuelker/html5ever?branch=encodings#730049b4ec736cb98d304b61ccd66181f38d7259"
 dependencies = [
+ "encoding_rs",
  "log",
  "mac",
  "markup5ever",
@@ -4514,8 +4515,9 @@ dependencies = [
 [[package]]
 name = "markup5ever"
 version = "0.15.0"
-source = "git+https://github.com/simonwuelker/html5ever/?branch=bubble-scripts-up-in-xml5ever#c185ee9a426d9cd7af4b9cd3023477a76cebb5b0"
+source = "git+https://github.com/simonwuelker/html5ever?branch=encodings#730049b4ec736cb98d304b61ccd66181f38d7259"
 dependencies = [
+ "encoding_rs",
  "log",
  "phf",
  "phf_codegen",
@@ -4527,7 +4529,7 @@ dependencies = [
 [[package]]
 name = "match_token"
 version = "0.1.0"
-source = "git+https://github.com/simonwuelker/html5ever/?branch=bubble-scripts-up-in-xml5ever#c185ee9a426d9cd7af4b9cd3023477a76cebb5b0"
+source = "git+https://github.com/simonwuelker/html5ever?branch=encodings#730049b4ec736cb98d304b61ccd66181f38d7259"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9418,7 +9420,7 @@ checksum = "c5b940ebc25896e71dd073bad2dbaa2abfe97b0a391415e22ad1326d9c54e3c4"
 [[package]]
 name = "xml5ever"
 version = "0.21.0"
-source = "git+https://github.com/simonwuelker/html5ever/?branch=bubble-scripts-up-in-xml5ever#c185ee9a426d9cd7af4b9cd3023477a76cebb5b0"
+source = "git+https://github.com/simonwuelker/html5ever?branch=encodings#730049b4ec736cb98d304b61ccd66181f38d7259"
 dependencies = [
  "log",
  "mac",
