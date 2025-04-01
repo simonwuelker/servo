@@ -221,7 +221,11 @@ codegen-units = 1
 # html5ever = { path = "../html5ever/html5ever" }
 # markup5ever = { path = "../html5ever/markup5ever" }
 # xml5ever = { path = "../html5ever/xml5ever" }
-# web_atoms = { path = "../html5ever/web_atoms" }
+# web_atoms =  { path = "../html5ever/web_atoms" }
+html5ever = { git = "https://github.com/simonwuelker/html5ever", branch="input-stream-move" }
+markup5ever = {git = "https://github.com/simonwuelker/html5ever", branch="input-stream-move"  }
+xml5ever = { git = "https://github.com/simonwuelker/html5ever", branch="input-stream-move" }
+web_atoms = { git = "https://github.com/simonwuelker/html5ever", branch="input-stream-move" }
 #
 # Or for Stylo:
 #

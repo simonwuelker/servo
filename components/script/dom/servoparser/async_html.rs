@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::collections::HashMap;
 use std::collections::vec_deque::VecDeque;
-use std::thread;
+use std::{iter, thread};
 
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use html5ever::buffer_queue::BufferQueue;
@@ -19,7 +19,7 @@ use html5ever::tree_builder::{
     ElementFlags, NodeOrText as HtmlNodeOrText, QuirksMode, TreeBuilder, TreeBuilderOpts, TreeSink,
 };
 use html5ever::{Attribute as HtmlAttribute, ExpandedName, QualName, local_name, ns};
-use markup5ever::TokenizerResult;
+use markup5ever::{DecodingParser, ParserAction};
 use servo_url::ServoUrl;
 use style::context::QuirksMode as ServoQuirksMode;
 
@@ -144,15 +144,8 @@ enum ParseOperation {
 #[derive(MallocSizeOf)]
 enum ToTokenizerMsg {
     // From HtmlTokenizer
-    TokenizerResultDone {
-        #[ignore_malloc_size_of = "Defined in html5ever"]
-        updated_input: VecDeque<SendTendril<UTF8>>,
-    },
-    TokenizerResultScript {
-        script: ParseNode,
-        #[ignore_malloc_size_of = "Defined in html5ever"]
-        updated_input: VecDeque<SendTendril<UTF8>>,
-    },
+    TokenizerResultDone,
+    TokenizerResultScript { script: ParseNode },
     End, // Sent to Tokenizer to signify HtmlTokenizer's end method has returned
 
     // From Sink
@@ -163,10 +156,14 @@ enum ToTokenizerMsg {
 enum ToHtmlTokenizerMsg {
     Feed {
         #[ignore_malloc_size_of = "Defined in html5ever"]
-        input: VecDeque<SendTendril<UTF8>>,
+        input: SendTendril<UTF8>,
     },
     End,
+    ClearInputStream,
     SetPlainTextState,
+    NotifyParserBlockingScriptLoaded,
+    PushScriptInput(#[ignore_malloc_size_of = "Defined in html5ever"] SendTendril<UTF8>),
+    EndDocumentWriteTransaction
 }
 
 fn create_buffer_queue(mut buffers: VecDeque<SendTendril<UTF8>>) -> BufferQueue {
@@ -284,50 +281,43 @@ impl Tokenizer {
         tokenizer
     }
 
-    pub(crate) fn feed(
-        &self,
-        input: &BufferQueue,
-        can_gc: CanGc,
-    ) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
-        let mut send_tendrils = VecDeque::new();
-        while let Some(str) = input.pop_front() {
-            send_tendrils.push_back(SendTendril::from(str));
-        }
-
-        // Send message to parser thread, asking it to start reading from the input.
-        // Parser operation messages will be sent to main thread as they are evaluated.
+    pub(crate) fn clear_input_stream(&self) {
         self.html_tokenizer_sender
-            .send(ToHtmlTokenizerMsg::Feed {
-                input: send_tendrils,
-            })
+            .send(ToHtmlTokenizerMsg::ClearInputStream)
             .unwrap();
+    }
 
-        loop {
-            match self
-                .receiver
-                .recv()
-                .expect("Unexpected channel panic in main thread.")
-            {
-                ToTokenizerMsg::ProcessOperation(parse_op) => {
-                    self.process_operation(parse_op, can_gc)
-                },
-                ToTokenizerMsg::TokenizerResultDone { updated_input } => {
-                    let buffer_queue = create_buffer_queue(updated_input);
-                    input.replace_with(buffer_queue);
-                    return TokenizerResult::Done;
-                },
-                ToTokenizerMsg::TokenizerResultScript {
-                    script,
-                    updated_input,
-                } => {
-                    let buffer_queue = create_buffer_queue(updated_input);
-                    input.replace_with(buffer_queue);
-                    let script = self.get_node(&script.id);
-                    return TokenizerResult::Script(DomRoot::from_ref(script.downcast().unwrap()));
-                },
-                _ => unreachable!(),
-            };
-        }
+    pub(crate) fn feed_code_points(&self, code_points: StrTendril) {
+        let code_points = SendTendril::from(code_points);
+
+        self.html_tokenizer_sender
+            .send(ToHtmlTokenizerMsg::Feed { input: code_points })
+            .unwrap();
+    }
+
+    pub fn parse(&self) -> impl Iterator<Item = ParserAction<DomRoot<HTMLScriptElement>>> {
+        iter::from_fn(|| {
+            loop {
+                match self
+                    .receiver
+                    .recv()
+                    .expect("Unexpected channel panic in main thread.")
+                {
+                    ToTokenizerMsg::TokenizerResultDone | ToTokenizerMsg::End => return None,
+                    ToTokenizerMsg::TokenizerResultScript { script } => {
+                        let script = DomRoot::from_ref(
+                            self.get_node(script.id)
+                                .downcast::<HTMLScriptElement>()
+                                .expect("parser blocked on non-script node"),
+                        );
+                        return Some(ParserAction::HandleScript(script));
+                    },
+                    ToTokenizerMsg::ProcessOperation(parse_op) => {
+                        self.process_operation(parse_op, CanGc::note())
+                    },
+                }
+            }
+        })
     }
 
     pub(crate) fn end(&self, can_gc: CanGc) {
@@ -343,14 +333,39 @@ impl Tokenizer {
                 ToTokenizerMsg::ProcessOperation(parse_op) => {
                     self.process_operation(parse_op, can_gc)
                 },
-                ToTokenizerMsg::TokenizerResultDone { updated_input: _ } |
-                ToTokenizerMsg::TokenizerResultScript {
-                    script: _,
-                    updated_input: _,
-                } => continue,
+                ToTokenizerMsg::TokenizerResultDone |
+                ToTokenizerMsg::TokenizerResultScript { script: _ } => continue,
                 ToTokenizerMsg::End => return,
             };
         }
+    }
+
+    pub(crate) fn notify_parser_blocking_script_loaded(&self) {
+        self.html_tokenizer_sender
+            .send(ToHtmlTokenizerMsg::NotifyParserBlockingScriptLoaded)
+            .unwrap();
+    }
+
+    pub(crate) fn push_script_input(&self, input: StrTendril) {
+        self.html_tokenizer_sender
+            .send(ToHtmlTokenizerMsg::PushScriptInput(input.into()))
+            .unwrap();
+    }
+
+    pub(crate) fn document_write<'a>(
+        &'a self,
+        input: StrTendril,
+    ) -> impl Iterator<Item = ParserAction<DomRoot<HTMLScriptElement>>> + 'a {
+        self.html_tokenizer_sender
+            .send(ToHtmlTokenizerMsg::DocumentWrite(SendTendril::from(input)))
+            .unwrap();
+
+    }
+
+    pub(crate) fn end_document_write_transaction(&self) {
+        self.html_tokenizer_sender
+            .send(ToHtmlTokenizerMsg::EndDocumentWriteTransaction)
+            .unwrap();
     }
 
     pub(crate) fn url(&self) -> &ServoUrl {
@@ -367,20 +382,20 @@ impl Tokenizer {
         assert!(self.nodes.borrow_mut().insert(id, node).is_none());
     }
 
-    fn get_node<'a>(&'a self, id: &ParseNodeId) -> Ref<'a, Dom<Node>> {
+    fn get_node<'a>(&'a self, id: ParseNodeId) -> Ref<'a, Dom<Node>> {
         Ref::map(self.nodes.borrow(), |nodes| {
-            nodes.get(id).expect("Node not found!")
+            nodes.get(&id).expect("Node not found!")
         })
     }
 
     fn append_before_sibling(&self, sibling: ParseNodeId, node: NodeOrText, can_gc: CanGc) {
         let node = match node {
             NodeOrText::Node(n) => {
-                HtmlNodeOrText::AppendNode(Dom::from_ref(&**self.get_node(&n.id)))
+                HtmlNodeOrText::AppendNode(Dom::from_ref(&**self.get_node(n.id)))
             },
             NodeOrText::Text(text) => HtmlNodeOrText::AppendText(Tendril::from(text)),
         };
-        let sibling = &**self.get_node(&sibling);
+        let sibling = &**self.get_node(sibling);
         let parent = &*sibling
             .GetParentNode()
             .expect("append_before_sibling called on node without parent");
@@ -391,22 +406,22 @@ impl Tokenizer {
     fn append(&self, parent: ParseNodeId, node: NodeOrText, can_gc: CanGc) {
         let node = match node {
             NodeOrText::Node(n) => {
-                HtmlNodeOrText::AppendNode(Dom::from_ref(&**self.get_node(&n.id)))
+                HtmlNodeOrText::AppendNode(Dom::from_ref(&**self.get_node(n.id)))
             },
             NodeOrText::Text(text) => HtmlNodeOrText::AppendText(Tendril::from(text)),
         };
 
-        let parent = &**self.get_node(&parent);
+        let parent = &**self.get_node(parent);
         super::insert(parent, None, node, self.parsing_algorithm, can_gc);
     }
 
     fn has_parent_node(&self, node: ParseNodeId) -> bool {
-        self.get_node(&node).GetParentNode().is_some()
+        self.get_node(node).GetParentNode().is_some()
     }
 
     fn same_tree(&self, x: ParseNodeId, y: ParseNodeId) -> bool {
-        let x = self.get_node(&x);
-        let y = self.get_node(&y);
+        let x = self.get_node(x);
+        let y = self.get_node(y);
 
         let x = x.downcast::<Element>().expect("Element node expected");
         let y = y.downcast::<Element>().expect("Element node expected");
@@ -414,13 +429,13 @@ impl Tokenizer {
     }
 
     fn process_operation(&self, op: ParseOperation, can_gc: CanGc) {
-        let document = DomRoot::from_ref(&**self.get_node(&0));
+        let document = DomRoot::from_ref(&**self.get_node(0));
         let document = document
             .downcast::<Document>()
             .expect("Document node should be downcasted!");
         match op {
             ParseOperation::GetTemplateContents { target, contents } => {
-                let target = DomRoot::from_ref(&**self.get_node(&target));
+                let target = DomRoot::from_ref(&**self.get_node(target));
                 let template = target
                     .downcast::<HTMLTemplateElement>()
                     .expect("Tried to extract contents from non-template element while parsing");
@@ -486,7 +501,7 @@ impl Tokenizer {
                     .expect("Appending failed");
             },
             ParseOperation::AddAttrsIfMissing { target, attrs } => {
-                let node = self.get_node(&target);
+                let node = self.get_node(target);
                 let elem = node
                     .downcast::<Element>()
                     .expect("tried to set attrs on non-Element in HTML parsing");
@@ -500,20 +515,20 @@ impl Tokenizer {
                 }
             },
             ParseOperation::RemoveFromParent { target } => {
-                if let Some(ref parent) = self.get_node(&target).GetParentNode() {
-                    parent.RemoveChild(&self.get_node(&target), can_gc).unwrap();
+                if let Some(ref parent) = self.get_node(target).GetParentNode() {
+                    parent.RemoveChild(&self.get_node(target), can_gc).unwrap();
                 }
             },
             ParseOperation::MarkScriptAlreadyStarted { node } => {
-                let node = self.get_node(&node);
+                let node = self.get_node(node);
                 let script = node.downcast::<HTMLScriptElement>();
                 if let Some(script) = script {
                     script.set_already_started(true)
                 }
             },
             ParseOperation::ReparentChildren { parent, new_parent } => {
-                let parent = self.get_node(&parent);
-                let new_parent = self.get_node(&new_parent);
+                let parent = self.get_node(parent);
+                let new_parent = self.get_node(new_parent);
                 while let Some(child) = parent.GetFirstChild() {
                     new_parent.AppendChild(&child, can_gc).unwrap();
                 }
@@ -535,11 +550,11 @@ impl Tokenizer {
                 if !self.same_tree(tree_node, form) {
                     return;
                 }
-                let form = self.get_node(&form);
+                let form = self.get_node(form);
                 let form = DomRoot::downcast::<HTMLFormElement>(DomRoot::from_ref(&**form))
                     .expect("Owner must be a form element");
 
-                let node = self.get_node(&target);
+                let node = self.get_node(target);
                 let elem = node.downcast::<Element>();
                 let control = elem.and_then(|e| e.as_maybe_form_control());
 
@@ -548,7 +563,7 @@ impl Tokenizer {
                 }
             },
             ParseOperation::Pop { node } => {
-                vtable_for(&self.get_node(&node)).pop();
+                vtable_for(&self.get_node(node)).pop();
             },
             ParseOperation::CreatePI { node, target, data } => {
                 let pi = ProcessingInstruction::new(
@@ -594,6 +609,7 @@ fn run(
     } else {
         HtmlTokenizer::new(TreeBuilder::new(sink, options), Default::default())
     };
+    let html_tokenizer = DecodingParser::new(html_tokenizer);
 
     loop {
         match receiver
@@ -601,31 +617,38 @@ fn run(
             .expect("Unexpected channel panic in html parser thread")
         {
             ToHtmlTokenizerMsg::Feed { input } => {
-                let input = create_buffer_queue(input);
-                let res = html_tokenizer.feed(&input);
+                html_tokenizer
+                    .input_stream()
+                    .append(StrTendril::from(input));
 
-                // Gather changes to 'input' and place them in 'updated_input',
-                // which will be sent to the main thread to update feed method's 'input'
-                let mut updated_input = VecDeque::new();
-                while let Some(st) = input.pop_front() {
-                    updated_input.push_back(SendTendril::from(st));
-                }
-
-                let res = match res {
-                    TokenizerResult::Done => ToTokenizerMsg::TokenizerResultDone { updated_input },
-                    TokenizerResult::Script(script) => ToTokenizerMsg::TokenizerResultScript {
-                        script,
-                        updated_input,
+                let result = match html_tokenizer.parse().next() {
+                    None => {
+                        // Done parsing
+                        ToTokenizerMsg::TokenizerResultDone
+                    },
+                    Some(ParserAction::HandleScript(script)) => {
+                        ToTokenizerMsg::TokenizerResultScript { script }
                     },
                 };
-                sender.send(res).unwrap();
+
+                sender.send(result).unwrap();
             },
             ToHtmlTokenizerMsg::End => {
-                html_tokenizer.end();
+                html_tokenizer.sink().end();
                 sender.send(ToTokenizerMsg::End).unwrap();
                 break;
             },
-            ToHtmlTokenizerMsg::SetPlainTextState => html_tokenizer.set_plaintext_state(),
+            ToHtmlTokenizerMsg::SetPlainTextState => html_tokenizer.sink().set_plaintext_state(),
+            ToHtmlTokenizerMsg::ClearInputStream => html_tokenizer.input_stream().clear(),
+            ToHtmlTokenizerMsg::NotifyParserBlockingScriptLoaded => {
+                html_tokenizer.notify_parser_blocking_script_loaded()
+            },
+            ToHtmlTokenizerMsg::PushScriptInput(input) => {
+                html_tokenizer.push_script_input(StrTendril::from(input))
+            },
+            ToHtmlTokenizerMsg::EndDocumentWriteTransaction => {
+                html_tokenizer.end_document_write_transaction();
+            }
         };
     }
 }
@@ -698,6 +721,7 @@ impl Sink {
 #[cfg_attr(crown, allow(crown::unrooted_must_root))]
 impl TreeSink for Sink {
     type Output = Self;
+
     fn finish(self) -> Self {
         self
     }

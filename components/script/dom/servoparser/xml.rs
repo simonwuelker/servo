@@ -6,10 +6,10 @@
 
 use std::cell::Cell;
 
-use markup5ever::TokenizerResult;
+use markup5ever::{DecodingParser, ParserAction};
 use script_bindings::trace::CustomTraceable;
 use servo_url::ServoUrl;
-use xml5ever::buffer_queue::BufferQueue;
+use tendril::StrTendril;
 use xml5ever::tokenizer::XmlTokenizer;
 use xml5ever::tree_builder::XmlTreeBuilder;
 
@@ -23,8 +23,8 @@ use crate::dom::servoparser::{ParsingAlgorithm, Sink};
 #[derive(JSTraceable, MallocSizeOf)]
 #[cfg_attr(crown, crown::unrooted_must_root_lint::must_root)]
 pub(crate) struct Tokenizer {
-    #[ignore_malloc_size_of = "Defined in xml5ever"]
-    inner: XmlTokenizer<XmlTreeBuilder<Dom<Node>, Sink>>,
+    #[ignore_malloc_size_of = "Defined in markup5ever"]
+    inner: DecodingParser<XmlTokenizer<XmlTreeBuilder<Dom<Node>, Sink>>>,
 }
 
 impl Tokenizer {
@@ -37,32 +37,64 @@ impl Tokenizer {
             parsing_algorithm: ParsingAlgorithm::Normal,
         };
 
-        let tb = XmlTreeBuilder::new(sink, Default::default());
-        let tok = XmlTokenizer::new(tb, Default::default());
+        let tree_builder = XmlTreeBuilder::new(sink, Default::default());
+        let tokenizer = XmlTokenizer::new(tree_builder, Default::default());
 
-        Tokenizer { inner: tok }
-    }
-
-    pub(crate) fn feed(&self, input: &BufferQueue) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
-        loop {
-            match self.inner.run(input) {
-                TokenizerResult::Done => return TokenizerResult::Done,
-                TokenizerResult::Script(handle) => {
-                    // Apparently the parser can sometimes create <script> elements without a namespace, resulting
-                    // in them not being HTMLScriptElements.
-                    if let Some(script) = handle.downcast::<HTMLScriptElement>() {
-                        return TokenizerResult::Script(DomRoot::from_ref(script));
-                    }
-                },
-            }
+        Tokenizer {
+            inner: DecodingParser::new(tokenizer),
         }
     }
 
+    pub(crate) fn feed_code_points(&self, chunk: StrTendril) {
+        self.inner.input_stream().append(chunk);
+    }
+
     pub(crate) fn end(&self) {
-        self.inner.end()
+        self.inner.sink().end()
     }
 
     pub(crate) fn url(&self) -> &ServoUrl {
-        &self.inner.sink.sink.base_url
+        &self.inner.sink().sink.sink.base_url
     }
+
+    pub(crate) fn parse(&self) -> impl Iterator<Item = ParserAction<DomRoot<HTMLScriptElement>>> {
+        self.inner.parse().flat_map(map_action)
+    }
+
+    pub(crate) fn clear_input_stream(&self) {
+        self.inner.input_stream().clear();
+    }
+
+    pub(crate) fn document_write<'a>(
+        &'a self,
+        input: StrTendril,
+    ) -> impl Iterator<Item = ParserAction<DomRoot<HTMLScriptElement>>> + 'a {
+        self.inner.document_write(input).flat_map(map_action)
+    }
+
+    pub(crate) fn end_document_write_transaction(&self) {
+        self.inner.end_document_write_transaction();
+    }
+
+    /// Called when the parser is suspended and `document.write` is called
+    pub(crate) fn push_script_input(&self, input: StrTendril) {
+        self.inner.push_script_input(input);
+    }
+
+    pub(crate) fn notify_parser_blocking_script_loaded(&self) {
+        self.inner.notify_parser_blocking_script_loaded();
+    }
+}
+
+fn map_action(action: ParserAction<Dom<Node>>) -> Option<ParserAction<DomRoot<HTMLScriptElement>>> {
+    let action = match action {
+        ParserAction::HandleScript(script) => {
+            if let Some(script) = script.downcast::<HTMLScriptElement>() {
+                ParserAction::HandleScript(DomRoot::from_ref(script))
+            } else {
+                return None;
+            }
+        },
+    };
+    Some(action)
 }

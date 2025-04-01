@@ -3013,7 +3013,7 @@ impl Document {
         self.completely_loaded.get()
     }
 
-    // https://html.spec.whatwg.org/multipage/#pending-parsing-blocking-script
+    /// <https://html.spec.whatwg.org/multipage/#pending-parsing-blocking-script>
     pub(crate) fn set_pending_parsing_blocking_script(
         &self,
         script: &HTMLScriptElement,
