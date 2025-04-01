@@ -596,6 +596,7 @@ fn run(
     } else {
         HtmlTokenizer::new(TreeBuilder::new(sink, options), Default::default())
     };
+    // let html_tokenizer = DecodingParser::new(html_tokenizer);
 
     loop {
         match receiver
@@ -619,6 +620,7 @@ fn run(
                         script,
                         updated_input,
                     },
+                    _ => todo!(),
                 };
                 sender.send(res).unwrap();
             },
