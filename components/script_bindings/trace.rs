@@ -18,6 +18,7 @@ use js::gc::{GCMethods, Handle};
 use js::glue::CallObjectTracer;
 use js::jsapi::{GCTraceKindToAscii, Heap, JSObject, JSTracer, TraceKind};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use markup5ever::{DecodingParser, InputSink};
 use parking_lot::RwLock;
 use servo_arc::Arc as ServoArc;
 use smallvec::SmallVec;
@@ -281,7 +282,9 @@ unsafe impl<Handle: JSTraceable + Clone, Sink: TreeSink<Handle = Handle> + JSTra
         }
 
         self.trace_handles(&tracer);
-        self.sink.trace(trc);
+        unsafe {
+            self.sink.trace(trc);
+        }
     }
 }
 
@@ -290,7 +293,20 @@ unsafe impl<Handle: JSTraceable + Clone, Sink: TokenSink<Handle = Handle> + Cust
     CustomTraceable for Tokenizer<Sink>
 {
     unsafe fn trace(&self, trc: *mut JSTracer) {
-        self.sink.trace(trc);
+        unsafe {
+            self.sink.trace(trc);
+        }
+    }
+}
+
+#[allow(unsafe_code)]
+unsafe impl<Handle: JSTraceable + Clone, Sink: InputSink<Handle = Handle> + CustomTraceable>
+    CustomTraceable for DecodingParser<Sink>
+{
+    unsafe fn trace(&self, trc: *mut JSTracer) {
+        unsafe {
+            self.sink().trace(trc);
+        }
     }
 }
 
