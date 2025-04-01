@@ -4,20 +4,22 @@
 
 #![cfg_attr(crown, allow(crown::unrooted_must_root))]
 
+use std::borrow::Borrow;
 use std::cell::Cell;
 use std::io;
 
-use html5ever::buffer_queue::BufferQueue;
 use html5ever::serialize::TraversalScope::IncludeNode;
 use html5ever::serialize::{AttrRef, Serialize, Serializer, TraversalScope};
 use html5ever::tokenizer::{Tokenizer as HtmlTokenizer, TokenizerOpts};
 use html5ever::tree_builder::{QuirksMode as HTML5EverQuirksMode, TreeBuilder, TreeBuilderOpts};
-use html5ever::{QualName, local_name, ns};
-use markup5ever::TokenizerResult;
+use html5ever::{QualName, local_name, namespace_url, ns};
+use markup5ever::buffer_queue::{BufferQueue, ByteBufferQueue};
+use markup5ever::{DecodingParser, ParserAction, TokenizerResult};
 use script_bindings::trace::CustomTraceable;
 use servo_url::ServoUrl;
 use style::attr::AttrValue;
 use style::context::QuirksMode as StyleContextQuirksMode;
+use tendril::StrTendril;
 use xml5ever::LocalName;
 
 use crate::dom::bindings::codegen::Bindings::HTMLTemplateElementBinding::HTMLTemplateElementMethods;
@@ -42,7 +44,7 @@ use crate::script_runtime::CanGc;
 #[cfg_attr(crown, crown::unrooted_must_root_lint::must_root)]
 pub(crate) struct Tokenizer {
     #[ignore_malloc_size_of = "Defined in html5ever"]
-    inner: HtmlTokenizer<TreeBuilder<Dom<Node>, Sink>>,
+    inner: DecodingParser<HtmlTokenizer<TreeBuilder<Dom<Node>, Sink>>>,
 }
 
 impl Tokenizer {
@@ -74,7 +76,7 @@ impl Tokenizer {
             ..Default::default()
         };
 
-        let inner = if let Some(fc) = fragment_context {
+        let tokenizer = if let Some(fc) = fragment_context {
             let tb = TreeBuilder::new_for_fragment(
                 sink,
                 Dom::from_ref(fc.context_elem),
@@ -92,28 +94,64 @@ impl Tokenizer {
             HtmlTokenizer::new(TreeBuilder::new(sink, options), Default::default())
         };
 
-        Tokenizer { inner }
-    }
-
-    pub(crate) fn feed(&self, input: &BufferQueue) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
-        match self.inner.feed(input) {
-            TokenizerResult::Done => TokenizerResult::Done,
-            TokenizerResult::Script(script) => {
-                TokenizerResult::Script(DomRoot::from_ref(script.downcast().unwrap()))
-            },
+        Tokenizer {
+            inner: DecodingParser::new(tokenizer, document.encoding()),
         }
     }
 
+    pub(crate) fn feed_code_points(&self, chunk: StrTendril) {
+        self.inner.input_stream().append(chunk);
+    }
+
+    pub(crate) fn feed_bytes(&self, chunk: &[u8]) {
+        self.inner.input_stream().append_bytes(chunk);
+    }
+
     pub(crate) fn end(&self) {
-        self.inner.end();
+        self.inner.sink().end();
     }
 
     pub(crate) fn url(&self) -> &ServoUrl {
-        &self.inner.sink.sink.base_url
+        &self.inner.sink().sink.sink.base_url
     }
 
     pub(crate) fn set_plaintext_state(&self) {
-        self.inner.set_plaintext_state();
+        self.inner.sink().set_plaintext_state();
+    }
+
+    pub(crate) fn parse(&self) -> impl Iterator<Item = ParserAction<DomRoot<HTMLScriptElement>>> {
+        self.inner.parse().map(|action| {
+            action.map_script(|script| {
+                DomRoot::from_ref(script.downcast::<HTMLScriptElement>().unwrap())
+            })
+        })
+    }
+
+    pub(crate) fn finish_decoding_input(&self) {
+        self.inner.input_stream().finish_decoding_input();
+    }
+
+    pub(crate) fn clear_input_stream(&self) {
+        self.inner.input_stream().clear();
+    }
+
+    pub(crate) fn document_write<'a>(
+        &'a self,
+        input: &'a BufferQueue,
+    ) -> impl Iterator<Item = ParserAction<DomRoot<HTMLScriptElement>>> + 'a {
+        self.inner.document_write(input).map(|action| {
+            action.map_script(|script| {
+                DomRoot::from_ref(script.downcast::<HTMLScriptElement>().unwrap())
+            })
+        })
+    }
+
+    pub(crate) fn push_script_input(&self, input: &BufferQueue) {
+        self.inner.push_script_input(input);
+    }
+
+    pub(crate) fn notify_parser_blocking_script_loaded(&self) {
+        self.inner.notify_parser_blocking_script_loaded();
     }
 }
 

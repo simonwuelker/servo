@@ -14,12 +14,10 @@ use dom_struct::dom_struct;
 use embedder_traits::resources::{self, Resource};
 use encoding_rs::Encoding;
 use html5ever::buffer_queue::BufferQueue;
-use html5ever::tendril::fmt::UTF8;
 use html5ever::tendril::{ByteTendril, StrTendril, TendrilSink};
 use html5ever::tree_builder::{ElementFlags, NodeOrText, QuirksMode, TreeSink};
 use html5ever::{Attribute, ExpandedName, LocalName, QualName, local_name, ns};
 use hyper_serde::Serde;
-use markup5ever::TokenizerResult;
 use mime::{self, Mime};
 use net_traits::policy_container::PolicyContainer;
 use net_traits::request::RequestId;
@@ -35,7 +33,6 @@ use script_traits::DocumentActivity;
 use servo_config::pref;
 use servo_url::ServoUrl;
 use style::context::QuirksMode as ServoQuirksMode;
-use tendril::stream::LossyDecoder;
 
 use crate::document_loader::{DocumentLoader, LoadType};
 use crate::dom::bindings::cell::DomRefCell;
@@ -85,6 +82,8 @@ mod xml;
 
 pub(crate) use html::serialize_html_fragment;
 
+type ParserAction = markup5ever::ParserAction<DomRoot<HTMLScriptElement>>;
+
 #[dom_struct]
 /// The parser maintains two input streams: one for input from script through
 /// document.write(), and one for input from network.
@@ -108,20 +107,12 @@ pub(crate) struct ServoParser {
     /// we're not parsing from a byte stream. `Some` contains the BOM bytes
     /// found so far.
     bom_sniff: DomRefCell<Option<Vec<u8>>>,
-    /// The decoder used for the network input.
-    network_decoder: DomRefCell<Option<NetworkDecoder>>,
-    /// Input received from network.
-    #[ignore_malloc_size_of = "Defined in html5ever"]
-    #[no_trace]
-    network_input: BufferQueue,
-    /// Input received from script. Used only to support document.write().
-    #[ignore_malloc_size_of = "Defined in html5ever"]
-    #[no_trace]
-    script_input: BufferQueue,
     /// The tokenizer of this parser.
     tokenizer: Tokenizer,
     /// Whether to expect any further input from the associated network request.
     last_chunk_received: Cell<bool>,
+    /// Whether more input from the associated network request will be processed
+    last_chunk_processed: Cell<bool>,
     /// Whether this parser should avoid passing any further data to the tokenizer.
     suspended: Cell<bool>,
     /// <https://html.spec.whatwg.org/multipage/#script-nesting-level>
@@ -335,10 +326,7 @@ impl ServoParser {
         assert!(self.suspended.get());
         self.suspended.set(false);
 
-        self.script_input.swap_with(&self.network_input);
-        while let Some(chunk) = self.script_input.pop_front() {
-            self.network_input.push_back(chunk);
-        }
+        self.tokenizer.notify_parser_blocking_script_loaded();
 
         let script_nesting_level = self.script_nesting_level.get();
         assert_eq!(script_nesting_level, 0);
@@ -360,21 +348,28 @@ impl ServoParser {
     pub(crate) fn write(&self, text: DOMString, can_gc: CanGc) {
         assert!(self.can_write());
 
+        let input = BufferQueue::default();
+        input.push_back(String::from(text).into());
+
         if self.document.has_pending_parsing_blocking_script() {
             // There is already a pending parsing blocking script so the
             // parser is suspended, we just append everything to the
             // script input and abort these steps.
-            self.script_input.push_back(String::from(text).into());
+            self.tokenizer.push_script_input(&input);
             return;
         }
 
         // There is no pending parsing blocking script, so all previous calls
         // to document.write() should have seen their entire input tokenized
         // and process, with nothing pushed to the parser script input.
-        assert!(self.script_input.is_empty());
+        self.tokenizer
+            .document_write(&input, |action| self.handle_parsing_action(action, can_gc));
 
-        let input = BufferQueue::default();
-        input.push_back(String::from(text).into());
+        // Check if we got suspended while processing the document.write call
+        if self.suspended.get() {
+            self.tokenizer.push_script_input(&input);
+        }
+        assert!(input.is_empty());
 
         let profiler_chan = self
             .document
@@ -387,29 +382,6 @@ impl ServoParser {
             iframe: TimerMetadataFrameType::RootWindow,
             incremental: TimerMetadataReflowType::FirstReflow,
         };
-        self.tokenize(
-            |tokenizer| {
-                tokenizer.feed(
-                    &input,
-                    can_gc,
-                    profiler_chan.clone(),
-                    profiler_metadata.clone(),
-                )
-            },
-            can_gc,
-        );
-
-        if self.suspended.get() {
-            // Parser got suspended, insert remaining input at end of
-            // script input, following anything written by scripts executed
-            // reentrantly during this call.
-            while let Some(chunk) = input.pop_front() {
-                self.script_input.push_back(chunk);
-            }
-            return;
-        }
-
-        assert!(input.is_empty());
     }
 
     // Steps 4-6 of https://html.spec.whatwg.org/multipage/#dom-document-close
@@ -433,9 +405,9 @@ impl ServoParser {
         assert!(!self.aborted.get());
         self.aborted.set(true);
 
-        // Step 1.
-        self.script_input.replace_with(BufferQueue::default());
-        self.network_input.replace_with(BufferQueue::default());
+        // Step 1. Throw away any pending content in the input stream, and discard any future content
+        // that would have been added to it.
+        self.tokenizer.clear_input_stream();
 
         // Step 2.
         self.document
@@ -461,11 +433,9 @@ impl ServoParser {
             reflector: Reflector::new(),
             document: Dom::from_ref(document),
             bom_sniff: DomRefCell::new(Some(Vec::with_capacity(3))),
-            network_decoder: DomRefCell::new(Some(NetworkDecoder::new(document.encoding()))),
-            network_input: BufferQueue::default(),
-            script_input: BufferQueue::default(),
             tokenizer,
             last_chunk_received: Cell::new(false),
+            last_chunk_processed: Cell::new(false),
             suspended: Default::default(),
             script_nesting_level: Default::default(),
             aborted: Default::default(),
@@ -511,7 +481,7 @@ impl ServoParser {
         }
         // Push the chunk into the network input stream,
         // which is tokenized lazily.
-        self.network_input.push_back(chunk);
+        self.tokenizer.feed_code_points(chunk);
     }
 
     fn push_bytes_input_chunk(&self, chunk: Vec<u8>) {
@@ -534,14 +504,7 @@ impl ServoParser {
             }
         }
 
-        // For byte input, we convert it to text using the network decoder.
-        let chunk = self
-            .network_decoder
-            .borrow_mut()
-            .as_mut()
-            .unwrap()
-            .decode(chunk);
-        self.push_tendril_input_chunk(chunk);
+        self.tokenizer.feed_bytes(&chunk);
     }
 
     fn push_string_input_chunk(&self, chunk: String) {
@@ -557,55 +520,88 @@ impl ServoParser {
     }
 
     fn parse_sync(&self, can_gc: CanGc) {
-        assert!(self.script_input.is_empty());
-
         // This parser will continue to parse while there is either pending input or
         // the parser remains unsuspended.
-
-        if self.last_chunk_received.get() {
-            if let Some(decoder) = self.network_decoder.borrow_mut().take() {
-                let chunk = decoder.finish();
-                if !chunk.is_empty() {
-                    self.network_input.push_back(chunk);
-                }
-            }
+        if self.last_chunk_received.get() && !self.last_chunk_processed.get() {
+            self.tokenizer.finish_decoding_input();
+            self.last_chunk_processed.set(true);
         }
 
-        let profiler_chan = self
-            .document
-            .window()
-            .as_global_scope()
-            .time_profiler_chan()
-            .clone();
-        let profiler_metadata = TimerMetadata {
-            url: self.document.url().as_str().into(),
-            iframe: TimerMetadataFrameType::RootWindow,
-            incremental: TimerMetadataReflowType::FirstReflow,
-        };
-        self.tokenize(
-            |tokenizer| {
-                tokenizer.feed(
-                    &self.network_input,
-                    can_gc,
-                    profiler_chan.clone(),
-                    profiler_metadata.clone(),
-                )
-            },
-            can_gc,
-        );
+        // let profiler_chan = self
+        //     .document
+        //     .window()
+        //     .as_global_scope()
+        //     .time_profiler_chan()
+        //     .clone();
+        // let profiler_metadata = TimerMetadata {
+        //     url: self.document.url().as_str().into(),
+        //     iframe: TimerMetadataFrameType::RootWindow,
+        //     incremental: TimerMetadataReflowType::FirstReflow,
+        // };
+
+        self.tokenizer
+            .parse_complete(|action| self.handle_parsing_action(action, can_gc));
 
         if self.suspended.get() {
             return;
         }
-
-        assert!(self.network_input.is_empty());
 
         if self.last_chunk_received.get() {
             self.finish(can_gc);
         }
     }
 
+    /// Handle a single [ParserAction] and return whether parsing should continue
+    fn handle_parsing_action(&self, parsing_action: ParserAction, can_gc: CanGc) -> bool {
+        assert!(!self.suspended.get());
+        assert!(!self.aborted.get());
+
+        self.document
+            .window()
+            .reflow_if_reflow_timer_expired(can_gc);
+
+        let script = match parsing_action {
+            ParserAction::HandleScript(script) => script,
+            ParserAction::StartOverWithEncoding(encoding) => {
+                log::error!("FIXME: Restart the parser with encoding {encoding:?}");
+                return true;
+            },
+        };
+
+        // https://html.spec.whatwg.org/multipage/#parsing-main-incdata
+        // branch "An end tag whose tag name is "script"
+        // The spec says to perform the microtask checkpoint before
+        // setting the insertion mode back from Text, but this is not
+        // possible with the way servo and html5ever currently
+        // relate to each other, and hopefully it is not observable.
+        if is_execution_stack_empty() {
+            self.document
+                .window()
+                .as_global_scope()
+                .perform_a_microtask_checkpoint(can_gc);
+        }
+
+        let script_nesting_level = self.script_nesting_level.get();
+
+        self.script_nesting_level.set(script_nesting_level + 1);
+        script.prepare(can_gc);
+        self.script_nesting_level.set(script_nesting_level);
+
+        if self.document.has_pending_parsing_blocking_script() {
+            self.suspended.set(true);
+            return false;
+        }
+
+        if self.aborted.get() {
+            return false;
+        }
+
+        true
+    }
+
     fn parse_complete_string_chunk(&self, input: String, can_gc: CanGc) {
+        debug_assert!(!self.last_chunk_received.get());
+
         self.document.set_current_parser(Some(self));
         self.push_string_input_chunk(input);
         self.last_chunk_received.set(true);
@@ -622,58 +618,10 @@ impl ServoParser {
         }
     }
 
-    fn tokenize<F>(&self, feed: F, can_gc: CanGc)
-    where
-        F: Fn(&Tokenizer) -> TokenizerResult<DomRoot<HTMLScriptElement>>,
-    {
-        loop {
-            assert!(!self.suspended.get());
-            assert!(!self.aborted.get());
-
-            self.document
-                .window()
-                .reflow_if_reflow_timer_expired(can_gc);
-            let script = match feed(&self.tokenizer) {
-                TokenizerResult::Done => return,
-                TokenizerResult::Script(script) => script,
-            };
-
-            // https://html.spec.whatwg.org/multipage/#parsing-main-incdata
-            // branch "An end tag whose tag name is "script"
-            // The spec says to perform the microtask checkpoint before
-            // setting the insertion mode back from Text, but this is not
-            // possible with the way servo and html5ever currently
-            // relate to each other, and hopefully it is not observable.
-            if is_execution_stack_empty() {
-                self.document
-                    .window()
-                    .as_global_scope()
-                    .perform_a_microtask_checkpoint(can_gc);
-            }
-
-            let script_nesting_level = self.script_nesting_level.get();
-
-            self.script_nesting_level.set(script_nesting_level + 1);
-            script.prepare(can_gc);
-            self.script_nesting_level.set(script_nesting_level);
-
-            if self.document.has_pending_parsing_blocking_script() {
-                self.suspended.set(true);
-                return;
-            }
-            if self.aborted.get() {
-                return;
-            }
-        }
-    }
-
     // https://html.spec.whatwg.org/multipage/#the-end
     fn finish(&self, can_gc: CanGc) {
         assert!(!self.suspended.get());
         assert!(self.last_chunk_received.get());
-        assert!(self.script_input.is_empty());
-        assert!(self.network_input.is_empty());
-        assert!(self.network_decoder.borrow().is_none());
 
         // Step 1.
         self.document
@@ -728,32 +676,102 @@ enum Tokenizer {
 }
 
 impl Tokenizer {
-    fn feed(
-        &self,
-        input: &BufferQueue,
-        can_gc: CanGc,
-        profiler_chan: ProfilerChan,
-        profiler_metadata: TimerMetadata,
-    ) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
-        match *self {
-            Tokenizer::Html(ref tokenizer) => time_profile!(
-                ProfilerCategory::ScriptParseHTML,
-                Some(profiler_metadata),
-                profiler_chan,
-                || tokenizer.feed(input),
-            ),
-            Tokenizer::AsyncHtml(ref tokenizer) => time_profile!(
-                ProfilerCategory::ScriptParseHTML,
-                Some(profiler_metadata),
-                profiler_chan,
-                || tokenizer.feed(input, can_gc),
-            ),
-            Tokenizer::Xml(ref tokenizer) => time_profile!(
-                ProfilerCategory::ScriptParseXML,
-                Some(profiler_metadata),
-                profiler_chan,
-                || tokenizer.feed(input),
-            ),
+    fn clear_input_stream(&self) {
+        match self {
+            Self::Html(html_tokenizer) => html_tokenizer.clear_input_stream(),
+            Self::AsyncHtml(async_html_tokenizer) => todo!(),
+            Self::Xml(xml_tokenizer) => xml_tokenizer.clear_input_stream(),
+        }
+    }
+
+    fn document_write<F>(&self, input: &BufferQueue, callback: F)
+    where
+        F: Fn(ParserAction) -> bool,
+    {
+        match self {
+            Tokenizer::Html(html_tokenizer) => {
+                for action in html_tokenizer.document_write(input) {
+                    if !callback(action) {
+                        break;
+                    }
+                }
+            },
+            Tokenizer::Xml(xml_tokenizer) => {
+                for action in xml_tokenizer.document_write(input) {
+                    if !callback(action) {
+                        break;
+                    }
+                }
+            },
+            Tokenizer::AsyncHtml(_) => {
+                todo!();
+            },
+        }
+    }
+
+    fn push_script_input(&self, input: &BufferQueue) {
+        match self {
+            Self::Html(html_tokenizer) => html_tokenizer.push_script_input(input),
+            Self::AsyncHtml(async_html_tokenizer) => todo!(),
+            Self::Xml(xml_tokenizer) => xml_tokenizer.push_script_input(input),
+        }
+    }
+
+    fn notify_parser_blocking_script_loaded(&self) {
+        match self {
+            Self::Html(html_tokenizer) => html_tokenizer.notify_parser_blocking_script_loaded(),
+            Self::AsyncHtml(async_html_tokenizer) => todo!(),
+            Self::Xml(xml_tokenizer) => xml_tokenizer.notify_parser_blocking_script_loaded(),
+        }
+    }
+
+    fn finish_decoding_input(&self) {
+        match self {
+            Self::Html(html_tokenizer) => html_tokenizer.finish_decoding_input(),
+            Self::AsyncHtml(_) => todo!(),
+            Self::Xml(xml_tokenizer) => xml_tokenizer.finish_decoding_input(),
+        }
+    }
+
+    /// Run the parser until all input has been consumed.
+    fn parse_complete<F>(&self, callback: F)
+    where
+        F: Fn(ParserAction) -> bool,
+    {
+        match self {
+            Tokenizer::Html(html_tokenizer) => {
+                for action in html_tokenizer.parse() {
+                    if !callback(action) {
+                        break;
+                    }
+                }
+            },
+            Tokenizer::Xml(xml_tokenizer) => {
+                for action in xml_tokenizer.parse() {
+                    if !callback(action) {
+                        break;
+                    }
+                }
+            },
+            Tokenizer::AsyncHtml(_) => {
+                todo!();
+            },
+        }
+    }
+
+    fn feed_code_points(&self, code_points: StrTendril) {
+        match self {
+            Self::Html(html_tokenizer) => html_tokenizer.feed_code_points(code_points),
+            Self::AsyncHtml(_) => todo!(),
+            Self::Xml(xml_tokenizer) => xml_tokenizer.feed_code_points(code_points),
+        }
+    }
+
+    fn feed_bytes(&self, bytes: &[u8]) {
+        match self {
+            Self::Html(html_tokenizer) => html_tokenizer.feed_bytes(bytes),
+            Self::AsyncHtml(_) => todo!(),
+            Self::Xml(xml_tokenizer) => xml_tokenizer.feed_bytes(bytes),
         }
     }
 
@@ -1567,52 +1585,4 @@ fn create_element_for_token(
 
     // Step 13.
     element
-}
-
-#[derive(JSTraceable, MallocSizeOf)]
-struct NetworkDecoder {
-    #[ignore_malloc_size_of = "Defined in tendril"]
-    #[custom_trace]
-    decoder: LossyDecoder<NetworkSink>,
-}
-
-impl NetworkDecoder {
-    fn new(encoding: &'static Encoding) -> Self {
-        Self {
-            decoder: LossyDecoder::new_encoding_rs(encoding, Default::default()),
-        }
-    }
-
-    fn decode(&mut self, chunk: Vec<u8>) -> StrTendril {
-        self.decoder.process(ByteTendril::from(&*chunk));
-        std::mem::take(&mut self.decoder.inner_sink_mut().output)
-    }
-
-    fn finish(self) -> StrTendril {
-        self.decoder.finish()
-    }
-}
-
-#[derive(Default, JSTraceable)]
-struct NetworkSink {
-    #[no_trace]
-    output: StrTendril,
-}
-
-impl TendrilSink<UTF8> for NetworkSink {
-    type Output = StrTendril;
-
-    fn process(&mut self, t: StrTendril) {
-        if self.output.is_empty() {
-            self.output = t;
-        } else {
-            self.output.push_tendril(&t);
-        }
-    }
-
-    fn error(&mut self, _desc: Cow<'static, str>) {}
-
-    fn finish(self) -> Self::Output {
-        self.output
-    }
 }

@@ -218,6 +218,10 @@ codegen-units = 1
 #
 # For html5ever:
 #
+html5ever = { git = "https://github.com/simonwuelker/html5ever", branch = "encodings" }
+markup5ever = { git = "https://github.com/simonwuelker/html5ever", branch = "encodings" }
+xml5ever = { git = "https://github.com/simonwuelker/html5ever", branch = "encodings" }
+web_atoms = { git = "https://github.com/simonwuelker/html5ever", branch = "encodings" }
 # html5ever = { path = "../html5ever/html5ever" }
 # markup5ever = { path = "../html5ever/markup5ever" }
 # xml5ever = { path = "../html5ever/xml5ever" }
