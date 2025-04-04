@@ -356,26 +356,20 @@ impl ServoParser {
     /// Steps 6-8 of <https://html.spec.whatwg.org/multipage/#document.write()>
     pub(crate) fn write(&self, text: Vec<DOMString>, can_gc: CanGc) {
         assert!(self.can_write());
+        for chunk in text {
+            self.script_input.push_back(String::from(chunk).into());
+        }
 
         if self.document.has_pending_parsing_blocking_script() {
             // There is already a pending parsing blocking script so the
             // parser is suspended, we just append everything to the
             // script input and abort these steps.
-            for chunk in text {
-                self.script_input.push_back(String::from(chunk).into());
-            }
             return;
         }
 
         // There is no pending parsing blocking script, so all previous calls
         // to document.write() should have seen their entire input tokenized
         // and process, with nothing pushed to the parser script input.
-        assert!(self.script_input.is_empty());
-
-        let input = BufferQueue::default();
-        for chunk in text {
-            input.push_back(String::from(chunk).into());
-        }
 
         let profiler_chan = self
             .document
@@ -391,7 +385,7 @@ impl ServoParser {
         self.tokenize(
             |tokenizer| {
                 tokenizer.feed(
-                    &input,
+                    &self.script_input,
                     can_gc,
                     profiler_chan.clone(),
                     profiler_metadata.clone(),
@@ -399,18 +393,6 @@ impl ServoParser {
             },
             can_gc,
         );
-
-        if self.suspended.get() {
-            // Parser got suspended, insert remaining input at end of
-            // script input, following anything written by scripts executed
-            // reentrantly during this call.
-            while let Some(chunk) = input.pop_front() {
-                self.script_input.push_back(chunk);
-            }
-            return;
-        }
-
-        assert!(input.is_empty());
     }
 
     // Steps 4-6 of https://html.spec.whatwg.org/multipage/#dom-document-close
