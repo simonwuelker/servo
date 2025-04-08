@@ -3125,8 +3125,14 @@ pub(crate) fn new_js_regex(
     true
 }
 
+// TODO: This is also used in the URLPattern implementation. Consider moving it into mozjs or some other
+// shared module
 #[allow(unsafe_code)]
-fn matches_js_regex(cx: SafeJSContext, regex_obj: HandleObject, value: &str) -> Result<bool, ()> {
+pub(crate) fn matches_js_regex(
+    cx: SafeJSContext,
+    regex_obj: HandleObject,
+    value: &str,
+) -> Result<bool, ()> {
     let mut value: Vec<u16> = value.encode_utf16().collect();
 
     unsafe {

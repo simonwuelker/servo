@@ -2,12 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+mod constructor_string_parser;
 mod pattern_parser;
 mod preprocessing;
 mod tokenizer;
 
 use std::ptr;
 
+use constructor_string_parser::parse_a_constructor_string;
 use dom_struct::dom_struct;
 use js::jsapi::{Heap, JSObject, RegExpFlag_IgnoreCase, RegExpFlag_UnicodeSets, RegExpFlags};
 use js::rust::HandleObject;
@@ -17,6 +19,7 @@ use preprocessing::{
     canonicalize_a_port, canonicalize_a_protocol, canonicalize_a_search, canonicalize_a_username,
     escape_a_regexp_string, process_a_url_pattern_init,
 };
+use script_bindings::codegen::GenericUnionTypes::USVStringOrURLPatternInit;
 use script_bindings::error::{Error, Fallible};
 use script_bindings::reflector::Reflector;
 use script_bindings::root::DomRoot;
@@ -25,7 +28,7 @@ use script_bindings::str::USVString;
 
 use crate::dom::bindings::cell::RefCell;
 use crate::dom::bindings::codegen::Bindings::URLPatternBinding::{
-    URLPatternInit, URLPatternMethods, URLPatternOptions,
+    URLPatternMethods, URLPatternOptions,
 };
 use crate::dom::bindings::reflector::reflect_dom_object_with_proto;
 use crate::dom::globalscope::GlobalScope;
@@ -33,6 +36,9 @@ use crate::dom::htmlinputelement::new_js_regex;
 
 /// <https://urlpattern.spec.whatwg.org/#full-wildcard-regexp-value>
 const FULL_WILDCARD_REGEXP_VALUE: &str = ".*";
+
+/// <https://url.spec.whatwg.org/#special-scheme>
+const SPECIAL_SCHEMES: &[&str; 5] = &["ftp", "http", "https", "ws", "wss"];
 
 /// <https://urlpattern.spec.whatwg.org/#urlpattern>
 #[dom_struct]
@@ -202,7 +208,8 @@ impl URLPattern {
     fn initialize(
         global: &GlobalScope,
         proto: Option<HandleObject>,
-        input: &URLPatternInit,
+        input: USVStringOrURLPatternInit,
+        base_url: Option<USVString>,
         options: &URLPatternOptions,
         can_gc: CanGc,
     ) -> Fallible<DomRoot<URLPattern>> {
@@ -211,6 +218,8 @@ impl URLPattern {
         URLPatternInternal::create(
             input,
             options,
+            base_url,
+            // FIXME: This is a gc hazard
             &mut pattern.associated_url_pattern.borrow_mut(),
         )?;
 
@@ -219,16 +228,29 @@ impl URLPattern {
 }
 
 impl URLPatternMethods<crate::DomTypeHolder> for URLPattern {
-    /// <https://urlpattern.spec.whatwg.org/#dom-urlpattern-urlpattern-input-options>
+    /// <https://urlpattern.spec.whatwg.org/#dom-urlpattern-urlpattern>
     fn Constructor(
         global: &GlobalScope,
         proto: Option<HandleObject>,
         can_gc: CanGc,
-        input: &URLPatternInit,
+        input: USVStringOrURLPatternInit,
+        base_url: USVString,
+        options: &URLPatternOptions,
+    ) -> Fallible<DomRoot<URLPattern>> {
+        // Step 1. Run initialize given this, input, baseURL, and options.
+        URLPattern::initialize(global, proto, input, Some(base_url), options, can_gc)
+    }
+
+    /// <https://urlpattern.spec.whatwg.org/#dom-urlpattern-urlpattern-input-options>
+    fn Constructor_(
+        global: &GlobalScope,
+        proto: Option<HandleObject>,
+        can_gc: CanGc,
+        input: USVStringOrURLPatternInit,
         options: &URLPatternOptions,
     ) -> Fallible<DomRoot<URLPattern>> {
         // Step 1. Run initialize given this, input, null, and options.
-        URLPattern::initialize(global, proto, input, options, can_gc)
+        URLPattern::initialize(global, proto, input, None, options, can_gc)
     }
 
     /// <https://urlpattern.spec.whatwg.org/#dom-urlpattern-protocol>
@@ -321,23 +343,52 @@ impl URLPatternMethods<crate::DomTypeHolder> for URLPattern {
 
 impl URLPatternInternal {
     /// <https://urlpattern.spec.whatwg.org/#url-pattern-create>
-    fn create(input: &URLPatternInit, options: &URLPatternOptions, out: &mut Self) -> Fallible<()> {
+    fn create(
+        input: USVStringOrURLPatternInit,
+        options: &URLPatternOptions,
+        base_url: Option<USVString>,
+        out: &mut Self,
+    ) -> Fallible<()> {
         // Step 1. Let init be null.
         // Step 2. If input is a scalar value string then:
-        // NOTE: We don't support strings as input yet
-        // Step 3. Otherwise:
-        // Step 3.1 Assert: input is a URLPatternInit.
-        // Step 3.2 If baseURL is not null, then throw a TypeError.
-        if input.baseURL.is_some() {
-            return Err(Error::Type("baseURL must be none".into()));
-        }
+        let init = match input {
+            USVStringOrURLPatternInit::USVString(scalar_value_string) => {
+                // Step 2.1 Set init to the result of running parse a constructor string given input.
+                let mut init = parse_a_constructor_string(&scalar_value_string)?;
 
-        // Step 3.3 Set init to input.
-        let init = input;
+                // Step 2.2 If baseURL is null and init["protocol"] does not exist, then throw a TypeError.
+                if base_url.is_none() && init.protocol.is_none() {
+                    return Err(Error::Type(
+                        "Cannot create URLPattern with neither a base URL nor a protocol"
+                            .to_owned(),
+                    ));
+                }
+
+                // Step 2.3 If baseURL is not null, set init["baseURL"] to baseURL.
+                if let Some(base_url) = base_url {
+                    init.baseURL = Some(base_url);
+                }
+
+                init
+            },
+            // Step 3. Otherwise:
+            USVStringOrURLPatternInit::URLPatternInit(url_pattern_init) => {
+                // Step 3.1 Assert: input is a URLPatternInit.
+                // NOTE: The type system ensures this.
+
+                // Step 3.2 If baseURL is not null, then throw a TypeError.
+                if base_url.is_some() {
+                    return Err(Error::Type("baseURL must be none".into()));
+                }
+
+                // Step 3.3 Set init to input.
+                url_pattern_init
+            },
+        };
 
         // Step 4. Let processedInit be the result of process a URLPatternInit given init, "pattern", null, null,
         // null, null, null, null, null, and null.
-        let mut processed_init = process_a_url_pattern_init(init, PatternInitType::Pattern)?;
+        let mut processed_init = process_a_url_pattern_init(&init, PatternInitType::Pattern)?;
 
         // Step 5. For each componentName of « "protocol", "username", "password", "hostname", "port",
         // "pathname", "search", "hash" »:
@@ -458,6 +509,7 @@ impl URLPatternInternal {
 
 impl Component {
     /// <https://urlpattern.spec.whatwg.org/#compile-a-component>
+    #[allow(unsafe_code)]
     fn compile(
         input: &str,
         encoding_callback: EncodingCallback,
@@ -734,7 +786,9 @@ fn default_port_for_special_scheme(scheme: &str) -> Option<u16> {
 
 /// <https://url.spec.whatwg.org/#special-scheme>
 fn is_special_scheme(scheme: &str) -> bool {
-    matches!(scheme, "ftp" | "http" | "https" | "ws" | "wss")
+    SPECIAL_SCHEMES
+        .iter()
+        .any(|special_scheme| *special_scheme == scheme)
 }
 
 /// <https://urlpattern.spec.whatwg.org/#generate-a-segment-wildcard-regexp>
@@ -808,3 +862,5 @@ impl Part {
         }
     }
 }
+
+impl js::gc::Rootable for Component {}
