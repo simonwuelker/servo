@@ -1157,6 +1157,13 @@ def getJSToNativeConversionInfo(type, descriptorProvider, failureCode=None,
 
         return handleOptional(template, declType, handleDefault(empty))
 
+    # if type.isUndefined():
+    #     print("cargo::warning=took undef branch")
+    #     conversionCode = (
+    #         f"if ${{val}}.get().is_undefined() {{ 1 }} else {{ Err(()) }}"
+    #     )
+
+    #     return JSToNativeConversionInfo(conversionCode, None, None)
     if type.isUndefined():
         # This one only happens for return values, and its easy: Just
         # ignore the jsval.
@@ -5083,6 +5090,17 @@ def getUnionTypeTemplateVars(type, descriptorProvider):
     elif type.isCallback():
         name = type.name
         typeName = f"{name}<D>"
+    elif type.isUndefined():
+        # jsconversion for the undefined marker needs special handling
+        return {
+            "name": type.name,
+            "typeName": "crate::utils::UndefinedUnionMarker",
+            "jsConversion": CGGeneric((
+                "if value.is_undefined() {"
+                "Ok(Some(crate::utils::UndefinedUnionMarker))"
+                "} else { Err(()) }"
+            ))
+        }
     else:
         raise TypeError(f"Can't handle {type} in unions yet")
 
@@ -5276,6 +5294,10 @@ class CGUnionConversionStruct(CGThing):
             names.append(typeName)
         else:
             mozMapObject = None
+
+        # numUndefinedVariants = count([t.isUndefined() for t in memberTypes])
+        # assert numUndefinedVariants <= 1, "Multiple undefined variants are indistinguishable from one another"
+        # hasUndefinedVariant = numUndefinedVariants != 0
 
         hasObjectTypes = object or interfaceObject or arrayObject or callbackObject or mozMapObject
         if hasObjectTypes:

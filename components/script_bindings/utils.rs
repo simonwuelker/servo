@@ -7,7 +7,7 @@ use std::os::raw::{c_char, c_void};
 use std::ptr::{self, NonNull};
 use std::slice;
 
-use js::conversions::ToJSValConvertible;
+use js::conversions::{ConversionResult, FromJSValConvertible, ToJSValConvertible};
 use js::gc::Handle;
 use js::glue::{
     AppendToIdVector, CallJitGetterOp, CallJitMethodOp, CallJitSetterOp, JS_GetReservedSlot,
@@ -710,4 +710,32 @@ unsafe fn latin1_bytes_from_id(cx: *mut JSContext, id: jsid) -> Result<&'static 
     let ptr = JS_GetLatin1StringCharsAndLength(cx, ptr::null(), string, &mut length);
     assert!(!ptr.is_null());
     Ok(slice::from_raw_parts(ptr, length))
+}
+
+/// A ZST Marker for `undefined` variants within unions.
+///
+/// Using a marker type avoids putting more responsibility on codegen
+#[derive(JSTraceable)]
+pub(crate) struct UndefinedUnionMarker;
+
+impl FromJSValConvertible for UndefinedUnionMarker {
+    type Config = ();
+
+    unsafe fn from_jsval(
+        _cx: *mut JSContext,
+        val: HandleValue<'_>,
+        _option: Self::Config,
+    ) -> Result<ConversionResult<Self>, ()> {
+        if val.is_undefined() {
+            Ok(ConversionResult::Success(Self))
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl ToJSValConvertible for UndefinedUnionMarker {
+    unsafe fn to_jsval(&self, _cx: *mut JSContext, mut rval: MutableHandleValue) {
+        rval.set(UndefinedValue());
+    }
 }

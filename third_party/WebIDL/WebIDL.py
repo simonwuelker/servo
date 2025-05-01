@@ -3298,6 +3298,8 @@ class IDLUnionType(IDLType):
                 self.memberTypes[i] = type.complete(scope)
 
         self.name = "Or".join(typeName(type) for type in self.memberTypes)
+        if self.name == "USVStringOrUndefined":
+            print(f"cargo::warning=Found {self.name} in parser: {self.memberTypes}")
         self.flatMemberTypes = list(self.memberTypes)
         i = 0
         while i < len(self.flatMemberTypes):

@@ -21,6 +21,8 @@ class Configuration:
         self.enumConfig = glbl['Enums']
         self.dictConfig = glbl['Dictionaries']
         self.unionConfig = glbl['Unions']
+        # print(f"cargo::warning={self.unionConfig}")
+        # assert False
 
         # Build descriptors for all the interfaces we have in the parse data.
         # This allows callers to specify a subset of interfaces by filtering
@@ -29,6 +31,8 @@ class Configuration:
         self.interfaces = {}
         self.maxProtoChainLength = 0
         for thing in parseData:
+            # if isInstance():
+            #     print(f"cargo::warning={thing.name}")
             # Servo does not support external interfaces.
             if isinstance(thing, IDLExternalInterface):
                 raise WebIDLError("Servo does not support external interfaces.",
