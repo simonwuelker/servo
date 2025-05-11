@@ -152,25 +152,6 @@ impl HTMLOptionElement {
     }
 }
 
-// FIXME(ajeffrey): Provide a way of buffering DOMStrings other than using Strings
-fn collect_text(element: &Element, value: &mut String) {
-    let svg_script =
-        *element.namespace() == ns!(svg) && element.local_name() == &local_name!("script");
-    let html_script = element.is::<HTMLScriptElement>();
-    if svg_script || html_script {
-        return;
-    }
-
-    for child in element.upcast::<Node>().children() {
-        if child.is::<Text>() {
-            let characterdata = child.downcast::<CharacterData>().unwrap();
-            value.push_str(&characterdata.Data());
-        } else if let Some(element_child) = child.downcast() {
-            collect_text(element_child, value);
-        }
-    }
-}
-
 impl HTMLOptionElementMethods<crate::DomTypeHolder> for HTMLOptionElement {
     /// <https://html.spec.whatwg.org/multipage/#dom-option>
     fn Option(
@@ -216,8 +197,36 @@ impl HTMLOptionElementMethods<crate::DomTypeHolder> for HTMLOptionElement {
 
     /// <https://html.spec.whatwg.org/multipage/#dom-option-text>
     fn Text(&self) -> DOMString {
+        // > The text IDL attribute, on getting, must return the result of stripping and collapsing ASCII whitespace
+        // > from the concatenation of data of all the Text node descendants of the option element, in tree order,
+        // > excluding any that are descendants of descendants of the option element that are themselves
+        // > script or SVG script elements.
+        let mut descendants = self.upcast::<Node>().traverse_preorder(ShadowIncluding::No);
         let mut content = String::new();
-        collect_text(self.upcast(), &mut content);
+        let is_script_element = |node: &Node| {
+            node.downcast::<Element>().is_some_and(|element| {
+                let is_svg_script = *element.namespace() == ns!(svg) &&
+                    element.local_name() == &local_name!("script");
+                let is_html_script = element.is::<HTMLScriptElement>();
+                is_svg_script || is_html_script
+            })
+        };
+
+        'collect_descendants: while let Some(descendant) = descendants.next() {
+            let mut current = descendant;
+            while is_script_element(&current) {
+                let Some(next_descendant) = descendants.next_skipping_children() else {
+                    break 'collect_descendants;
+                };
+                current = next_descendant;
+            }
+
+            if current.is::<Text>() {
+                let characterdata = current.downcast::<CharacterData>().unwrap();
+                content.push_str(&characterdata.Data());
+            }
+        }
+
         DOMString::from(str_join(split_html_space_chars(&content), " "))
     }
 
