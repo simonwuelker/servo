@@ -9,7 +9,7 @@ use constellation_traits::EmbedderToConstellationMessage;
 use embedder_traits::{
     AllowOrDeny, AuthenticationResponse, ContextMenuResult, Cursor, FilterPattern,
     GamepadHapticEffectType, InputMethodType, LoadStatus, MediaSessionEvent, Notification,
-    PermissionFeature, ScreenGeometry, SelectElementOptionOrOptgroup, SimpleDialog,
+    PermissionFeature, RgbColor, ScreenGeometry, SelectElementOptionOrOptgroup, SimpleDialog,
     WebResourceRequest, WebResourceResponse, WebResourceResponseMsg,
 };
 use ipc_channel::ipc::IpcSender;
@@ -300,6 +300,8 @@ impl Drop for InterceptedWebResourceLoad {
 pub enum FormControl {
     /// The picker of a `<select>` element.
     SelectElement(SelectElement),
+    /// The picker of a `<input type=color>` element.
+    ColorPicker(ColorPicker),
 }
 
 /// Represents a dialog triggered by clicking a `<select>` element.
@@ -353,6 +355,32 @@ impl SelectElement {
     /// Resolve the prompt with the options that have been selected by calling [select] previously.
     pub fn submit(mut self) {
         let _ = self.responder.send(self.selected_option);
+    }
+}
+
+/// Represents a dialog triggered by clicking a `<input type=color>` element.
+pub struct ColorPicker {
+    pub(crate) position: DeviceIntRect,
+    pub(crate) responder: IpcResponder<Option<RgbColor>>,
+}
+
+impl ColorPicker {
+    pub(crate) fn new(position: DeviceIntRect, ipc_sender: IpcSender<Option<RgbColor>>) -> Self {
+        Self {
+            position,
+            responder: IpcResponder::new(ipc_sender, None),
+        }
+    }
+
+    /// Return the area occupied by the `<input>` element that triggered the prompt.
+    ///
+    /// The embedder should use this value to position the prompt that is shown to the user.
+    pub fn position(&self) -> DeviceIntRect {
+        self.position
+    }
+
+    pub fn select(&mut self, color: Option<RgbColor>) {
+        let _ = self.responder.send(color);
     }
 }
 

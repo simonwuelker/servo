@@ -123,8 +123,8 @@ pub use crate::servo_delegate::{ServoDelegate, ServoError};
 use crate::webrender_api::FrameReadyParams;
 pub use crate::webview::{WebView, WebViewBuilder};
 pub use crate::webview_delegate::{
-    AllowOrDenyRequest, AuthenticationRequest, FormControl, NavigationRequest, PermissionRequest,
-    SelectElement, WebResourceLoad, WebViewDelegate,
+    AllowOrDenyRequest, AuthenticationRequest, ColorPicker, FormControl, NavigationRequest,
+    PermissionRequest, SelectElement, WebResourceLoad, WebViewDelegate,
 };
 
 #[cfg(feature = "webdriver")]
@@ -963,6 +963,14 @@ impl Servo {
                     webview
                         .delegate()
                         .show_form_control(webview, FormControl::SelectElement(prompt));
+                }
+            },
+            EmbedderMsg::ShowColorPicker(webview_id, position, ipc_sender) => {
+                if let Some(webview) = self.get_webview_handle(webview_id) {
+                    let prompt = ColorPicker::new(position, ipc_sender);
+                    webview
+                        .delegate()
+                        .show_form_control(webview, FormControl::ColorPicker(prompt));
                 }
             },
         }

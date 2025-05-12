@@ -372,6 +372,8 @@ pub enum EmbedderMsg {
         DeviceIntRect,
         IpcSender<Option<usize>>,
     ),
+    /// Indicates that the user has activated a `<input type=color>` element.
+    ShowColorPicker(WebViewId, DeviceIntRect, IpcSender<Option<RgbColor>>),
 }
 
 impl Debug for EmbedderMsg {
@@ -856,4 +858,11 @@ impl Display for FocusSequenceNumber {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         Display::fmt(&self.0, f)
     }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub struct RgbColor {
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
 }

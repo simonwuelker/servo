@@ -12,9 +12,9 @@ use log::warn;
 use servo::ipc_channel::ipc::IpcSender;
 use servo::servo_geometry::DeviceIndependentPixel;
 use servo::{
-    AlertResponse, AuthenticationRequest, ConfirmResponse, FilterPattern, PermissionRequest,
-    PromptResponse, SelectElement, SelectElementOption, SelectElementOptionOrOptgroup,
-    SimpleDialog,
+    AlertResponse, AuthenticationRequest, ColorPicker, ConfirmResponse, FilterPattern,
+    PermissionRequest, PromptResponse, RgbColor, SelectElement, SelectElementOption,
+    SelectElementOptionOrOptgroup, SimpleDialog,
 };
 
 pub enum Dialog {
@@ -41,6 +41,10 @@ pub enum Dialog {
     },
     SelectElement {
         maybe_prompt: Option<SelectElement>,
+        toolbar_offset: Length<f32, DeviceIndependentPixel>,
+    },
+    ColorPicker {
+        maybe_prompt: Option<ColorPicker>,
         toolbar_offset: Length<f32, DeviceIndependentPixel>,
     },
 }
@@ -114,6 +118,16 @@ impl Dialog {
         toolbar_offset: Length<f32, DeviceIndependentPixel>,
     ) -> Self {
         Dialog::SelectElement {
+            maybe_prompt: Some(prompt),
+            toolbar_offset,
+        }
+    }
+
+    pub fn new_color_picker_dialog(
+        prompt: ColorPicker,
+        toolbar_offset: Length<f32, DeviceIndependentPixel>,
+    ) -> Self {
+        Dialog::ColorPicker {
             maybe_prompt: Some(prompt),
             toolbar_offset,
         }
@@ -484,6 +498,44 @@ impl Dialog {
                 if !is_open {
                     maybe_prompt.take().unwrap().submit();
                 }
+
+                is_open
+            },
+            Dialog::ColorPicker {
+                maybe_prompt,
+                toolbar_offset,
+            } => {
+                let Some(prompt) = maybe_prompt else {
+                    // Prompt was dismissed, so the dialog should be closed too.
+                    return false;
+                };
+                let mut is_open = true;
+
+                let mut position = prompt.position();
+                position.min.y += toolbar_offset.0 as i32;
+                position.max.y += toolbar_offset.0 as i32;
+                let area = egui::Area::new(egui::Id::new("select-window"))
+                    .fixed_pos(egui::pos2(position.min.x as f32, position.max.y as f32));
+
+                let modal = Modal::new("select_element_picker".into()).area(area);
+                modal.show(ctx, |ui| {
+                    let mut color = egui::Color32::BLACK;
+                    let changed = egui::widgets::color_picker::color_picker_color32(
+                        ui,
+                        &mut color,
+                        egui::widgets::color_picker::Alpha::Opaque,
+                    );
+
+                    if changed {
+                        is_open = false;
+                        let selected_color = RgbColor {
+                            red: color.r(),
+                            green: color.g(),
+                            blue: color.b(),
+                        };
+                        prompt.select(Some(selected_color));
+                    }
+                });
 
                 is_open
             },
