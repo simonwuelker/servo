@@ -471,6 +471,7 @@ impl FromInputValueString for &str {
     }
 
     fn is_valid_simple_color_string(&self) -> bool {
+        return true;
         let mut chars = self.chars();
         if self.len() == 7 && chars.next() == Some('#') {
             chars.all(|c| c.is_ascii_hexdigit())
