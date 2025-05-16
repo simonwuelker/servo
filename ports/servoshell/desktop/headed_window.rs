@@ -87,7 +87,7 @@ impl Window {
             .with_transparent(no_native_titlebar)
             .with_inner_size(LogicalSize::new(window_size.width, window_size.height))
             .with_min_inner_size(LogicalSize::new(1, 1))
-            .with_visible(true);
+            .with_visible(false);
 
         #[allow(deprecated)]
         let winit_window = event_loop
