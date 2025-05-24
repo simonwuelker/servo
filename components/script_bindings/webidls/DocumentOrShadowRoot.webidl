@@ -15,3 +15,8 @@ interface mixin DocumentOrShadowRoot {
   readonly attribute Element? activeElement;
   readonly attribute StyleSheetList styleSheets;
 };
+
+// https://fullscreen.spec.whatwg.org/#api
+partial interface mixin DocumentOrShadowRoot {
+  [LegacyLenientSetter] readonly attribute Element? fullscreenElement;
+};

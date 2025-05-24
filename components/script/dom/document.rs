@@ -6616,9 +6616,8 @@ impl DocumentMethods<crate::DomTypeHolder> for Document {
         self.fullscreen_element.get().is_some()
     }
 
-    // https://fullscreen.spec.whatwg.org/#dom-document-fullscreenelement
+    /// <https://fullscreen.spec.whatwg.org/#dom-document-fullscreenelement>
     fn GetFullscreenElement(&self) -> Option<DomRoot<Element>> {
-        // TODO ShadowRoot
         self.fullscreen_element.get()
     }
 

@@ -8,6 +8,7 @@ use std::collections::hash_map::Entry;
 
 use dom_struct::dom_struct;
 use html5ever::serialize::TraversalScope;
+use script_bindings::codegen::GenericBindings::DocumentBinding::DocumentMethods;
 use servo_arc::Arc;
 use style::author_styles::AuthorStyles;
 use style::dom::TElement;
@@ -464,6 +465,33 @@ impl ShadowRootMethods<crate::DomTypeHolder> for ShadowRoot {
 
     // https://dom.spec.whatwg.org/#dom-shadowroot-onslotchange
     event_handler!(onslotchange, GetOnslotchange, SetOnslotchange);
+
+    /// <https://fullscreen.spec.whatwg.org/#dom-document-fullscreenelement>
+    fn GetFullscreenElement(&self) -> Option<DomRoot<Element>> {
+        // Step 1. If this is a shadow root and its host is not connected, then return null.
+        if !self.Host().is_connected() {
+            return None;
+        }
+
+        // Step 2. Let candidate be the result of retargeting fullscreen element against this.
+        let fullscreen_element = self.owner_document().GetFullscreenElement()?;
+        let candidate: DomRoot<Element> = DomRoot::downcast(
+            fullscreen_element
+                .upcast::<EventTarget>()
+                .retarget(self.upcast()),
+        )?;
+
+        // Step 3. If candidate and this are in the same tree, then return candidate.
+        if self
+            .upcast::<Node>()
+            .is_inclusive_ancestor_of(candidate.upcast())
+        {
+            return Some(candidate);
+        }
+
+        // Step 4. Return null.
+        None
+    }
 }
 
 impl VirtualMethods for ShadowRoot {
