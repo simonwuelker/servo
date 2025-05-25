@@ -67,6 +67,16 @@ impl SpecificCSSRule for CSSImportRule {
 }
 
 impl CSSImportRuleMethods<crate::DomTypeHolder> for CSSImportRule {
+    /// <https://drafts.csswg.org/cssom/#dom-cssimportrule-href>
+    fn Href(&self) -> DOMString {
+        let guard = self.cssrule.shared_lock().read();
+        self.import_rule
+            .read_with(&guard)
+            .url
+            .to_css_string()
+            .into()
+    }
+
     /// <https://drafts.csswg.org/cssom-1/#dom-cssimportrule-layername>
     fn GetLayerName(&self) -> Option<DOMString> {
         let guard = self.cssrule.shared_lock().read();
