@@ -710,7 +710,7 @@ impl Node {
     /// <https://dom.spec.whatwg.org/#concept-node-length>
     pub(crate) fn len(&self) -> u32 {
         match self.type_id() {
-            NodeTypeId::DocumentType => 0,
+            NodeTypeId::DocumentType | NodeTypeId::Attr => 0,
             NodeTypeId::CharacterData(_) => self.downcast::<CharacterData>().unwrap().Length(),
             _ => self.children_count(),
         }
