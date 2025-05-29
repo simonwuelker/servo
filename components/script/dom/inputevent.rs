@@ -24,7 +24,7 @@ pub(crate) struct InputEvent {
 
 impl InputEvent {
     #[allow(clippy::too_many_arguments)]
-    fn new(
+    pub(crate) fn new(
         window: &Window,
         proto: Option<HandleObject>,
         type_: DOMString,
@@ -53,7 +53,7 @@ impl InputEvent {
 }
 
 impl InputEventMethods<crate::DomTypeHolder> for InputEvent {
-    // https://w3c.github.io/uievents/#dom-inputevent-inputevent
+    /// <https://w3c.github.io/uievents/#dom-inputevent-inputevent>
     fn Constructor(
         window: &Window,
         proto: Option<HandleObject>,

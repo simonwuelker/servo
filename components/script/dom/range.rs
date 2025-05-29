@@ -11,6 +11,7 @@ use js::jsapi::JSTracer;
 use js::rust::HandleObject;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 
+use crate::dom::node::ShadowIncluding;
 use crate::dom::abstractrange::{AbstractRange, BoundaryPoint, bp_position};
 use crate::dom::bindings::cell::DomRefCell;
 use crate::dom::bindings::codegen::Bindings::AbstractRangeBinding::AbstractRangeMethods;
@@ -137,7 +138,7 @@ impl Range {
     }
 
     /// <https://dom.spec.whatwg.org/#contained>
-    fn contains(&self, node: &Node) -> bool {
+    pub(crate) fn contains(&self, node: &Node) -> bool {
         matches!(
             (
                 bp_position(node, 0, &self.start_container(), self.start_offset()),
@@ -203,7 +204,7 @@ impl Range {
     }
 
     /// <https://dom.spec.whatwg.org/#concept-range-bp-set>
-    fn set_start(&self, node: &Node, offset: u32) {
+    pub(crate) fn set_start(&self, node: &Node, offset: u32) {
         if self.start().node() != node || self.start_offset() != offset {
             self.report_change();
         }
@@ -300,11 +301,11 @@ impl Range {
         &self.abstract_range
     }
 
-    fn start(&self) -> &BoundaryPoint {
+    pub(crate) fn start(&self) -> &BoundaryPoint {
         self.abstract_range().start()
     }
 
-    fn end(&self) -> &BoundaryPoint {
+    pub(crate) fn end(&self) -> &BoundaryPoint {
         self.abstract_range().end()
     }
 
@@ -343,6 +344,10 @@ impl Range {
             .take_while(move |node| node != &end)
             .chain(iter::once(end_clone))
             .flat_map(move |node| node.content_boxes(can_gc))
+    }
+
+    pub(crate) fn common_ancestor_container(&self) -> DomRoot<Node> {
+        self.start_container().common_ancestor(&self.end_container(), ShadowIncluding::No).unwrap()
     }
 }
 

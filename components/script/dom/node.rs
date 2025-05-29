@@ -20,7 +20,7 @@ use dom_struct::dom_struct;
 use embedder_traits::UntrustedNodeAddress;
 use euclid::default::{Rect, Size2D, Vector2D};
 use html5ever::serialize::HtmlSerializer;
-use html5ever::{Namespace, Prefix, QualName, ns, serialize as html_serialize};
+use html5ever::{Namespace, Prefix, QualName, local_name, ns, serialize as html_serialize};
 use js::jsapi::JSObject;
 use js::rust::HandleObject;
 use libc::{self, c_void, uintptr_t};
@@ -71,7 +71,6 @@ use crate::dom::bindings::codegen::Bindings::ShadowRootBinding::{
 };
 use crate::dom::bindings::codegen::Bindings::WindowBinding::WindowMethods;
 use crate::dom::bindings::codegen::GenericBindings::HTMLElementBinding::HTMLElement_Binding::HTMLElementMethods;
-use crate::dom::bindings::codegen::InheritTypes::DocumentFragmentTypeId;
 use crate::dom::bindings::codegen::UnionTypes::NodeOrString;
 use crate::dom::bindings::conversions::{self, DerivedFrom};
 use crate::dom::bindings::error::{Error, ErrorResult, Fallible};
@@ -1545,6 +1544,12 @@ impl Node {
         }
     }
 
+    pub(crate) fn is_editing_host_or_editable(&self) -> bool {
+        self.downcast::<HTMLElement>()
+            .is_some_and(HTMLElement::is_editing_host) ||
+            self.is_editable()
+    }
+
     /// <https://w3c.github.io/editing/docs/execCommand/#editable>
     pub(crate) fn is_editable(&self) -> bool {
         // Something is editable if it is a node; it is not an editing host; it does not have a contenteditable
@@ -1575,6 +1580,17 @@ impl Node {
         } else {
             return false;
         }
+    }
+
+    /// <https://w3c.github.io/editing/docs/execCommand/#editing-host-of>
+    pub(crate) fn editing_host(&self) -> Option<DomRoot<HTMLElement>> {
+        if !self.is_editable() {
+            return None;
+        }
+
+        self.inclusive_ancestors(ShadowIncluding::No)
+            .filter_map(|ancestor| DomRoot::downcast::<HTMLElement>(ancestor))
+            .find(|html_element| html_element.is_editing_host())
     }
 }
 

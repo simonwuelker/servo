@@ -30,8 +30,9 @@ use devtools_traits::ScriptToDevtoolsControlMsg;
 use dom_struct::dom_struct;
 use embedder_traits::{
     AllowOrDeny, AnimationState, CompositorHitTestResult, ContextMenuResult, EditingActionEvent,
-    EmbedderMsg, FocusSequenceNumber, ImeEvent, InputEvent, LoadStatus, MouseButton,
-    MouseButtonAction, MouseButtonEvent, TouchEvent, TouchEventType, TouchId, WheelEvent,
+    EmbedderMsg, FocusSequenceNumber, ImeEvent, InputEvent as EmbedderInputEvent, LoadStatus,
+    MouseButton, MouseButtonAction, MouseButtonEvent, TouchEvent, TouchEventType, TouchId,
+    WheelEvent,
 };
 use encoding_rs::{Encoding, UTF_8};
 use euclid::default::{Point2D, Rect, Size2D};
@@ -53,6 +54,7 @@ use percent_encoding::percent_decode;
 use profile_traits::ipc as profile_ipc;
 use profile_traits::time::TimerMetadataFrameType;
 use regex::bytes::Regex;
+use script_bindings::codegen::GenericBindings::InputEventBinding::InputEventMethods;
 use script_bindings::interfaces::DocumentHelpers;
 use script_layout_interface::{PendingRestyle, TrustedNodeAddress};
 use script_traits::{ConstellationInputEvent, DocumentActivity, ProgressiveWebMetricType};
@@ -74,6 +76,7 @@ use uuid::Uuid;
 #[cfg(feature = "webgpu")]
 use webgpu_traits::WebGPUContextId;
 use webrender_api::units::DeviceIntRect;
+use script_bindings::codegen::GenericBindings::InputEventBinding::InputEventInit;
 
 use crate::DomTypes;
 use crate::animation_timeline::AnimationTimeline;
@@ -104,11 +107,10 @@ use crate::dom::bindings::codegen::Bindings::WindowBinding::{
 };
 use crate::dom::bindings::codegen::Bindings::XPathEvaluatorBinding::XPathEvaluatorMethods;
 use crate::dom::bindings::codegen::Bindings::XPathNSResolverBinding::XPathNSResolver;
+use crate::dom::bindings::codegen::GenericBindings::HTMLElementBinding::HTMLElement_Binding::HTMLElementMethods;
 use crate::dom::bindings::codegen::UnionTypes::{
     NodeOrString, StringOrElementCreationOptions, TrustedHTMLOrString,
 };
-use crate::dom::bindings::codegen::GenericBindings::HTMLElementBinding::HTMLElement_Binding::HTMLElementMethods;
-use crate::dom::bindings::codegen::UnionTypes::{NodeOrString, StringOrElementCreationOptions};
 use crate::dom::bindings::error::{Error, ErrorInfo, ErrorResult, Fallible};
 use crate::dom::bindings::inheritance::{Castable, ElementTypeId, HTMLElementTypeId, NodeTypeId};
 use crate::dom::bindings::num::Finite;
@@ -190,7 +192,7 @@ use crate::dom::touchevent::TouchEvent as DomTouchEvent;
 use crate::dom::touchlist::TouchList;
 use crate::dom::treewalker::TreeWalker;
 use crate::dom::trustedhtml::TrustedHTML;
-use crate::dom::types::VisibilityStateEntry;
+use crate::dom::types::{InputEvent, VisibilityStateEntry};
 use crate::dom::uievent::UIEvent;
 use crate::dom::virtualmethods::vtable_for;
 use crate::dom::webglrenderingcontext::WebGLRenderingContext;
@@ -202,6 +204,7 @@ use crate::dom::windowproxy::WindowProxy;
 use crate::dom::xpathevaluator::XPathEvaluator;
 use crate::drag_data_store::{DragDataStore, Kind, Mode};
 use crate::editing_host_manager::EditingHostManager;
+use crate::execcommand::Command;
 use crate::fetch::FetchCanceller;
 use crate::iframe_collection::IFrameCollection;
 use crate::image_animation::ImageAnimationManager;
@@ -1487,7 +1490,7 @@ impl Document {
                     "Can't lose the document's focus without specifying \
                     another one to focus"
                 );
-            }
+            },
         }
     }
 
@@ -4317,7 +4320,7 @@ impl Document {
     /// Note a pending compositor event, to be processed at the next `update_the_rendering` task.
     pub(crate) fn note_pending_input_event(&self, event: ConstellationInputEvent) {
         let mut pending_compositor_events = self.pending_input_events.borrow_mut();
-        if matches!(event.event, InputEvent::MouseMove(..)) {
+        if matches!(event.event, EmbedderInputEvent::MouseMove(..)) {
             // First try to replace any existing mouse move event.
             if let Some(mouse_move_event) = self
                 .mouse_move_event_index
@@ -5276,9 +5279,10 @@ impl Document {
     }
 
     pub(crate) fn editing_host_manager(&self) -> RefMut<EditingHostManager> {
-        RefMut::map(self.editing_host_manager.borrow_mut(), |manager| manager.get_or_insert(EditingHostManager::new(self)))
+        RefMut::map(self.editing_host_manager.borrow_mut(), |manager| {
+            manager.get_or_insert(EditingHostManager::new(self))
+        })
     }
-}
 
     /// <https://dom.spec.whatwg.org/#document-allow-declarative-shadow-roots>
     pub fn allow_declarative_shadow_roots(&self) -> bool {
@@ -5341,17 +5345,107 @@ impl DocumentMethods<crate::DomTypeHolder> for Document {
     }
 
     /// <https://w3c.github.io/editing/docs/execCommand/#execcommand()>
-    fn ExecCommand(&self, commandId: DOMString, showUI: bool, value: DOMString) -> bool {
-        _ = commandId;
-        _ = showUI;
-        _ = value;
-        todo!()
+    fn ExecCommand(&self, commandId: DOMString, _showUI: bool, value: DOMString) -> bool {
+        let can_gc = CanGc::note();
+
+        // Step 1. If only one argument was provided, let show UI be false.
+        // Step 2. If only one or two arguments were provided, let value be the empty string.
+        // NOTE: This happens before this function is called
+
+        // Step 3. If command is not supported or not enabled, return false.
+        let Ok(command) = Command::from_str(&commandId) else {
+            return false;
+        };
+        if !command.is_enabled(self, can_gc) {
+            return false;
+        }
+
+        // Step 4. If command is not in the Miscellaneous commands section:
+        // NOTE: This algorithm does not respect the usual scoping rules, so we have to do this weirdness
+        let mut affected_editing_host_from_step_4 = None;
+        if !command.is_miscellaneous() {
+            // Step 4.1 Let affected editing host be the editing host that is an inclusive ancestor of
+            // the active range's start node and end node, and is not the ancestor of any editing host
+            //  that is an inclusive ancestor of the active range's start node and end node.
+            let affected_editing_host = Command::get_editing_host_for_selection(self, can_gc)
+                .expect("Command should not have been enabled");
+
+            // Step 4.2 Fire an event named "beforeinput" at affected editing host using InputEvent,
+            // with its bubbles and cancelable attributes initialized to true, and its data attribute
+            // initialized to null.
+            // NOTE: It is an unclear whether this should actually happen.
+            let before_input_event = InputEvent::new(
+                self.window(),
+                None,
+                "beforeinput".to_owned().into(),
+                true,
+                true,
+                None,
+                0,
+                None,
+                false,
+                can_gc,
+            );
+            let status = before_input_event
+                .upcast::<Event>()
+                .fire(affected_editing_host.upcast(), can_gc);
+
+            // Step 4.3  If the value returned by the previous step is false, return false.
+            if status == EventStatus::Canceled {
+                return false;
+            }
+
+            // Step 4.4 If command is not enabled, return false.
+            if !command.is_enabled(self, can_gc) {
+                return false;
+            }
+
+            // Step 4.5 Let affected editing host be the editing host that is an inclusive ancestor of
+            // the active range's start node and end node, and is not the ancestor of any editing host
+            // that is an inclusive ancestor of the active range's start node and end node.
+            affected_editing_host_from_step_4 =
+                Command::get_editing_host_for_selection(self, can_gc);
+        }
+
+        // Step 5. Take the action for command, passing value to the instructions as an argument.
+        // Step 6. If the previous step returned false, return false.
+        // NOTE: Step 7 wants to know if the DOM tree changed, so remember the version before
+        // taking the action
+        let dom_tree_version = self.upcast::<Node>().inclusive_descendants_version();
+        if !command.take_action(self, value, can_gc) {
+            return false;
+        }
+
+        // Step 7. If the action modified DOM tree, then fire an event named "input" at
+        // affected editing host using InputEvent, with its isTrusted and bubbles attributes initialized to true,
+        // inputType attribute initialized to the mapped value of command, and its data attribute initialized
+        // to null.
+        if self.upcast::<Node>().inclusive_descendants_version() != dom_tree_version {
+            let mut event_init = InputEventInit::default();
+            event_init.isTrusted = true;
+            event_init.bubbles = true;
+
+            let input_event = InputEvent::Constructor(self.window(), None, can_gc, false, can_gc);
+            if let Some(affected_editing_host) = affected_editing_host {
+                input_event
+                    .upcast::<Event>()
+                    .fire(affected_editing_host.upcast(), can_gc);
+            }
+        }
+
+        // Step 8. Return true.
+        true
     }
 
     /// <https://w3c.github.io/editing/docs/execCommand/#querycommandenabled()>
     fn QueryCommandEnabled(&self, commandId: DOMString) -> bool {
-        _ = commandId;
-        todo!()
+        // NOTE: Step 1. notes that behaviour is undefined when the command is not known.
+        let Ok(command) = Command::from_str(&commandId) else {
+            return false;
+        };
+
+        // Step 2. Return true if command is both supported and enabled, false otherwise.
+        command.is_enabled(self, CanGc::note())
     }
 
     /// <https://w3c.github.io/editing/docs/execCommand/#querycommandindeterm()>
@@ -6724,7 +6818,7 @@ impl DocumentMethods<crate::DomTypeHolder> for Document {
         }
     }
 
-    // https://w3c.github.io/selection-api/#dom-document-getselection
+    /// <https://w3c.github.io/selection-api/#dom-document-getselection>
     fn GetSelection(&self, can_gc: CanGc) -> Option<DomRoot<Selection>> {
         if self.has_browsing_context {
             Some(self.selection.or_init(|| Selection::new(self, can_gc)))
