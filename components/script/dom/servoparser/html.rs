@@ -14,16 +14,17 @@ use html5ever::tokenizer::{Tokenizer as HtmlTokenizer, TokenizerOpts};
 use html5ever::tree_builder::{QuirksMode as HTML5EverQuirksMode, TreeBuilder, TreeBuilderOpts};
 use html5ever::{QualName, local_name, ns};
 use markup5ever::TokenizerResult;
+use script_bindings::codegen::GenericBindings::NodeBinding::NodeMethods;
+use script_bindings::codegen::InheritTypes::{CharacterDataTypeId, NodeTypeId};
 use script_bindings::trace::CustomTraceable;
 use servo_url::ServoUrl;
-use style::attr::AttrValue;
 use style::context::QuirksMode as StyleContextQuirksMode;
 use xml5ever::LocalName;
 
 use crate::dom::bindings::codegen::Bindings::HTMLTemplateElementBinding::HTMLTemplateElementMethods;
 use crate::dom::bindings::codegen::Bindings::ShadowRootBinding::ShadowRootMode;
 use crate::dom::bindings::codegen::GenericBindings::ShadowRootBinding::ShadowRoot_Binding::ShadowRootMethods;
-use crate::dom::bindings::inheritance::{Castable, CharacterDataTypeId, NodeTypeId};
+use crate::dom::bindings::inheritance::Castable;
 use crate::dom::bindings::root::{Dom, DomRoot};
 use crate::dom::characterdata::CharacterData;
 use crate::dom::document::Document;
@@ -36,6 +37,7 @@ use crate::dom::node::Node;
 use crate::dom::processinginstruction::ProcessingInstruction;
 use crate::dom::servoparser::{ParsingAlgorithm, Sink};
 use crate::dom::shadowroot::ShadowRoot;
+use crate::dom::text::Text;
 use crate::script_runtime::CanGc;
 
 #[derive(JSTraceable, MallocSizeOf)]
@@ -133,14 +135,14 @@ fn start_element<S: Serializer>(element: &Element, serializer: &mut S) -> io::Re
         if let Some(is_value) = element.get_is() {
             let qualified_name = QualName::new(None, ns!(), LocalName::from("is"));
 
-            attributes.push((qualified_name, AttrValue::String(is_value.to_string())));
+            attributes.push((qualified_name, is_value.to_string()));
         }
     }
 
     // Collect all the "normal" attributes
     attributes.extend(element.attrs().iter().map(|attr| {
         let qname = QualName::new(None, attr.namespace().clone(), attr.local_name().clone());
-        let value = attr.value().clone();
+        let value = escape_a_string(&attr.value(), true);
         (qname, value)
     }));
 
@@ -156,6 +158,10 @@ enum SerializationCommand {
     OpenElement(DomRoot<Element>),
     CloseElement(QualName),
     SerializeNonelement(DomRoot<Node>),
+    SerializeText {
+        node: DomRoot<Text>,
+        should_escape_contents: bool,
+    },
     SerializeShadowRoot(DomRoot<ShadowRoot>),
 }
 
@@ -226,17 +232,40 @@ impl SerializationIterator {
     }
 
     fn push_node(&mut self, node: &Node) {
-        let Some(element) = node.downcast::<Element>() else {
-            self.stack.push(SerializationCommand::SerializeNonelement(
-                DomRoot::from_ref(node),
-            ));
+        if let Some(element) = node.downcast::<Element>() {
+            self.stack
+                .push(SerializationCommand::OpenElement(DomRoot::from_ref(
+                    element,
+                )));
             return;
         };
 
-        self.stack
-            .push(SerializationCommand::OpenElement(DomRoot::from_ref(
-                element,
-            )));
+        if let Some(text) = node.downcast::<Text>() {
+            let should_escape_contents = !node
+                .GetParentNode()
+                .and_then(|parent| DomRoot::downcast::<Element>(parent))
+                .is_some_and(|parent| {
+                    matches!(
+                        *parent.local_name(),
+                        local_name!("style") |
+                            local_name!("script") |
+                            local_name!("xmp") |
+                            local_name!("iframe") |
+                            local_name!("noembed") |
+                            local_name!("noframes") |
+                            local_name!("plaintext")
+                    )
+                });
+            self.stack.push(SerializationCommand::SerializeText {
+                node: DomRoot::from_ref(text),
+                should_escape_contents: should_escape_contents,
+            });
+            return;
+        }
+
+        self.stack.push(SerializationCommand::SerializeNonelement(
+            DomRoot::from_ref(node),
+        ));
     }
 }
 
@@ -297,32 +326,35 @@ pub(crate) fn serialize_html_fragment<S: Serializer>(
             SerializationCommand::CloseElement(name) => {
                 serializer.end_elem(name)?;
             },
+            SerializationCommand::SerializeText {
+                node,
+                should_escape_contents,
+            } => {
+                let contents = node.upcast::<CharacterData>().data();
+                if should_escape_contents {
+                    serializer.write_text(&escape_a_string(&contents, false))?;
+                } else {
+                    serializer.write_text(&contents)?;
+                }
+            },
             SerializationCommand::SerializeNonelement(n) => match n.type_id() {
                 NodeTypeId::DocumentType => {
                     let doctype = n.downcast::<DocumentType>().unwrap();
                     serializer.write_doctype(doctype.name())?;
                 },
-
-                NodeTypeId::CharacterData(CharacterDataTypeId::Text(_)) => {
-                    let cdata = n.downcast::<CharacterData>().unwrap();
-                    serializer.write_text(&cdata.data())?;
-                },
-
                 NodeTypeId::CharacterData(CharacterDataTypeId::Comment) => {
                     let cdata = n.downcast::<CharacterData>().unwrap();
                     serializer.write_comment(&cdata.data())?;
                 },
-
                 NodeTypeId::CharacterData(CharacterDataTypeId::ProcessingInstruction) => {
                     let pi = n.downcast::<ProcessingInstruction>().unwrap();
                     let data = pi.upcast::<CharacterData>().data();
                     serializer.write_processing_instruction(pi.target(), &data)?;
                 },
-
                 NodeTypeId::DocumentFragment(_) | NodeTypeId::Attr => {},
-
-                NodeTypeId::Document(_) => panic!("Can't serialize Document node itself"),
-                NodeTypeId::Element(_) => panic!("Element shouldn't appear here"),
+                NodeTypeId::Document(_) |
+                NodeTypeId::CharacterData(CharacterDataTypeId::Text(_)) |
+                NodeTypeId::Element(_) => panic!("shouldn't appear here"),
             },
             SerializationCommand::SerializeShadowRoot(shadow_root) => {
                 // Shadow roots are serialized as template elements with a fixed set of
@@ -377,5 +409,28 @@ impl Serialize for &Node {
             vec![],
             CanGc::note(),
         )
+    }
+}
+
+/// <https://html.spec.whatwg.org/multipage/#escapingString>
+fn escape_a_string(input: &str, attribute_mode: bool) -> String {
+    // Step 1. Replace any occurrence of the "&" character by the string "&amp;".
+    let input = input.replace('&', "&amp;");
+
+    // Step 2. Replace any occurrences of the U+00A0 NO-BREAK SPACE character by the string "&nbsp;".
+    let input = input.replace('\u{00A0}', "&nbsp;");
+
+    // Step 3. Replace any occurrences of the "<" character by the string "&lt;".
+    let input = input.replace('<', "&lt;");
+
+    // Step 4. Replace any occurrences of the ">" character by the string "&gt;".
+    let input = input.replace('>', "&gt;");
+
+    // Step 4. If the algorithm was invoked in the attribute mode, then replace any occurrences of
+    // the """ character by the string "&quot;".
+    if attribute_mode {
+        input.replace('"', "&quot;")
+    } else {
+        input
     }
 }

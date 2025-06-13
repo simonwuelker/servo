@@ -196,7 +196,7 @@ impl ServoParser {
         }
     }
 
-    // https://html.spec.whatwg.org/multipage/#parsing-html-fragments
+    /// <https://html.spec.whatwg.org/multipage/#parsing-html-fragments>
     pub(crate) fn parse_html_fragment(
         context: &Element,
         input: DOMString,
@@ -208,7 +208,7 @@ impl ServoParser {
         let window = context_document.window();
         let url = context_document.url();
 
-        // Step 1.
+        // Step 1. Let document be a Document node whose type is "html".
         let loader = DocumentLoader::new_with_threads(
             context_document.loader().resource_threads().clone(),
             Some(url.clone()),
@@ -234,8 +234,14 @@ impl ServoParser {
             can_gc,
         );
 
-        // Step 2.
+        // Step 2. If context's node document is in quirks mode, then set document's mode to "quirks".
+        // Step 3. Otherwise, if context's node document is in limited-quirks mode, then set document's
+        // mode to "limited-quirks".
         document.set_quirks_mode(context_document.quirks_mode());
+
+        // Step 4. If allowDeclarativeShadowRoots is true, then set document's
+        // allow declarative shadow roots to true.
+        // NOTE: This happened as part of Step 1.
 
         // Step 11.
         let form = context_node
@@ -260,7 +266,7 @@ impl ServoParser {
         );
         parser.parse_complete_string_chunk(String::from(input), can_gc);
 
-        // Step 14.
+        // Step 16. Return root's children, in tree order.
         let root_element = document.GetDocumentElement().expect("no document element");
         FragmentParsingResult {
             inner: root_element.upcast::<Node>().children(),
