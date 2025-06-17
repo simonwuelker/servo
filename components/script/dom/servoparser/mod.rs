@@ -79,11 +79,16 @@ use crate::script_runtime::CanGc;
 use crate::script_thread::ScriptThread;
 
 mod async_html;
+mod encoding_detection;
 mod html;
 mod prefetch;
 mod xml;
 
+use encoding_detection::{get_xml_encoding, prescan_the_byte_stream_to_determine_the_encoding};
 pub(crate) use html::serialize_html_fragment;
+
+/// <https://html.spec.whatwg.org/multipage/#prescan-a-byte-stream-to-determine-its-encoding>
+const MAX_LENGTH_TO_PRESCAN: usize = 1024;
 
 #[dom_struct]
 /// The parser maintains two input streams: one for input from script through
@@ -196,7 +201,7 @@ impl ServoParser {
         }
     }
 
-    // https://html.spec.whatwg.org/multipage/#parsing-html-fragments
+    /// <https://html.spec.whatwg.org/multipage/#parsing-html-fragments>
     pub(crate) fn parse_html_fragment(
         context: &Element,
         input: DOMString,
@@ -788,16 +793,23 @@ impl Tokenizer {
 pub(crate) struct ParserContext {
     /// The parser that initiated the request.
     parser: Option<Trusted<ServoParser>>,
-    /// Is this a synthesized document
+    /// Is this a synthesized document.
     is_synthesized_document: bool,
     /// The pipeline associated with this document.
     id: PipelineId,
-    /// The URL for this document.
+    /// The URL for this document..
     url: ServoUrl,
-    /// timing data for this resource
+    /// timing data for this resource.
     resource_timing: ResourceFetchTiming,
-    /// pushed entry index
+    /// pushed entry index.
     pushed_entry_index: Option<usize>,
+    prescan_state: PrescanState,
+}
+
+#[derive(Debug)]
+enum PrescanState {
+    Prescanning(Vec<u8>),
+    Done,
 }
 
 impl ParserContext {
@@ -809,6 +821,7 @@ impl ParserContext {
             url,
             resource_timing: ResourceFetchTiming::new(ResourceTimingType::Navigation),
             pushed_entry_index: None,
+            prescan_state: PrescanState::Prescanning(vec![]),
         }
     }
 
@@ -970,10 +983,28 @@ impl FetchResponseListener for ParserContext {
         }
     }
 
-    fn process_response_chunk(&mut self, _: RequestId, payload: Vec<u8>) {
+    fn process_response_chunk(&mut self, _: RequestId, mut payload: Vec<u8>) {
         if self.is_synthesized_document {
             return;
         }
+
+        if let PrescanState::Prescanning(ref mut data) = self.prescan_state {
+            data.extend_from_slice(&payload);
+            if data.len() < MAX_LENGTH_TO_PRESCAN {
+                // Not done yet, keep collecting more of the input...
+                return;
+            }
+            let start = std::time::Instant::now();
+            if let Some(encoding) = prescan_the_byte_stream_to_determine_the_encoding(data)
+                .or_else(|| get_xml_encoding(data))
+            {
+                println!("we detected {encoding:?} in {:?}", start.elapsed());
+            }
+
+            payload = std::mem::take(data);
+            self.prescan_state = PrescanState::Done;
+        }
+
         let parser = match self.parser.as_ref() {
             Some(parser) => parser.root(),
             None => return,
@@ -999,6 +1030,20 @@ impl FetchResponseListener for ParserContext {
         };
         if parser.aborted.get() {
             return;
+        }
+
+        // If we're still buffering data to prescan the encoding then we need to stop and parse it all,
+        // regardless of how much we have collected.
+        if let PrescanState::Prescanning(ref mut data) = self.prescan_state {
+            let start = std::time::Instant::now();
+            if let Some(encoding) = prescan_the_byte_stream_to_determine_the_encoding(data)
+                .or_else(|| get_xml_encoding(data))
+            {
+                println!("we detected {encoding:?} in {:?}", start.elapsed());
+            }
+
+            parser.parse_bytes_chunk(std::mem::take(data), CanGc::note());
+            self.prescan_state = PrescanState::Done;
         }
 
         let _realm = enter_realm(&*parser);
