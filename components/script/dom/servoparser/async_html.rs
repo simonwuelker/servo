@@ -659,7 +659,6 @@ fn run(
             ToHtmlTokenizerMsg::End => {
                 html_tokenizer.end();
                 sender.send(ToTokenizerMsg::End).unwrap();
-                break;
             },
             ToHtmlTokenizerMsg::SetPlainTextState => html_tokenizer.set_plaintext_state(),
         };
