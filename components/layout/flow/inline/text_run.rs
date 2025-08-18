@@ -15,6 +15,7 @@ use log::warn;
 use malloc_size_of_derive::MallocSizeOf;
 use range::Range as ServoRange;
 use servo_arc::Arc;
+use style::computed_values::font_kerning::T as FontKerning;
 use style::computed_values::text_rendering::T as TextRendering;
 use style::computed_values::white_space_collapse::T as WhiteSpaceCollapse;
 use style::computed_values::word_break::T as WordBreak;
@@ -390,7 +391,10 @@ impl TextRun {
         }
         if inherited_text_style.text_rendering == TextRendering::Optimizespeed {
             flags.insert(ShapingFlags::IGNORE_LIGATURES_SHAPING_FLAG);
-            flags.insert(ShapingFlags::DISABLE_KERNING_SHAPING_FLAG)
+            flags.insert(ShapingFlags::DISABLE_KERNING_SHAPING_FLAG);
+        }
+        if parent_style.clone_font_kerning() == FontKerning::None {
+            flags.insert(ShapingFlags::DISABLE_KERNING_SHAPING_FLAG);
         }
 
         let specified_word_spacing = &inherited_text_style.word_spacing;
