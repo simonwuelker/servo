@@ -49,6 +49,12 @@ pub(crate) const COLR: Tag = Tag::new(b"COLR");
 pub(crate) const BASE: Tag = Tag::new(b"BASE");
 pub(crate) const LIGA: Tag = Tag::new(b"liga");
 
+// Webrender wants u32 tags and font_types::Tag can't be converted to u32.
+pub const WGHT: u32 = u32::from_be_bytes(*b"wght");
+pub const WDTH: u32 = u32::from_be_bytes(*b"wdth");
+pub const SLNT: u32 = u32::from_be_bytes(*b"slnt");
+pub const ITAL: u32 = u32::from_be_bytes(*b"ital");
+
 pub const LAST_RESORT_GLYPH_ADVANCE: FractionalPixel = 10.0;
 
 /// Nanoseconds spent shaping text across all layout threads.
@@ -291,12 +297,70 @@ impl Font {
 
     /// <https://drafts.csswg.org/css-fonts-4/#apply-font-matching-variations>
     fn compute_variations_for_descriptor(&self, descriptor: &FontDescriptor) -> Vec<FontVariation> {
+        // The steps in this algorithm are inverted order because they are listed in ascending order of
+        // precedence.
+
         // TODO: Consider all the other possible sources of variations
+        let mut variations: Vec<FontVariation> = vec![];
+
+        let mut add_variation = |variation: FontVariation| {
+            if !variations
+                .iter()
+                .any(|existing_variation| existing_variation.tag == variation.tag)
+            {
+                variations.push(FontVariation {
+                    tag: variation.tag,
+                    value: variation.value,
+                });
+            }
+        };
 
         // Step 12. Font variations implied by the value of the font-variation-settings property are applied.
         // These values should be clamped to the values that are supported by the font.
         // NOTE: Clamping happens inside the PlatformFont.
-        descriptor.variation_settings.to_owned()
+        descriptor
+            .variation_settings
+            .iter()
+            .copied()
+            .for_each(&mut add_variation);
+
+        // Step 2. Font variations as enabled by the font-weight, font-width, and font-style properties are applied.
+        // NOTE: font-stretch is a legacy alias to font-width
+        if descriptor.weight != FontWeight::NORMAL {
+            add_variation(FontVariation {
+                tag: WGHT,
+                value: descriptor.weight.value(),
+            });
+        }
+        if descriptor.stretch != FontStretch::NORMAL {
+            add_variation(FontVariation {
+                tag: WDTH,
+                value: descriptor.stretch.0.to_float(),
+            });
+        }
+        if descriptor.style != FontStyle::NORMAL {
+            if descriptor.style == FontStyle::ITALIC {
+                // If the font should be italic but isn't, then we use the default oblique angle.
+                // See https://searchfox.org/firefox-main/rev/7620954e589eb74f20e94e284b250848a159fca0/gfx/thebes/gfxFont.cpp#932
+                if !self.is_italic() {
+                    add_variation(FontVariation {
+                        tag: ITAL,
+                        value: FontStyle::OBLIQUE.oblique_degrees(),
+                    });
+                }
+            } else {
+                add_variation(FontVariation {
+                    tag: ITAL,
+                    value: descriptor.style.oblique_degrees(),
+                });
+            }
+        }
+
+        variations
+    }
+
+    fn is_italic(&self) -> bool {
+        self.template.descriptor().style.0 == FontStyle::ITALIC
     }
 
     /// A unique identifier for the font, allowing comparison.
