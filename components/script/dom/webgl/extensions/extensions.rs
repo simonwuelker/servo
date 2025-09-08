@@ -21,6 +21,7 @@ use crate::dom::bindings::codegen::Bindings::EXTTextureFilterAnisotropicBinding:
 use crate::dom::bindings::codegen::Bindings::OESStandardDerivativesBinding::OESStandardDerivativesConstants;
 use crate::dom::bindings::codegen::Bindings::OESTextureHalfFloatBinding::OESTextureHalfFloatConstants;
 use crate::dom::bindings::codegen::Bindings::OESVertexArrayObjectBinding::OESVertexArrayObjectConstants;
+use crate::dom::bindings::codegen::Bindings::WEBGLDepthTextureBinding::WEBGLDepthTextureConstants;
 use crate::dom::bindings::codegen::Bindings::WebGLRenderingContextBinding::WebGLRenderingContextConstants as constants;
 use crate::dom::bindings::trace::JSTraceable;
 use crate::dom::webgl::extensions::extcolorbufferhalffloat::EXTColorBufferHalfFloat;
@@ -30,12 +31,13 @@ use crate::dom::webgl::extensions::webglcolorbufferfloat::WEBGLColorBufferFloat;
 use crate::dom::webgl::webglrenderingcontext::WebGLRenderingContext;
 use crate::dom::webgl::webgltexture::TexCompression;
 
-// Data types that are implemented for texImage2D and texSubImage2D in a WebGL 1.0 context
-// but must trigger a InvalidValue error until the related WebGL Extensions are enabled.
-// Example: https://www.khronos.org/registry/webgl/extensions/OES_texture_float/
-const DEFAULT_DISABLED_TEX_TYPES_WEBGL1: [GLenum; 2] = [
+/// Data types that are implemented for texImage2D and texSubImage2D in a WebGL 1.0 context
+/// but must trigger a InvalidValue error until the related WebGL Extensions are enabled.
+/// Example: <https://www.khronos.org/registry/webgl/extensions/OES_texture_float/>
+const DEFAULT_DISABLED_TEX_TYPES_WEBGL1: [GLenum; 3] = [
     constants::FLOAT,
     OESTextureHalfFloatConstants::HALF_FLOAT_OES,
+    WEBGLDepthTextureConstants::UNSIGNED_INT_24_8_WEBGL,
 ];
 
 // Data types that are implemented for textures in WebGLRenderingContext
@@ -207,6 +209,7 @@ impl WebGLExtensions {
 
     pub(crate) fn register<T: 'static + WebGLExtension + JSTraceable + MallocSizeOf>(&self) {
         let name = T::name().to_uppercase();
+        println!("registering {:?}", name);
         self.extensions
             .borrow_mut()
             .insert(name, Box::new(TypedWebGLExtensionWrapper::<T>::new()));
@@ -224,7 +227,7 @@ impl WebGLExtensions {
                 }
                 v.1.is_supported(self)
             })
-            .map(|ref v| v.1.name())
+            .map(|ref v| dbg!(v.1.name()))
             .collect()
     }
 
@@ -255,6 +258,7 @@ impl WebGLExtensions {
     }
 
     pub(crate) fn supports_gl_extension(&self, name: &str) -> bool {
+        println!("{:?}", self.features.borrow().gl_extensions);
         self.features.borrow().gl_extensions.contains(name)
     }
 
@@ -428,6 +432,7 @@ impl WebGLExtensions {
         self.register::<ext::webglcolorbufferfloat::WEBGLColorBufferFloat>();
         self.register::<ext::webglcompressedtextureetc1::WEBGLCompressedTextureETC1>();
         self.register::<ext::webglcompressedtextures3tc::WEBGLCompressedTextureS3TC>();
+        self.register::<ext::webgldepthtexture::WEBGLDepthTexture>();
     }
 
     pub(crate) fn enable_element_index_uint(&self) {

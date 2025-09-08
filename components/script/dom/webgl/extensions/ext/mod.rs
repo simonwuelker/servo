@@ -5,6 +5,7 @@
 use super::{WebGLExtension, WebGLExtensionSpec, WebGLExtensions};
 use crate::dom::bindings::codegen::Bindings::WebGLRenderingContextBinding::WebGLRenderingContextConstants as constants;
 
+pub(crate) mod webgldepthtexture;
 pub(crate) mod angleinstancedarrays;
 pub(crate) mod extblendminmax;
 pub(crate) mod extcolorbufferhalffloat;
