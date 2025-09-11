@@ -332,8 +332,8 @@ pub(crate) struct Document {
     domcontentloaded_dispatched: Cell<bool>,
     /// The state of this document's focus transaction.
     focus_transaction: DomRefCell<Option<FocusTransaction>>,
-    /// The element that currently has the document focus context.
-    focused: MutNullableDom<Element>,
+    /// <https://html.spec.whatwg.org/multipage/#focused-area-of-the-document>
+    focused_area: MutNullableDom<Element>,
     /// The last sequence number sent to the constellation.
     #[no_trace]
     focus_sequence: Cell<FocusSequenceNumber>,
@@ -1127,7 +1127,7 @@ impl Document {
     /// Return the element that currently has focus.
     // https://w3c.github.io/uievents/#events-focusevent-doc-focus
     pub(crate) fn get_focused_element(&self) -> Option<DomRoot<Element>> {
-        self.focused.get()
+        self.focused_area.get()
     }
 
     /// Get the last sequence number sent to the constellation.
@@ -1159,7 +1159,7 @@ impl Document {
     pub(crate) fn begin_focus_transaction(&self) {
         // Initialize it with the current state
         *self.focus_transaction.borrow_mut() = Some(FocusTransaction {
-            element: self.focused.get().as_deref().map(Dom::from_ref),
+            element: self.focused_area.get().as_deref().map(Dom::from_ref),
             has_focus: self.has_focus.get(),
             focus_options: FocusOptions::default(),
         });
@@ -1169,7 +1169,7 @@ impl Document {
     pub(crate) fn perform_focus_fixup_rule(&self, not_focusable: &Element, can_gc: CanGc) {
         // Return if `not_focusable` is not the designated focused area of the
         // `Document`.
-        if Some(not_focusable) != self.focused.get().as_deref() {
+        if Some(not_focusable) != self.focused_area.get().as_deref() {
             return;
         }
 
@@ -1299,7 +1299,7 @@ impl Document {
             }
         }
 
-        let old_focused = self.focused.get();
+        let old_focused = self.focused_area.get();
         let old_focus_state = self.has_focus.get();
 
         debug!(
@@ -1348,7 +1348,7 @@ impl Document {
             self.fire_focus_event(FocusEventType::Blur, self.global().upcast(), None, can_gc);
         }
 
-        self.focused.set(new_focused.as_deref());
+        self.focused_area.set(new_focused.as_deref());
         self.has_focus.set(new_focus_state);
 
         if old_focus_state != new_focus_state && new_focus_state {
@@ -3373,7 +3373,7 @@ impl Document {
             ready_state: Cell::new(ready_state),
             domcontentloaded_dispatched: Cell::new(domcontentloaded_dispatched),
             focus_transaction: DomRefCell::new(None),
-            focused: Default::default(),
+            focused_area: Default::default(),
             focus_sequence: Cell::new(FocusSequenceNumber::default()),
             has_focus: Cell::new(has_focus),
             current_script: Default::default(),
