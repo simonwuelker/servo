@@ -333,6 +333,11 @@ pub(crate) struct Document {
     /// The state of this document's focus transaction.
     focus_transaction: DomRefCell<Option<FocusTransaction>>,
     /// <https://html.spec.whatwg.org/multipage/#focused-area-of-the-document>
+    ///
+    /// When the focus is in an `<iframe>` (a [navigable container]) then the
+    /// focused area will be that `<iframe>`.
+    ///
+    /// [navigable container]: https://html.spec.whatwg.org/multipage/#navigable-container
     focused_area: MutNullableDom<Element>,
     /// The last sequence number sent to the constellation.
     #[no_trace]
@@ -1202,6 +1207,8 @@ impl Document {
         self.request_focus_with_options(elem, focus_initiator, FocusOptions::default(), can_gc);
     }
 
+    /// <https://html.spec.whatwg.org/multipage/interaction.html#focusing-steps>
+    ///
     /// Request that the given element receive focus once the current
     /// transaction is complete. `None` specifies to focus the document.
     ///
@@ -1214,12 +1221,6 @@ impl Document {
         focus_options: FocusOptions,
         can_gc: CanGc,
     ) {
-        // If an element is specified, and it's non-focusable, ignore the
-        // request.
-        if elem.is_some_and(|e| !e.is_focusable_area()) {
-            return;
-        }
-
         let implicit_transaction = self.focus_transaction.borrow().is_none();
 
         if implicit_transaction {

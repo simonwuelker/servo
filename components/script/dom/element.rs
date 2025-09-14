@@ -2992,7 +2992,7 @@ impl Element {
         self.rare_data().as_ref()?.name_attribute.clone()
     }
 
-    fn is_sequentially_focusable(&self) -> bool {
+    pub(crate) fn is_sequentially_focusable(&self) -> bool {
         let element = self.upcast::<Element>();
         let node = self.upcast::<Node>();
         if !node.is_connected() {

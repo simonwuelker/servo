@@ -55,6 +55,7 @@ use crate::dom::node::{
 use crate::dom::shadowroot::ShadowRoot;
 use crate::dom::text::Text;
 use crate::dom::virtualmethods::VirtualMethods;
+use crate::focus::run_focusing_steps;
 use crate::script_runtime::CanGc;
 use crate::script_thread::ScriptThread;
 
@@ -422,17 +423,19 @@ impl HTMLElementMethods<crate::DomTypeHolder> for HTMLElement {
 
     /// <https://html.spec.whatwg.org/multipage/#dom-focus>
     fn Focus(&self, options: &FocusOptions, can_gc: CanGc) {
-        // TODO: Mark the element as locked for focus and run the focusing steps.
-        // <https://html.spec.whatwg.org/multipage/#focusing-steps>
+        // TODO: Step 1. If the allow focus steps given this's node document return false, then return.
+
+        // Step 2. Run the focusing steps for this.
         let document = self.owner_document();
-        document.request_focus_with_options(
+        run_focusing_steps(
+            &document,
             Some(self.upcast()),
             FocusInitiator::Local,
             FocusOptions {
                 preventScroll: options.preventScroll,
             },
             can_gc,
-        );
+        )
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-blur

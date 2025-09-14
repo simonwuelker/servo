@@ -38,6 +38,7 @@ mod init;
 mod layout_image;
 
 pub(crate) mod document_collection;
+mod focus;
 pub(crate) mod iframe_collection;
 pub(crate) mod image_animation;
 pub mod layout_dom;

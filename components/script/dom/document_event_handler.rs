@@ -56,6 +56,7 @@ use crate::dom::types::{
     WheelEvent, Window,
 };
 use crate::drag_data_store::{DragDataStore, Kind, Mode};
+use crate::focus::{run_focusing_steps, run_unfocusing_steps};
 use crate::realms::enter_realm;
 
 /// The [`DocumentEventHandler`] is a structure responsible for handling input events for
@@ -595,18 +596,29 @@ impl DocumentEventHandler {
 
                 // (TODO) Step 6. Maybe send pointerdown event with `dom_event`.
 
+                let document = self.window.Document();
                 // For a node within a text input UA shadow DOM,
                 // delegate the focus target into its shadow host.
                 // TODO: This focus delegation should be done
                 // with shadow DOM delegateFocus attribute.
-                let target_el = el.find_focusable_shadow_host_if_necessary();
+                if let Some(target_element) = el.find_focusable_shadow_host_if_necessary() {
+                    run_focusing_steps(
+                        &document,
+                        Some(&target_element),
+                        FocusInitiator::Local,
+                        Default::default(),
+                        can_gc,
+                    );
+                } else {
+                    if let Some(currently_focused_area) = document.get_focused_element() {
+                        run_unfocusing_steps(document, can_gc);
+                    }
+                };
+                // document.begin_focus_transaction();
 
-                let document = self.window.Document();
-                document.begin_focus_transaction();
-
-                // Try to focus `el`. If it's not focusable, focus the document instead.
-                document.request_focus(None, FocusInitiator::Local, can_gc);
-                document.request_focus(target_el.as_deref(), FocusInitiator::Local, can_gc);
+                // // Try to focus `el`. If it's not focusable, focus the document instead.
+                // document.request_focus(None, FocusInitiator::Local, can_gc);
+                // document.request_focus(target_el.as_deref(), FocusInitiator::Local, can_gc);
 
                 // Step 7. Let result = dispatch event at target
                 let result = dom_event.dispatch(node.upcast(), false, can_gc);

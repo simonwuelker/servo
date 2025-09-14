@@ -173,6 +173,9 @@ impl FontContext {
         )
     }
 
+    /// Decide on a font, without actually loading it.
+    pub fn select_font(&self, font_template: FontTemplateRef, font_descriptor: &FontDescriptor) {}
+
     fn get_font_maybe_synthesizing_small_caps(
         &self,
         font_template: FontTemplateRef,
