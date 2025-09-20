@@ -6,6 +6,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
 
+use base::generic_channel::{self, GenericSender};
 use base::id::WebViewId;
 use ipc_channel::ipc;
 use js::jsapi::{ExceptionStackBehavior, JS_IsExceptionPending};
@@ -13,6 +14,8 @@ use js::jsval::UndefinedValue;
 use js::realm::CurrentRealm;
 use js::rust::HandleValue;
 use js::rust::wrappers::JS_SetPendingException;
+use net_traits::filemanager_thread::FileManagerThreadMsg;
+use net_traits::policy_container::{PolicyContainer, RequestPolicyContainer};
 use net_traits::request::{
     CorsSettings, CredentialsMode, Destination, Referrer, Request as NetTraitsRequest,
     RequestBuilder, RequestId, RequestMode, ServiceWorkersMode,
@@ -813,4 +816,27 @@ pub(crate) fn create_a_potential_cors_request(
         // mode is mode, credentials mode is credentialsMode, and whose use-URL-credentials flag is set.
         .destination(destination)
         .use_url_credentials(true)
+}
+
+pub(crate) struct BlobResolver<'a>(pub &'a GenericSender<CoreResourceMsg>);
+
+impl servo_url::BlobStorage for BlobResolver<'_> {
+    fn acquire_blob_token(&self, url: &ServoUrl) -> Result<Option<servo_url::BlobToken>, ()> {
+        if url.scheme() != "blob" {
+            return Ok(None);
+        }
+        let Ok((file_id, origin)) = net_traits::blob_url_store::parse_blob_url(&url) else {
+            return Ok(None)
+        };
+        let (sender, receiver) = generic_channel::channel().unwrap();
+        self.0.send(
+            CoreResourceMsg::ToFileManager(
+                FileManagerThreadMsg::GetTokenForFile(file_id, origin, sender)
+            ))
+            .map_err(|_| ())?;
+        let Ok((id, sender)) = receiver.recv() else {
+            return Err(());
+        };
+        Ok(id.map(|id| servo_url::BlobToken::new(id, file_id, sender)))
+    }
 }

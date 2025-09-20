@@ -14,7 +14,7 @@ use std::thread;
 
 use base::generic_channel::{
     self, CallbackSetter, GenericCallback, GenericReceiver, GenericReceiverSet,
-    GenericSelectionResult,
+    GenericSelectionResult, GenericSender
 };
 use base::id::CookieStoreId;
 use cookie::Cookie;
@@ -25,7 +25,7 @@ use hyper_serde::Serde;
 use ipc_channel::ipc::IpcSender;
 use log::{debug, trace, warn};
 use net_traits::blob_url_store::parse_blob_url;
-use net_traits::filemanager_thread::FileTokenCheck;
+use net_traits::filemanager_thread::{FileTokenCheck, FileManagerThreadMsg};
 use net_traits::pub_domains::public_suffix_list_size_of;
 use net_traits::request::{Destination, PreloadEntry, PreloadId, RequestBuilder, RequestId};
 use net_traits::response::{Response, ResponseInit};
@@ -138,6 +138,7 @@ pub fn new_core_resource_thread(
     let (public_setup_chan, public_setup_port) = generic_channel::channel().unwrap();
     let (private_setup_chan, private_setup_port) = generic_channel::channel().unwrap();
     let (report_chan, report_port) = generic_channel::channel().unwrap();
+    let (revoke_sender, revoke_receiver) = generic_channel::channel().unwrap();
 
     thread::Builder::new()
         .name("ResourceManager".to_owned())
@@ -148,6 +149,7 @@ pub fn new_core_resource_thread(
                 embedder_proxy.clone(),
                 ca_certificates.clone(),
                 ignore_certificate_errors,
+                revoke_sender,
             );
 
             let mut channel_manager = ResourceChannelManager {
@@ -167,6 +169,7 @@ pub fn new_core_resource_thread(
                         report_port,
                         protocols,
                         embedder_proxy,
+                        revoke_receiver,
                     )
                 },
                 String::from("network-cache-reporter"),
@@ -246,6 +249,7 @@ impl ResourceChannelManager {
         memory_reporter: GenericReceiver<CoreResourceMsg>,
         protocols: Arc<ProtocolRegistry>,
         embedder_proxy: GenericEmbedderProxy<NetToEmbedderMsg>,
+        revoke_receiver: GenericReceiver<CoreResourceMsg>,
     ) {
         let (public_http_state, private_http_state) = create_http_states(
             self.config_dir.as_deref(),
@@ -258,6 +262,7 @@ impl ResourceChannelManager {
         let private_id = rx_set.add(private_receiver);
         let public_id = rx_set.add(public_receiver);
         let reporter_id = rx_set.add(memory_reporter);
+        let revoker_id = rx_set.add(revoke_receiver);
 
         loop {
             for received in rx_set.select().into_iter() {
@@ -268,7 +273,16 @@ impl ResourceChannelManager {
                         log::error!("Found selection error: {error}")
                     },
                     GenericSelectionResult::MessageReceived(id, msg) => {
-                        if id == reporter_id {
+                        if id == revoker_id {
+                            if let CoreResourceMsg::RevokeTokenForFile(token, file_id) = msg {
+                                self.resource_manager.filemanager.handle(
+                                    FileManagerThreadMsg::RevokeTokenForFile(token, file_id)
+                                );
+                            } else {
+                                log::error!("Blob revocation channel received unexpected message");
+                            }
+                        }
+                        else if id == reporter_id {
                             if let CoreResourceMsg::CollectMemoryReport(report_chan) = msg {
                                 self.process_report(
                                     report_chan,
@@ -588,8 +602,8 @@ impl ResourceChannelManager {
                 let _ = sender.send(());
                 return false;
             },
-            // Ignore this message as we handle it only in the reporter chan
-            CoreResourceMsg::CollectMemoryReport(_) => {},
+            // Ignore these messages as they are only sent on very specific channels.
+            CoreResourceMsg::CollectMemoryReport(_) | CoreResourceMsg::RevokeTokenForFile(..) => {},
         }
         true
     }
@@ -635,11 +649,12 @@ impl CoreResourceManager {
         embedder_proxy: GenericEmbedderProxy<NetToEmbedderMsg>,
         ca_certificates: CACertificates<'static>,
         ignore_certificate_errors: bool,
+        revoke_sender: GenericSender<CoreResourceMsg>,
     ) -> CoreResourceManager {
         CoreResourceManager {
             devtools_sender,
             sw_managers: Default::default(),
-            filemanager: FileManager::new(embedder_proxy.clone()),
+            filemanager: FileManager::new(embedder_proxy.clone(), revoke_sender),
             request_interceptor: RequestInterceptor::new(embedder_proxy),
             ca_certificates,
             ignore_certificate_errors,

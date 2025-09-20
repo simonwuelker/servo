@@ -17,11 +17,13 @@ use std::ops::{Index, Range, RangeFrom, RangeFull, RangeTo};
 use std::path::Path;
 use std::str::FromStr;
 
+use base::generic_channel::GenericSender;
 use malloc_size_of_derive::MallocSizeOf;
 use serde::{Deserialize, Serialize};
 use servo_arc::Arc;
 pub use url::Host;
 use url::{Position, Url};
+use uuid::Uuid;
 
 pub use crate::origin::{ImmutableOrigin, MutableOrigin, OpaqueOrigin, OriginSnapshot};
 
@@ -36,12 +38,70 @@ pub enum UrlError {
     FromFilePath,
 }
 
+pub trait BlobStorage {
+    fn acquire_blob_token(&self, url: &ServoUrl) -> Result<Option<BlobToken>, ()>;
+}
+
+#[derive(Deserialize, MallocSizeOf, Serialize)]
+pub struct BlobToken {
+    token: Uuid,
+    file_id: Uuid,
+    revocation_sender: GenericSender<(Uuid, Uuid)>
+}
+
+impl BlobToken {
+    pub fn new(token: Uuid, file_id: Uuid, revocation_sender: GenericSender<(Uuid, Uuid)>) -> Self {
+        Self {
+            token,
+            file_id,
+            revocation_sender
+        }
+    }
+}
+
+impl Drop for BlobToken {
+    fn drop(&mut self) {
+        let _ = self.revocation_sender.send((self.token, self.file_id));
+    }
+}
+
+impl Eq for BlobToken {}
+impl std::hash::Hash for BlobToken {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.token.hash(state);
+    }
+}
+impl Ord for BlobToken {
+    fn cmp(&self, other: &BlobToken) -> std::cmp::Ordering {
+        self.token.cmp(&other.token)
+    }
+}
+impl PartialOrd for BlobToken {
+    fn partial_cmp(&self, other: &BlobToken) -> Option<std::cmp::Ordering> {
+        self.token.partial_cmp(&other.token)
+    }
+}
+impl PartialEq for BlobToken {
+    fn eq(&self, other: &BlobToken) -> bool {
+        self.token == other.token
+    }
+}
+
 #[derive(Clone, Deserialize, Eq, Hash, MallocSizeOf, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct ServoUrl(#[conditional_malloc_size_of] Arc<Url>);
+pub struct ServoUrl(#[conditional_malloc_size_of] Arc<Url>, #[conditional_malloc_size_of] Option<Arc<BlobToken>>);
 
 impl ServoUrl {
     pub fn from_url(url: Url) -> Self {
-        ServoUrl(Arc::new(url))
+        ServoUrl(Arc::new(url), None)
+    }
+
+    pub fn parse_with_base_and_blob_store(base: Option<&Self>, input: &str, blob_store: &dyn BlobStorage) -> Result<Self, url::ParseError> {
+        let mut parsed = Self::parse_with_base(base, input)?;
+        let Ok(token) = blob_store.acquire_blob_token(&parsed) else {
+            return Ok(parsed);
+        };
+        parsed.1 = token.map(Arc::new);
+        Ok(parsed)
     }
 
     pub fn parse_with_base(base: Option<&Self>, input: &str) -> Result<Self, url::ParseError> {
@@ -332,7 +392,7 @@ impl From<Url> for ServoUrl {
 
 impl From<Arc<Url>> for ServoUrl {
     fn from(url: Arc<Url>) -> Self {
-        ServoUrl(url)
+        ServoUrl(url, None)
     }
 }
 

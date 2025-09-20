@@ -65,6 +65,7 @@ mod task_source;
 pub mod test;
 pub mod textinput;
 mod timers;
+mod url;
 mod webdriver_handlers;
 mod window_named_properties;
 mod xpath;

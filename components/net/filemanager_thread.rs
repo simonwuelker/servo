@@ -24,7 +24,7 @@ use net_traits::filemanager_thread::{
     FileManagerResult, FileManagerThreadError, FileManagerThreadMsg, FileTokenCheck,
     ReadFileProgress, RelativePos,
 };
-use net_traits::http_percent_encode;
+use net_traits::{CoreResourceMsg, http_percent_encode};
 use net_traits::response::{Response, ResponseBody};
 use parking_lot::{Mutex, RwLock};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -84,13 +84,18 @@ enum FileImpl {
 pub struct FileManager {
     embedder_proxy: GenericEmbedderProxy<NetToEmbedderMsg>,
     store: Arc<FileManagerStore>,
+    revoke_sender: GenericSender<CoreResourceMsg>,
 }
 
 impl FileManager {
-    pub fn new(embedder_proxy: GenericEmbedderProxy<NetToEmbedderMsg>) -> FileManager {
+    pub fn new(
+        embedder_proxy: GenericEmbedderProxy<NetToEmbedderMsg>,
+        revoke_sender: GenericSender<CoreResourceMsg>,
+    ) -> FileManager {
         FileManager {
             embedder_proxy,
             store: Arc::new(FileManagerStore::new()),
+            revoke_sender,
         }
     }
 
@@ -181,6 +186,16 @@ impl FileManager {
             },
             FileManagerThreadMsg::ActivateBlobURL(id, sender, origin) => {
                 let _ = sender.send(self.store.set_blob_url_validity(true, &id, &origin));
+            },
+            FileManagerThreadMsg::GetTokenForFile(id, _origin, sender) => {
+                let token = match self.get_token_for_file(&id) {
+                    FileTokenCheck::Required(token) => Some(token),
+                    _ => None,
+                };
+                let _ = sender.send((token, self.revoke_sender.clone()));
+            },
+            FileManagerThreadMsg::RevokeTokenForFile(token, id) => {
+                self.invalidate_token(&FileTokenCheck::Required(token), &id);
             },
         }
     }

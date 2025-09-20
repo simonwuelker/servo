@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use servo_url::ImmutableOrigin;
 use uuid::Uuid;
 
+use crate::CoreResourceMsg;
 use crate::blob_url_store::{BlobBuf, BlobURLStoreError};
 
 /// A token modulating access to a file for a blob URL.
@@ -161,11 +162,15 @@ pub enum FileManagerThreadMsg {
     ),
 
     /// Revoke Blob URL and send back the acknowledgement
-    RevokeBlobURL(
+    RevokeBlobURL(Uuid, ImmutableOrigin, IpcSender<Result<(), BlobURLStoreError>>),
+
+    ///
+    GetTokenForFile(
         Uuid,
         ImmutableOrigin,
-        GenericSender<Result<(), BlobURLStoreError>>,
+        GenericSender<(Option<Uuid>, GenericSender<CoreResourceMsg>)>
     ),
+    RevokeTokenForFile(Uuid, Uuid),
 }
 
 #[derive(Debug, Deserialize, Serialize)]

@@ -8,6 +8,7 @@ use std::fmt::{self, Debug, Display};
 use std::sync::{LazyLock, OnceLock};
 use std::thread::{self, JoinHandle};
 
+use uuid::Uuid;
 use base::cross_process_instant::CrossProcessInstant;
 use base::generic_channel::{
     self, CallbackSetter, GenericCallback, GenericOneshotSender, GenericSend, GenericSender,
@@ -655,6 +656,7 @@ pub enum CoreResourceMsg {
     /// and exit
     Exit(GenericOneshotSender<()>),
     CollectMemoryReport(ReportsChan),
+    RevokeTokenForFile(Uuid, Uuid),
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

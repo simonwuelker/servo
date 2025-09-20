@@ -8650,6 +8650,7 @@ dependencies = [
  "encoding_rs",
  "malloc_size_of_derive",
  "serde",
+ "servo-base",
  "servo-malloc-size-of",
  "servo_arc",
  "url",

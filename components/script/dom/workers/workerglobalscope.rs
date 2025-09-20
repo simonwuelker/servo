@@ -680,7 +680,8 @@ impl WorkerGlobalScopeMethods<crate::DomTypeHolder> for WorkerGlobalScope {
                 url,
                 "WorkerGlobalScope importScripts",
             )?;
-            let url = self.worker_url.borrow().join(&url.str());
+            //let url = self.worker_url.borrow().join(&url.str());
+            let url = crate::url::parse_url(&url.str(), crate::url::RelativeTo::Global(self.upcast::<GlobalScope>()));
             match url {
                 Ok(url) => urls.push(url),
                 Err(_) => return Err(Error::Syntax(None)),
