@@ -21,11 +21,10 @@ use log::warn;
 use mime::{self, Mime};
 use net_traits::blob_url_store::{BlobBuf, BlobURLStoreError};
 use net_traits::filemanager_thread::{
-    FileManagerResult, FileManagerThreadError, FileManagerThreadMsg, FileTokenCheck,
-    ReadFileProgress, RelativePos,
+    FileManagerResult, FileManagerThreadError, FileManagerThreadMsg, FileTokenCheck, GetTokenForFileReply, ReadFileProgress, RelativePos
 };
-use net_traits::{CoreResourceMsg, http_percent_encode};
 use net_traits::response::{Response, ResponseBody};
+use net_traits::{CoreResourceMsg, http_percent_encode};
 use parking_lot::{Mutex, RwLock};
 use rustc_hash::{FxHashMap, FxHashSet};
 use servo_arc::Arc as ServoArc;
@@ -85,17 +84,20 @@ pub struct FileManager {
     embedder_proxy: GenericEmbedderProxy<NetToEmbedderMsg>,
     store: Arc<FileManagerStore>,
     revoke_sender: GenericSender<CoreResourceMsg>,
+    refresh_sender: GenericSender<CoreResourceMsg>,
 }
 
 impl FileManager {
     pub fn new(
         embedder_proxy: GenericEmbedderProxy<NetToEmbedderMsg>,
         revoke_sender: GenericSender<CoreResourceMsg>,
+        refresh_sender: GenericSender<CoreResourceMsg>,
     ) -> FileManager {
         FileManager {
             embedder_proxy,
             store: Arc::new(FileManagerStore::new()),
             revoke_sender,
+            refresh_sender,
         }
     }
 
@@ -113,8 +115,8 @@ impl FileManager {
         });
     }
 
-    pub(crate) fn get_token_for_file(&self, file_id: &Uuid) -> FileTokenCheck {
-        self.store.get_token_for_file(file_id)
+    pub fn get_token_for_file(&self, file_id: &Uuid, allow_revoked: bool) -> FileTokenCheck {
+        self.store.get_token_for_file(file_id, allow_revoked)
     }
 
     pub(crate) fn invalidate_token(&self, token: &FileTokenCheck, file_id: &Uuid) {
@@ -158,6 +160,7 @@ impl FileManager {
 
     /// Message handler
     pub fn handle(&self, msg: FileManagerThreadMsg) {
+        println!("handling {msg:?}");
         match msg {
             FileManagerThreadMsg::SelectFiles(control_id, file_picker_request, response_sender) => {
                 let store = self.store.clone();
@@ -188,11 +191,16 @@ impl FileManager {
                 let _ = sender.send(self.store.set_blob_url_validity(true, &id, &origin));
             },
             FileManagerThreadMsg::GetTokenForFile(id, _origin, sender) => {
-                let token = match self.get_token_for_file(&id) {
+                let token = match self.get_token_for_file(&id, false) {
                     FileTokenCheck::Required(token) => Some(token),
                     _ => None,
                 };
-                let _ = sender.send((token, self.revoke_sender.clone()));
+
+                let _ = sender.send(GetTokenForFileReply {
+                    token,
+                    revoke_sender: self.revoke_sender.clone(),
+                    refresh_sender: self.refresh_sender.clone()
+                });
             },
             FileManagerThreadMsg::RevokeTokenForFile(token, id) => {
                 self.invalidate_token(&FileTokenCheck::Required(token), &id);
@@ -449,7 +457,15 @@ impl FileManagerStore {
         }
     }
 
-    fn invalidate_token(&self, token: &FileTokenCheck, file_id: &Uuid) {
+    pub fn invalidate_token(&self, token: &FileTokenCheck, file_id: &Uuid) {
+        println!(
+            "invalidating {} for {file_id:?}",
+            match token {
+                FileTokenCheck::Required(id) => id.to_string(),
+                FileTokenCheck::NotRequired => "not required".to_string(),
+                FileTokenCheck::ShouldFail => "should fail".to_string(),
+            }
+        );
         if let FileTokenCheck::Required(token) = token {
             let mut entries = self.entries.write();
             if let Some(entry) = entries.get_mut(file_id) {
@@ -474,7 +490,7 @@ impl FileManagerStore {
         }
     }
 
-    pub(crate) fn get_token_for_file(&self, file_id: &Uuid) -> FileTokenCheck {
+    pub fn get_token_for_file(&self, file_id: &Uuid, allow_revoked: bool) -> FileTokenCheck {
         let mut entries = self.entries.write();
         let parent_id = match entries.get(file_id) {
             Some(entry) => {
@@ -491,7 +507,7 @@ impl FileManagerStore {
             None => file_id,
         };
         if let Some(entry) = entries.get_mut(file_id) {
-            if !entry.is_valid_url.load(Ordering::Acquire) {
+            if !allow_revoked && !entry.is_valid_url.load(Ordering::Acquire) {
                 return FileTokenCheck::ShouldFail;
             }
             let token = Uuid::new_v4();

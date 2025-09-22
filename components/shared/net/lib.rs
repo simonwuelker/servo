@@ -8,7 +8,6 @@ use std::fmt::{self, Debug, Display};
 use std::sync::{LazyLock, OnceLock};
 use std::thread::{self, JoinHandle};
 
-use uuid::Uuid;
 use base::cross_process_instant::CrossProcessInstant;
 use base::generic_channel::{
     self, CallbackSetter, GenericCallback, GenericOneshotSender, GenericSend, GenericSender,
@@ -34,6 +33,7 @@ use rustc_hash::FxHashMap;
 use rustls_pki_types::CertificateDer;
 use serde::{Deserialize, Serialize};
 use servo_url::{ImmutableOrigin, ServoUrl};
+use uuid::Uuid;
 
 use crate::fetch::headers::determine_nosniff;
 use crate::filemanager_thread::FileManagerThreadMsg;
@@ -657,6 +657,7 @@ pub enum CoreResourceMsg {
     Exit(GenericOneshotSender<()>),
     CollectMemoryReport(ReportsChan),
     RevokeTokenForFile(Uuid, Uuid),
+    RefreshTokenForFile(Uuid)
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

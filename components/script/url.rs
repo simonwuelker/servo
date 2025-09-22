@@ -19,5 +19,9 @@ pub(crate) fn parse_url(url: &str, relative_to: RelativeTo) -> Result<ServoUrl, 
         },
         RelativeTo::Global(global) => (global.api_base_url(), global.resource_threads()),
     };
-    ServoUrl::parse_with_base_and_blob_store(Some(&base), url, &BlobResolver(&resource_sender.core_thread))
+    ServoUrl::parse_with_base_and_blob_store(
+        Some(&base),
+        url,
+        &BlobResolver(&resource_sender.core_thread),
+    )
 }

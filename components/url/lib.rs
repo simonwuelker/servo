@@ -17,7 +17,7 @@ use std::ops::{Index, Range, RangeFrom, RangeFull, RangeTo};
 use std::path::Path;
 use std::str::FromStr;
 
-use base::generic_channel::GenericSender;
+use base::generic_channel::{self, GenericSender};
 use malloc_size_of_derive::MallocSizeOf;
 use serde::{Deserialize, Serialize};
 use servo_arc::Arc;
@@ -39,29 +39,98 @@ pub enum UrlError {
 }
 
 pub trait BlobStorage {
-    fn acquire_blob_token(&self, url: &ServoUrl) -> Result<Option<BlobToken>, ()>;
+    fn acquire_blob_token(&self, url: &ServoUrl) -> Result<Option<SerializableBlobToken>, ()>;
 }
 
 #[derive(Deserialize, MallocSizeOf, Serialize)]
 pub struct BlobToken {
-    token: Uuid,
-    file_id: Uuid,
-    revocation_sender: GenericSender<(Uuid, Uuid)>
+    pub token: Uuid,
+    pub file_id: Uuid,
+    pub revoke_sender: GenericSender<BlobTokenRevocationRequest>,
+    pub refresh_token_sender: GenericSender<BlobTokenRefreshRequest>,
+    pub neutered: bool,
 }
 
-impl BlobToken {
-    pub fn new(token: Uuid, file_id: Uuid, revocation_sender: GenericSender<(Uuid, Uuid)>) -> Self {
-        Self {
-            token,
-            file_id,
-            revocation_sender
+#[derive(Deserialize, MallocSizeOf, Serialize)]
+pub struct BlobTokenRevocationRequest {
+    pub blob_id: Uuid,
+    pub token: Uuid,
+}
+
+#[derive(Deserialize, MallocSizeOf, Serialize)]
+pub struct BlobTokenRefreshRequest {
+    pub blob_id: Uuid,
+    pub new_token_sender: GenericSender<Uuid>,
+}
+
+impl serde::Serialize for SerializableBlobToken {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let (new_token_sender, new_token_receiver) = generic_channel::channel().unwrap();
+        self.0
+            .refresh_token_sender
+            .send(BlobTokenRefreshRequest {
+                blob_id: self.0.file_id.clone(),
+                new_token_sender,
+            })
+            .unwrap();
+        let new_token = new_token_receiver.recv().unwrap();
+        let mut new_token = BlobToken {
+            token: new_token,
+            file_id: self.0.file_id.clone(),
+            revoke_sender: self.0.revoke_sender.clone(),
+            refresh_token_sender: self.0.refresh_token_sender.clone(),
+            neutered: false,
+        };
+        let result = serializer.serialize_newtype_struct("SerializableBlobToken", &new_token);
+        if result.is_ok() {
+            new_token.neutered = true;
         }
+        result
+    }
+}
+
+impl<'a> serde::Deserialize<'a> for SerializableBlobToken {
+    fn deserialize<D>(de: D) -> Result<Self, <D as serde::Deserializer<'a>>::Error>
+    where
+        D: serde::Deserializer<'a>,
+    {
+        struct MethodVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for MethodVisitor {
+            type Value = SerializableBlobToken;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(formatter, "a SerializableBlobToken")
+            }
+
+            fn visit_newtype_struct<D>(
+                self,
+                deserializer: D,
+            ) -> Result<Self::Value, <D as serde::Deserializer<'de>>::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                Ok(SerializableBlobToken(Arc::new(BlobToken::deserialize(
+                    deserializer,
+                )?)))
+            }
+        }
+
+        de.deserialize_newtype_struct("SerializableBlobToken", MethodVisitor)
     }
 }
 
 impl Drop for BlobToken {
     fn drop(&mut self) {
-        let _ = self.revocation_sender.send((self.token, self.file_id));
+        if !self.neutered {
+            let _ = self.revoke_sender.send(BlobTokenRevocationRequest {
+                token: self.token.clone(),
+                blob_id: self.file_id.clone(),
+            });
+        }
     }
 }
 
@@ -88,19 +157,33 @@ impl PartialEq for BlobToken {
 }
 
 #[derive(Clone, Deserialize, Eq, Hash, MallocSizeOf, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct ServoUrl(#[conditional_malloc_size_of] Arc<Url>, #[conditional_malloc_size_of] Option<Arc<BlobToken>>);
+pub struct ServoUrl(
+    #[conditional_malloc_size_of] Arc<Url>,
+    Option<SerializableBlobToken>,
+);
+
+#[derive(Clone, PartialEq, Eq, Hash, MallocSizeOf, Ord, PartialOrd)]
+pub struct SerializableBlobToken(#[conditional_malloc_size_of] pub Arc<BlobToken>);
 
 impl ServoUrl {
+    pub fn blob_token(&self) -> &Option<SerializableBlobToken> {
+        &self.1
+    }
+
     pub fn from_url(url: Url) -> Self {
         ServoUrl(Arc::new(url), None)
     }
 
-    pub fn parse_with_base_and_blob_store(base: Option<&Self>, input: &str, blob_store: &dyn BlobStorage) -> Result<Self, url::ParseError> {
+    pub fn parse_with_base_and_blob_store(
+        base: Option<&Self>,
+        input: &str,
+        blob_store: &dyn BlobStorage,
+    ) -> Result<Self, url::ParseError> {
         let mut parsed = Self::parse_with_base(base, input)?;
         let Ok(token) = blob_store.acquire_blob_token(&parsed) else {
             return Ok(parsed);
         };
-        parsed.1 = token.map(Arc::new);
+        parsed.1 = token;
         Ok(parsed)
     }
 
