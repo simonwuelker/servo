@@ -2,6 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use std::mem;
+
+use markup5ever::QualName;
 use malloc_size_of_derive::MallocSizeOf;
 use markup5ever::QualName;
 
@@ -18,6 +21,7 @@ pub enum Expression {
     ContextItem,
     /// We only support the built-in core functions.
     Function(CoreFunction),
+    GetAttributeByName(QualName),
 }
 
 #[derive(Clone, Debug, MallocSizeOf, PartialEq)]
@@ -198,4 +202,118 @@ pub enum CoreFunction {
     False,
     /// lang(string)
     Lang(Box<Expression>),
+}
+
+impl Expression {
+    pub(crate) fn optimize(&mut self) {
+        match self {
+            Self::Binary(left_side, _, right_side) => {
+                left_side.optimize();
+                right_side.optimize();
+            },
+            Self::Negate(expression) => {
+                expression.optimize();
+            },
+            Self::Path(path_expression) => {
+                path_expression.optimize();
+            },
+            Self::LocationStep(step_expression) => {
+                step_expression.predicate_list.optimize();
+
+                if step_expression.axis == Axis::Attribute &&
+                    let NodeTest::Name(name) = &step_expression.node_test
+                {
+                    // Instead of doing an O(n) search through the list of attributes, do an
+                    // O(1) lookup by name.
+                    if step_expression.predicate_list.predicates.is_empty() {
+                        *self = Self::GetAttributeByName(name.local_part.to_owned());
+                    } else {
+                        *self = Self::Filter(FilterExpression {
+                            expression: Box::new(Self::GetAttributeByName(
+                                name.local_part.to_owned(),
+                            )),
+                            predicates: mem::take(&mut step_expression.predicate_list),
+                        })
+                    }
+                }
+            },
+            Self::Filter(filter_expression) => {
+                filter_expression.expression.optimize();
+                filter_expression.predicates.optimize();
+            },
+            Self::Function(function) => function.optimize(),
+            Self::ContextItem |
+            Self::GetAttributeByName(_) |
+            Self::Literal(_) |
+            Self::Variable(_) => {},
+        }
+    }
+}
+
+impl PathExpression {
+    fn optimize(&mut self) {
+        for step in &mut self.steps {
+            step.optimize();
+        }
+    }
+}
+
+impl PredicateListExpression {
+    fn optimize(&mut self) {
+        for expression in &mut self.predicates {
+            expression.optimize();
+        }
+    }
+}
+
+impl CoreFunction {
+    fn optimize(&mut self) {
+        match self {
+            Self::Last | Self::Position | Self::True | Self::False => {},
+            Self::Count(expression) |
+            Self::Id(expression) |
+            Self::Sum(expression) |
+            Self::Floor(expression) |
+            Self::Ceiling(expression) |
+            Self::Round(expression) |
+            Self::Boolean(expression) |
+            Self::Not(expression) |
+            Self::Lang(expression) => expression.optimize(),
+            Self::LocalName(optional_expression) |
+            Self::NamespaceUri(optional_expression) |
+            Self::Name(optional_expression) |
+            Self::String(optional_expression) |
+            Self::StringLength(optional_expression) |
+            Self::NormalizeSpace(optional_expression) |
+            Self::Number(optional_expression) => {
+                if let Some(expression) = optional_expression {
+                    expression.optimize();
+                }
+            },
+            Self::Concat(expressions) => {
+                for expression in expressions {
+                    expression.optimize();
+                }
+            },
+            Self::StartsWith(first_argument, second_argument) |
+            Self::Contains(first_argument, second_argument) |
+            Self::SubstringBefore(first_argument, second_argument) |
+            Self::SubstringAfter(first_argument, second_argument) => {
+                first_argument.optimize();
+                second_argument.optimize();
+            },
+            Self::Substring(source_expression, position_expression, length_expression) => {
+                source_expression.optimize();
+                position_expression.optimize();
+                if let Some(length_expression) = length_expression {
+                    length_expression.optimize();
+                }
+            },
+            Self::Translate(source_expression, to_replace_expression, replace_with_expression) => {
+                source_expression.optimize();
+                to_replace_expression.optimize();
+                replace_with_expression.optimize();
+            },
+        }
+    }
 }

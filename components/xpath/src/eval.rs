@@ -97,6 +97,16 @@ impl Expression {
             Expression::Function(function) => function.evaluate(context),
             Expression::ContextItem => Ok(Value::Nodeset(vec![context.context_node.clone()])),
             Expression::Variable(_) => Err(Error::CannotUseVariables),
+            Expression::GetAttributeByName(name) => {
+                let result = context
+                    .context_node
+                    .as_element()
+                    .and_then(|element| element.get_attribute_by_name(name))
+                    .map(|attribute| attribute.as_node())
+                    .map(|node| vec![node])
+                    .unwrap_or_default();
+                Ok(Value::Nodeset(result))
+            },
         }
     }
 }
