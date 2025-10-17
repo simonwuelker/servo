@@ -2324,26 +2324,31 @@ impl Node {
         parent: &Node,
         child: Option<&Node>,
     ) -> ErrorResult {
-        // Step 1.
+        // Step 1. If parent is not a Document, DocumentFragment, or Element node,
+        // then throw a "HierarchyRequestError" DOMException.
         match parent.type_id() {
             NodeTypeId::Document(_) | NodeTypeId::DocumentFragment(_) | NodeTypeId::Element(..) => {
             },
             _ => return Err(Error::HierarchyRequest),
         }
 
-        // Step 2.
+        // Step 2. If node is a host-including inclusive ancestor of parent,
+        // then throw a "HierarchyRequestError" DOMException.
         if node.is_inclusive_ancestor_of(parent) {
             return Err(Error::HierarchyRequest);
         }
 
-        // Step 3.
+        // Step 3. If child is non-null and its parent is not parent, then throw a "NotFoundError" DOMException.
         if let Some(child) = child {
             if !parent.is_parent_of(child) {
                 return Err(Error::NotFound(None));
             }
         }
 
-        // Step 4-5.
+        // Step 4. If node is not a DocumentFragment, DocumentType, Element, or CharacterData node, then throw a
+        // "HierarchyRequestError" DOMException.
+        // Step 5. If either node is a Text node and parent is a document, or node is a doctype and parent is not a
+        // document, then throw a "HierarchyRequestError" DOMException.
         match node.type_id() {
             NodeTypeId::CharacterData(CharacterDataTypeId::Text(_)) => {
                 if parent.is::<Document>() {
@@ -2362,7 +2367,8 @@ impl Node {
             NodeTypeId::Document(_) | NodeTypeId::Attr => return Err(Error::HierarchyRequest),
         }
 
-        // Step 6.
+        // Step 6. If parent is a document, and any of the statements below, switched on the interface node implements,
+        // are true, then throw a "HierarchyRequestError"
         if parent.is::<Document>() {
             match node.type_id() {
                 // Step 6.1
