@@ -5057,22 +5057,30 @@ impl DocumentMethods<crate::DomTypeHolder> for Document {
         Ok(Node::clone(node, Some(self), clone_children, can_gc))
     }
 
-    // https://dom.spec.whatwg.org/#dom-document-adoptnode
+    /// <https://dom.spec.whatwg.org/#dom-document-adoptnode>
     fn AdoptNode(&self, node: &Node, can_gc: CanGc) -> Fallible<DomRoot<Node>> {
-        // Step 1.
+        // Step 1. If node is a document, then throw a "NotSupportedError" DOMException.
         if node.is::<Document>() {
             return Err(Error::NotSupported);
         }
 
-        // Step 2.
+        // Step 2. If node is a shadow root, then throw a "HierarchyRequestError" DOMException.
         if node.is::<ShadowRoot>() {
             return Err(Error::HierarchyRequest);
         }
 
-        // Step 3.
+        // Step 3. If node is a DocumentFragment node whose host is non-null, then return.
+        // NOTE: The spec doesn't say this, but browsers seem to return "node"
+        if let Some(document_fragment) = node.downcast::<DocumentFragment>() {
+            if document_fragment.host().is_some() {
+                return Ok(DomRoot::from_ref(node));
+            }
+        }
+
+        // Step 4. Adopt node into this.
         Node::adopt(node, self, can_gc);
 
-        // Step 4.
+        // Step 5. Return node.
         Ok(DomRoot::from_ref(node))
     }
 
