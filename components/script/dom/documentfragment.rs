@@ -14,7 +14,7 @@ use crate::dom::bindings::codegen::Bindings::WindowBinding::WindowMethods;
 use crate::dom::bindings::codegen::UnionTypes::NodeOrString;
 use crate::dom::bindings::error::{ErrorResult, Fallible};
 use crate::dom::bindings::inheritance::Castable;
-use crate::dom::bindings::root::{Dom, DomRoot};
+use crate::dom::bindings::root::{Dom, DomRoot, MutNullableDom};
 use crate::dom::bindings::str::DOMString;
 use crate::dom::document::Document;
 use crate::dom::element::Element;
@@ -25,10 +25,14 @@ use crate::dom::virtualmethods::VirtualMethods;
 use crate::dom::window::Window;
 use crate::script_runtime::CanGc;
 
-// https://dom.spec.whatwg.org/#documentfragment
+/// <https://dom.spec.whatwg.org/#documentfragment>
 #[dom_struct]
 pub(crate) struct DocumentFragment {
     node: Node,
+
+    /// <https://dom.spec.whatwg.org/#concept-documentfragment-host>
+    host: MutNullableDom<Element>,
+
     /// Caches for the getElement methods
     id_map: DomRefCell<HashMapTracedValues<Atom, Vec<Dom<Element>>, FxBuildHasher>>,
 }
@@ -38,6 +42,7 @@ impl DocumentFragment {
     pub(crate) fn new_inherited(document: &Document) -> DocumentFragment {
         DocumentFragment {
             node: Node::new_inherited(document),
+            host: Default::default(),
             id_map: DomRefCell::new(HashMapTracedValues::new_fx()),
         }
     }
@@ -63,6 +68,11 @@ impl DocumentFragment {
         &self,
     ) -> &DomRefCell<HashMapTracedValues<Atom, Vec<Dom<Element>>, FxBuildHasher>> {
         &self.id_map
+    }
+
+    /// <https://dom.spec.whatwg.org/#concept-documentfragment-host>
+    pub(crate) fn host(&self) -> Option<DomRoot<Element>> {
+        self.host.get()
     }
 }
 

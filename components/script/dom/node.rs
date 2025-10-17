@@ -1202,15 +1202,40 @@ impl Node {
     ) -> impl Iterator<Item = DomRoot<Node>> + use<> {
         SimpleNodeIterator {
             current: Some(DomRoot::from_ref(self)),
-            next_node: move |n| {
+            next_node: move |node| {
                 if shadow_including == ShadowIncluding::Yes {
-                    if let Some(shadow_root) = n.downcast::<ShadowRoot>() {
-                        return Some(DomRoot::from_ref(shadow_root.Host().upcast::<Node>()));
+                    if let Some(shadow_root) = node.downcast::<ShadowRoot>() {
+                        return Some(DomRoot::upcast(shadow_root.Host()));
                     }
                 }
-                n.GetParentNode()
+                node.GetParentNode()
             },
         }
+    }
+
+    /// <https://dom.spec.whatwg.org/#concept-tree-host-including-inclusive-ancestor>
+    ///
+    /// Careful - this method refers to hosts of `DocumentFragment` nodes, **not** hosts of
+    /// `ShadowRoot` nodes.
+    pub(crate) fn host_including_ancestors(&self) -> impl Iterator<Item = DomRoot<Node>> {
+        SimpleNodeIterator {
+            current: Some(DomRoot::from_ref(self)),
+            next_node: move |node| {
+                if let Some(host) = node
+                    .downcast::<DocumentFragment>()
+                    .and_then(|document_fragment| document_fragment.host())
+                {
+                    return Some(DomRoot::upcast(host));
+                }
+                node.GetParentNode()
+            },
+        }
+    }
+
+    pub(crate) fn is_host_including_ancestor_of(&self, other: &Node) -> bool {
+        other
+            .host_including_ancestors()
+            .any(|ancestor| &*ancestor == self)
     }
 
     pub(crate) fn owner_doc(&self) -> DomRoot<Document> {
@@ -2334,7 +2359,7 @@ impl Node {
 
         // Step 2. If node is a host-including inclusive ancestor of parent,
         // then throw a "HierarchyRequestError" DOMException.
-        if node.is_inclusive_ancestor_of(parent) {
+        if parent.is_host_including_ancestor_of(node) {
             return Err(Error::HierarchyRequest);
         }
 
@@ -3486,7 +3511,7 @@ impl NodeMethods<crate::DomTypeHolder> for Node {
 
         // Step 2. If node is a host-including inclusive ancestor of parent,
         // then throw a "HierarchyRequestError" DOMException.
-        if node.is_inclusive_ancestor_of(self) {
+        if node.is_host_including_ancestor_of(self) {
             return Err(Error::HierarchyRequest);
         }
 
