@@ -74,6 +74,11 @@ impl DocumentFragment {
     pub(crate) fn host(&self) -> Option<DomRoot<Element>> {
         self.host.get()
     }
+
+    /// <https://dom.spec.whatwg.org/#concept-documentfragment-host>
+    pub(crate) fn set_host(&self, host: &Element) {
+        self.host.set(Some(host))
+    }
 }
 
 impl DocumentFragmentMethods<crate::DomTypeHolder> for DocumentFragment {

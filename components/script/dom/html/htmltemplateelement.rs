@@ -47,7 +47,7 @@ impl HTMLTemplateElement {
         proto: Option<HandleObject>,
         can_gc: CanGc,
     ) -> DomRoot<HTMLTemplateElement> {
-        let n = Node::reflect_node_with_proto(
+        let template_element = Node::reflect_node_with_proto(
             Box::new(HTMLTemplateElement::new_inherited(
                 local_name, prefix, document,
             )),
@@ -56,11 +56,16 @@ impl HTMLTemplateElement {
             can_gc,
         );
 
-        n.upcast::<Node>().set_weird_parser_insertion_mode();
-        n
+        template_element
+            .upcast::<Node>()
+            .set_weird_parser_insertion_mode();
+        template_element
     }
 
     pub(crate) fn set_contents(&self, document_fragment: Option<&DocumentFragment>) {
+        if let Some(fragment) = document_fragment {
+            fragment.set_host(self.upcast());
+        }
         self.contents.set(document_fragment);
     }
 }
