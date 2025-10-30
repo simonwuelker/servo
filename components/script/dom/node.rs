@@ -2824,17 +2824,23 @@ impl Node {
         }
 
         // Step 10. If node has an inclusive descendant that is a slot:
-        let has_slot_descendant = node
+        let slot_descendants: Vec<_> = node
             .traverse_preorder(ShadowIncluding::No)
-            .any(|elem| elem.is::<HTMLSlotElement>());
-        if has_slot_descendant {
+            .flat_map(|element| DomRoot::downcast::<HTMLSlotElement>(element))
+            .collect();
+        if !slot_descendants.is_empty() {
             // Step 10.1 Run assign slottables for a tree with parent’s root.
             parent
                 .GetRootNode(&GetRootNodeOptions::empty())
                 .assign_slottables_for_a_tree();
 
             // Step 10.2 Run assign slottables for a tree with node.
-            node.assign_slottables_for_a_tree();
+            // NOTE: assigning slottables for a tree with node is equivalent to running
+            // "assign slottables" for every slottable that is an inclusive descendant of
+            // node, so we use the list that we collected earlier
+            for slot_descendant in slot_descendants {
+                slot_descendant.assign_slottables();
+            }
         }
 
         // TODO: Step 15. transient registered observers
