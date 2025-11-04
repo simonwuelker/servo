@@ -8,6 +8,7 @@ mod eval;
 mod functions;
 mod parser;
 mod tokenizer;
+mod optimizer;
 mod value;
 
 use std::fmt;

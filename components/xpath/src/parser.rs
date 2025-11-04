@@ -6,7 +6,7 @@ use markup5ever::{LocalName, Namespace, Prefix, QualName};
 
 use crate::NamespaceResolver;
 use crate::ast::{
-    Axis, BinaryOperator, CoreFunction, Expression, FilterExpression, KindTest, Literal,
+    Axis, BinaryOperator, CoreFunction, Expression, FilterExpression, Literal,
     LocationStepExpression, NodeTest, PathExpression, PredicateListExpression,
 };
 use crate::tokenizer::{Error as TokenizerError, LiteralToken, OperatorToken, Token, tokenize};
@@ -45,7 +45,7 @@ where
     N: NamespaceResolver,
 {
     let mut parser = Parser::new(input, namespace_resolver, is_in_html_document)?;
-    let root_expression = parser.parse_expression()?;
+    let mut root_expression = parser.parse_expression()?;
     if !parser.remaining().is_empty() {
         log::debug!(
             "Found trailing tokens after expression: {:?}",
@@ -53,8 +53,11 @@ where
         );
         return Err(Error::TrailingInput);
     }
-
     log::debug!("Parsed XPath expression: {root_expression:?}");
+
+    // root_expression.optimize();
+    // log::debug!("Optimized XPath expression: {root_expression:?}");
+
     Ok(root_expression)
 }
 
@@ -239,7 +242,7 @@ where
                         .steps
                         .push(Expression::LocationStep(LocationStepExpression {
                             axis: Axis::DescendantOrSelf,
-                            node_test: NodeTest::Kind(KindTest::Node),
+                            node_test: NodeTest::NODE,
                             predicate_list: PredicateListExpression { predicates: vec![] },
                         }));
                     true
@@ -339,12 +342,12 @@ where
             Token::ParentNode => {
                 self.advance(1);
                 axis = Axis::Parent;
-                node_test = Some(NodeTest::Kind(KindTest::Node));
+                node_test = Some(NodeTest::NODE);
             },
             Token::SelfNode => {
                 self.advance(1);
                 axis = Axis::Self_;
-                node_test = Some(NodeTest::Kind(KindTest::Node));
+                node_test = Some(NodeTest::NODE);
             },
             _ => {
                 axis = Axis::Child;
@@ -357,7 +360,7 @@ where
             self.advance(1);
 
             if name_token.local_name == "*" {
-                NodeTest::Wildcard
+                NodeTest::WILDCARD
             } else {
                 let namespace = name_token
                     .prefix
@@ -376,7 +379,7 @@ where
                     local: local_name,
                 };
 
-                NodeTest::Name(qualified_name)
+                NodeTest::name(qualified_name)
             }
         } else {
             self.parse_node_test()?
@@ -391,14 +394,14 @@ where
     }
 
     fn parse_node_test(&mut self) -> Result<NodeTest, Error> {
-        let kind_test = match self.expect_current_token()? {
+        let node_test = match self.expect_current_token()? {
             Token::CommentTest => {
                 self.advance(1);
-                KindTest::Comment
+                NodeTest::COMMENT
             },
             Token::NodeTest => {
                 self.advance(1);
-                KindTest::Node
+                NodeTest::NODE
             },
             Token::ProcessingInstructionTest => {
                 self.advance(1);
@@ -410,11 +413,11 @@ where
                 } else {
                     None
                 };
-                KindTest::PI(name.map(String::from))
+                NodeTest::processing_instruction(name.map(String::from))
             },
             Token::TextTest => {
                 self.advance(1);
-                KindTest::Text
+                NodeTest::TEXT
             },
             _ => {
                 return Err(Error::ExpectedNodeTest);
@@ -425,7 +428,7 @@ where
             return Err(Error::TooManyFunctionArguments);
         }
 
-        Ok(NodeTest::Kind(kind_test))
+        Ok(node_test)
     }
 
     /// <https://www.w3.org/TR/1999/REC-xpath-19991116/#predicates>

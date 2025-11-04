@@ -5,8 +5,8 @@
 use markup5ever::{QualName, local_name, ns};
 
 use crate::ast::{
-    Axis, BinaryOperator, Expression, FilterExpression, KindTest, Literal, LocationStepExpression,
-    NodeTest, PathExpression, PredicateListExpression,
+    Axis, BinaryOperator, Expression, FilterExpression, Literal, LocationStepExpression, NodeTest,
+    NodeTestCondition, PathExpression, PredicateListExpression,
 };
 use crate::context::PredicateCtx;
 use crate::{Attribute, Dom, Element, Error, EvaluationCtx, Node, ProcessingInstruction, Value};
@@ -97,16 +97,23 @@ impl Expression {
             Expression::Function(function) => function.evaluate(context),
             Expression::ContextItem => Ok(Value::Nodeset(vec![context.context_node.clone()])),
             Expression::Variable(_) => Err(Error::CannotUseVariables),
-            Expression::GetAttributeByName(name) => {
-                let result = context
-                    .context_node
-                    .as_element()
-                    .and_then(|element| element.get_attribute_by_name(name))
-                    .map(|attribute| attribute.as_node())
-                    .map(|node| vec![node])
-                    .unwrap_or_default();
-                Ok(Value::Nodeset(result))
-            },
+        }
+    }
+
+    /// Evaluates the expression in the context of a predicate (`foo[expr]`) and returns
+    /// whether or not the predicate matches.
+    ///
+    /// The `index_in_context_set` is 1-based.
+    fn evaluate_as_predicate<D: Dom>(
+        &self,
+        index_in_context_set: usize,
+        context: &EvaluationCtx<D>,
+    ) -> bool {
+        match self.evaluate(&context) {
+            Ok(Value::Number(number)) => (index_in_context_set + 1) as f64 == number,
+            Ok(Value::Boolean(boolean)) => boolean,
+            Ok(value) => value.convert_to_boolean(),
+            Err(_) => false,
         }
     }
 }
@@ -133,6 +140,7 @@ impl PathExpression {
         let have_multiple_steps = self.steps.len() > 1;
 
         for step_expression in &self.steps {
+            println!("evaluating step expression {step_expression:?} with {:?} nodes", current_nodes.len() );
             let mut next_nodes = Vec::new();
             for node in current_nodes {
                 let step_context = context.subcontext_for_node(node.clone());
@@ -197,8 +205,8 @@ pub(crate) fn element_name_test(
 }
 
 fn apply_node_test<D: Dom>(test: &NodeTest, node: &D::Node) -> Result<bool, Error> {
-    let result = match test {
-        NodeTest::Name(expected_name) => {
+    let result = match &test.condition {
+        NodeTestCondition::Name(expected_name) => {
             if let Some(element) = node.as_element() {
                 let comparison_mode = if element.is_html_element_in_html_document() {
                     NameTestComparisonMode::Html
@@ -224,33 +232,51 @@ fn apply_node_test<D: Dom>(test: &NodeTest, node: &D::Node) -> Result<bool, Erro
                 false
             }
         },
-        NodeTest::Wildcard => node.as_element().is_some(),
-        NodeTest::Kind(kind) => match kind {
-            KindTest::PI(target) => {
-                if let Some(processing_instruction) = node.as_processing_instruction() {
-                    match (target, processing_instruction.target()) {
-                        (Some(target_name), node_target_name)
-                            if target_name == &node_target_name.to_string() =>
-                        {
-                            true
-                        },
-                        (Some(_), _) => false,
-                        (None, _) => true,
-                    }
-                } else {
-                    false
+        NodeTestCondition::Wildcard => node.as_element().is_some(),
+        NodeTestCondition::ProcessingInstruction(target) => {
+            if let Some(processing_instruction) = node.as_processing_instruction() {
+                match (target, processing_instruction.target()) {
+                    (Some(target_name), node_target_name)
+                        if target_name == &node_target_name.to_string() =>
+                    {
+                        true
+                    },
+                    (Some(_), _) => false,
+                    (None, _) => true,
                 }
-            },
-            KindTest::Comment => node.is_comment(),
-            KindTest::Text => node.is_text(),
-            KindTest::Node => true,
+            } else {
+                false
+            }
         },
+        NodeTestCondition::Comment => node.is_comment(),
+        NodeTestCondition::Text => node.is_text(),
+        NodeTestCondition::Node => true,
     };
+
+    if !test.inline_predicates.is_empty() {
+        // Apply any predicates that the optimizer inlined into this node test
+        // The index we provide does not matter - inlined predicates never depend on the
+        // position or size of the context set.
+        let bogus_index = 0;
+        let context: EvaluationCtx<D> = EvaluationCtx {
+            context_node: node.clone(),
+            predicate_ctx: Some(PredicateCtx {
+                index: bogus_index,
+                size: 0,
+            }),
+        };
+        for predicate in &test.inline_predicates {
+            if !predicate.evaluate_as_predicate(bogus_index, &context) {
+                return Ok(false);
+            }
+        }
+    }
     Ok(result)
 }
 
 impl LocationStepExpression {
     fn evaluate<D: Dom>(&self, context: &EvaluationCtx<D>) -> Result<Value<D::Node>, Error> {
+        // println!("evaluating location step expression");
         let nodes: Vec<D::Node> = match self.axis {
             Axis::Child => context.context_node.children().collect(),
             Axis::Descendant => context.context_node.traverse_preorder().skip(1).collect(),
@@ -322,27 +348,18 @@ impl PredicateListExpression {
             let size = matched_nodes.len();
             let mut new_matched = Vec::new();
 
-            for (i, node) in matched_nodes.iter().enumerate() {
-                // 1-based position, per XPath spec
-                let predicate_ctx: EvaluationCtx<D> = EvaluationCtx {
+            for (i, node) in matched_nodes.into_iter().enumerate() {
+                let predicate_context: EvaluationCtx<D> = EvaluationCtx {
                     context_node: node.clone(),
                     predicate_ctx: Some(PredicateCtx { index: i + 1, size }),
                 };
 
-                let eval_result = predicate_expr.evaluate(&predicate_ctx);
-
-                let keep = match eval_result {
-                    Ok(Value::Number(number)) => (i + 1) as f64 == number,
-                    Ok(Value::Boolean(boolean)) => boolean,
-                    Ok(value) => value.convert_to_boolean(),
-                    Err(_) => false,
-                };
-
-                if keep {
-                    new_matched.push(node.clone());
+                if predicate_expr.evaluate_as_predicate(i + 1, &predicate_context) {
+                    new_matched.push(node);
                 }
             }
 
+            // println!("Allocated new list with {:?} elements", new_matched.len());
             matched_nodes = new_matched;
             log::trace!(
                 "[PredicateListExpr] Predicate {:?} matched nodes {:?}",
