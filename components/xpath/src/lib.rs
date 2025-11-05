@@ -100,8 +100,10 @@ pub fn evaluate_parsed_xpath<D: Dom>(
     context_node: D::Node,
 ) -> Result<Value<D::Node>, Error> {
     let context = EvaluationCtx::<D>::new(context_node);
+    let start = std::time::Instant::now();
     match expr.evaluate(&context) {
         Ok(value) => {
+            println!("Evaluation took {:?}", start.elapsed());
             log::debug!("Evaluated XPath: {value:?}");
             Ok(value)
         },

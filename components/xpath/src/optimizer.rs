@@ -5,8 +5,7 @@
 use std::mem;
 
 use crate::ast::{
-    CoreFunction, Expression, FilterExpression, LocationStepExpression, PathExpression,
-    PredicateListExpression,
+    Axis, CoreFunction, Expression, FilterExpression, LocationStepExpression, PathExpression, PredicateListExpression
 };
 
 /// Enumerates factors that can influence the value that an expression evaluates to.
@@ -65,6 +64,20 @@ impl PathExpression {
         for step in &mut self.steps {
             step.optimize();
         }
+        // return;
+
+        // Optimize an implicit descendant-or-self-step followed by a location step with
+        // axis "child" to a location step with axis "descendant".
+        if self.has_implicit_descendant_or_self_step {
+            if let Some(Expression::LocationStep(entry)) = self.steps.first_mut() {
+                if entry.axis == Axis::Child {
+                    entry.axis = Axis::Descendant;
+                    self.has_implicit_descendant_or_self_step = false;
+                } else if matches!(entry.axis, Axis::Descendant | Axis::DescendantOrSelf) {
+                    self.has_implicit_descendant_or_self_step = false;
+                }
+            }
+        }
     }
 
     fn is_influenced_by(&self, _: InfluencingFactor) -> bool {
@@ -87,23 +100,6 @@ impl FilterExpression {
 impl LocationStepExpression {
     fn optimize(&mut self) {
         self.predicate_list.optimize();
-
-        // Optimize predicates by moving them directly into the node test if possible.
-        // This avoids having to allocate intermediate node sets.
-        let mut remaining_predicates = Vec::with_capacity(self.predicate_list.predicates.len());
-        for predicate in mem::take(&mut self.predicate_list.predicates) {
-            // We can inline the predicate if it is not preceded by other predicates
-            // that were not inline
-            let can_inline_predicate = remaining_predicates.is_empty() &&
-                !predicate.is_influenced_by(InfluencingFactor::ContextSize);
-            if can_inline_predicate {
-                self.node_test.inline_predicates.push(predicate);
-            } else {
-                remaining_predicates.push(predicate);
-            }
-        }
-
-        self.predicate_list.predicates = remaining_predicates;
     }
 
     fn is_influenced_by(&self, factor: InfluencingFactor) -> bool {

@@ -100,7 +100,6 @@ pub(crate) enum Axis {
 #[derive(Clone, Debug, MallocSizeOf, PartialEq)]
 pub(crate) struct NodeTest {
     pub(crate) condition: NodeTestCondition,
-    pub(crate) inline_predicates: Vec<Expression>,
 }
 
 #[derive(Clone, Debug, MallocSizeOf, PartialEq)]
@@ -210,8 +209,6 @@ impl NodeTest {
     pub(crate) const fn new(condition: NodeTestCondition) -> Self {
         Self {
             condition,
-            // These are filled during the optimization pass
-            inline_predicates: vec![],
         }
     }
 

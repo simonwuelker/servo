@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use std::mem;
+
 use markup5ever::{QualName, local_name, ns};
 
 use crate::ast::{
@@ -128,12 +130,14 @@ impl PathExpression {
         };
 
         // If path starts with '//', add an implicit descendant-or-self::node() step
+        let start = std::time::Instant::now();
         if self.has_implicit_descendant_or_self_step {
             current_nodes = current_nodes
                 .iter()
                 .flat_map(|node| node.traverse_preorder())
                 .collect();
         }
+        println!("Evaluating implicit dos step took {:?}", start.elapsed());
 
         log::trace!("[PathExpr] Evaluating path expr: {:?}", self);
 
@@ -253,24 +257,6 @@ fn apply_node_test<D: Dom>(test: &NodeTest, node: &D::Node) -> Result<bool, Erro
         NodeTestCondition::Node => true,
     };
 
-    if !test.inline_predicates.is_empty() {
-        // Apply any predicates that the optimizer inlined into this node test
-        // The index we provide does not matter - inlined predicates never depend on the
-        // position or size of the context set.
-        let bogus_index = 0;
-        let context: EvaluationCtx<D> = EvaluationCtx {
-            context_node: node.clone(),
-            predicate_ctx: Some(PredicateCtx {
-                index: bogus_index,
-                size: 0,
-            }),
-        };
-        for predicate in &test.inline_predicates {
-            if !predicate.evaluate_as_predicate(bogus_index, &context) {
-                return Ok(false);
-            }
-        }
-    }
     Ok(result)
 }
 
