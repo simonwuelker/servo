@@ -25,6 +25,7 @@ use crate::dom::bindings::inheritance::Castable;
 use crate::dom::bindings::reflector::Reflector;
 use crate::dom::bindings::root::{Dom, DomRoot};
 use crate::dom::bindings::str::DOMString;
+use crate::dom::types::CSSScopeRule;
 use crate::dom::window::Window;
 use crate::script_runtime::CanGc;
 
@@ -77,8 +78,8 @@ impl CSSRule {
         }
     }
 
-    // Given a StyleCssRule, create a new instance of a derived class of
-    // CSSRule based on which rule it is
+    /// Given a StyleCssRule, create a new instance of a derived class of
+    /// CSSRule based on which rule it is
     pub(crate) fn new_specific(
         window: &Window,
         parent_stylesheet: &CSSStyleSheet,
@@ -125,10 +126,15 @@ impl CSSRule {
             StyleCssRule::FontPaletteValues(_) => unimplemented!(), // TODO
             StyleCssRule::Property(_) => unimplemented!(),          // TODO
             StyleCssRule::Margin(_) => unimplemented!(),            // TODO
-            StyleCssRule::Scope(_) => unimplemented!(),             // TODO
-            StyleCssRule::StartingStyle(_) => unimplemented!(),     // TODO
-            StyleCssRule::PositionTry(_) => unimplemented!(),       // TODO
-            StyleCssRule::CustomMedia(_) => unimplemented!(),       // TODO
+            StyleCssRule::Scope(scope_rule) => DomRoot::upcast(CSSScopeRule::new(
+                window,
+                parent_stylesheet,
+                scope_rule,
+                can_gc,
+            )),
+            StyleCssRule::StartingStyle(_) => unimplemented!(), // TODO
+            StyleCssRule::PositionTry(_) => unimplemented!(),   // TODO
+            StyleCssRule::CustomMedia(_) => unimplemented!(),   // TODO
             StyleCssRule::NestedDeclarations(s) => DomRoot::upcast(CSSNestedDeclarations::new(
                 window,
                 parent_stylesheet,
