@@ -132,7 +132,8 @@ use crate::dom::element::Element;
 use crate::dom::globalscope::GlobalScope;
 use crate::dom::html::htmliframeelement::HTMLIFrameElement;
 use crate::dom::node::NodeTraits;
-use crate::dom::servoparser::{EncodingConfidence, ParserContext, ServoParser};
+use crate::dom::servoparser::encoding::EncodingConfidence;
+use crate::dom::servoparser::{ParserContext, ServoParser};
 use crate::dom::types::DebuggerGlobalScope;
 #[cfg(feature = "webgpu")]
 use crate::dom::webgpu::identityhub::IdentityHub;
