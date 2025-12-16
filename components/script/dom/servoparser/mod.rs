@@ -689,39 +689,40 @@ impl ServoParser {
             assert!(!self.aborted.get());
 
             self.document.window().reflow_if_reflow_timer_expired();
-            let script = match feed(&self.tokenizer) {
+            match feed(&self.tokenizer) {
                 TokenizerResult::Done => return,
-                TokenizerResult::Script(script) => script,
+                TokenizerResult::EncodingIndicator(encoding) => todo!("handle {encoding:?}"),
+                TokenizerResult::Script(script) => {
+                    // https://html.spec.whatwg.org/multipage/#parsing-main-incdata
+                    // branch "An end tag whose tag name is "script"
+                    // The spec says to perform the microtask checkpoint before
+                    // setting the insertion mode back from Text, but this is not
+                    // possible with the way servo and html5ever currently
+                    // relate to each other, and hopefully it is not observable.
+                    if is_execution_stack_empty() {
+                        self.document
+                            .window()
+                            .perform_a_microtask_checkpoint(can_gc);
+                    }
+
+                    let script_nesting_level = self.script_nesting_level.get();
+
+                    self.script_nesting_level.set(script_nesting_level + 1);
+                    script.set_initial_script_text();
+                    let introduction_type_override =
+                        (script_nesting_level > 0).then_some(IntroductionType::INJECTED_SCRIPT);
+                    script.prepare(introduction_type_override, can_gc);
+                    self.script_nesting_level.set(script_nesting_level);
+
+                    if self.document.has_pending_parsing_blocking_script() {
+                        self.suspended.set(true);
+                        return;
+                    }
+                    if self.aborted.get() {
+                        return;
+                    }
+                },
             };
-
-            // https://html.spec.whatwg.org/multipage/#parsing-main-incdata
-            // branch "An end tag whose tag name is "script"
-            // The spec says to perform the microtask checkpoint before
-            // setting the insertion mode back from Text, but this is not
-            // possible with the way servo and html5ever currently
-            // relate to each other, and hopefully it is not observable.
-            if is_execution_stack_empty() {
-                self.document
-                    .window()
-                    .perform_a_microtask_checkpoint(can_gc);
-            }
-
-            let script_nesting_level = self.script_nesting_level.get();
-
-            self.script_nesting_level.set(script_nesting_level + 1);
-            script.set_initial_script_text();
-            let introduction_type_override =
-                (script_nesting_level > 0).then_some(IntroductionType::INJECTED_SCRIPT);
-            script.prepare(introduction_type_override, can_gc);
-            self.script_nesting_level.set(script_nesting_level);
-
-            if self.document.has_pending_parsing_blocking_script() {
-                self.suspended.set(true);
-                return;
-            }
-            if self.aborted.get() {
-                return;
-            }
         }
     }
 
