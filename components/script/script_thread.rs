@@ -132,7 +132,7 @@ use crate::dom::element::Element;
 use crate::dom::globalscope::GlobalScope;
 use crate::dom::html::htmliframeelement::HTMLIFrameElement;
 use crate::dom::node::NodeTraits;
-use crate::dom::servoparser::{ParserContext, ServoParser};
+use crate::dom::servoparser::{EncodingConfidence, ParserContext, ServoParser};
 use crate::dom::types::DebuggerGlobalScope;
 #[cfg(feature = "webgpu")]
 use crate::dom::webgpu::identityhub::IdentityHub;
@@ -3280,6 +3280,7 @@ impl ScriptThread {
             incomplete.load_data.has_trustworthy_ancestor_origin,
             self.custom_element_reaction_stack.clone(),
             incomplete.load_data.creation_sandboxing_flag_set,
+            incomplete.load_data.encoding_override,
             can_gc,
         );
 
@@ -3351,7 +3352,13 @@ impl ScriptThread {
         if is_html_document == IsHTMLDocument::NonHTMLDocument {
             ServoParser::parse_xml_document(&document, None, final_url, can_gc);
         } else {
-            ServoParser::parse_html_document(&document, None, final_url, can_gc);
+            let confidence = if incomplete.load_data.encoding_override.is_some() {
+                EncodingConfidence::Certain
+            } else {
+                EncodingConfidence::Tentative
+            };
+            let parser = ServoParser::new_sync_or_async(&document, final_url, confidence, can_gc);
+            document.set_current_parser(Some(&parser));
         }
 
         if incomplete.activity == DocumentActivity::FullyActive {

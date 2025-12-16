@@ -3,18 +3,19 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use std::borrow::Cow;
-use std::cell::Cell;
+use std::cell::{Cell, RefMut};
 use std::rc::Rc;
 
 use base::cross_process_instant::CrossProcessInstant;
 use base::id::{PipelineId, WebViewId};
 use base64::Engine as _;
 use base64::engine::general_purpose;
+use constellation_traits::NavigationHistoryBehavior;
 use content_security_policy::sandboxing_directive::SandboxingFlagSet;
 use devtools_traits::ScriptToDevtoolsControlMsg;
 use dom_struct::dom_struct;
 use embedder_traits::resources::{self, Resource};
-use encoding_rs::Encoding;
+use encoding_rs::{Encoding, UTF_8, UTF_16BE, UTF_16LE, WINDOWS_1252, X_USER_DEFINED};
 use html5ever::buffer_queue::BufferQueue;
 use html5ever::tendril::fmt::UTF8;
 use html5ever::tendril::{ByteTendril, StrTendril, TendrilSink};
@@ -33,6 +34,7 @@ use profile_traits::time::{
     ProfilerCategory, ProfilerChan, TimerMetadata, TimerMetadataFrameType, TimerMetadataReflowType,
 };
 use profile_traits::time_profile;
+use script_bindings::codegen::GenericBindings::WindowBinding::WindowMethods;
 use script_traits::DocumentActivity;
 use servo_config::pref;
 use servo_url::ServoUrl;
@@ -71,6 +73,7 @@ use crate::dom::html::htmlimageelement::HTMLImageElement;
 use crate::dom::html::htmlinputelement::HTMLInputElement;
 use crate::dom::html::htmlscriptelement::{HTMLScriptElement, ScriptResult};
 use crate::dom::html::htmltemplateelement::HTMLTemplateElement;
+use crate::dom::location::NavigationType;
 use crate::dom::node::{Node, ShadowIncluding};
 use crate::dom::performance::performanceentry::PerformanceEntry;
 use crate::dom::performance::performancenavigationtiming::PerformanceNavigationTiming;
@@ -170,6 +173,36 @@ impl ElementAttribute {
 }
 
 impl ServoParser {
+    pub(crate) fn new_sync_or_async(
+        document: &Document,
+        url: ServoUrl,
+        confidence: EncodingConfidence,
+        can_gc: CanGc,
+    ) -> DomRoot<Self> {
+        if pref!(dom_servoparser_async_html_tokenizer_enabled) {
+            ServoParser::new(
+                document,
+                Tokenizer::AsyncHtml(self::async_html::Tokenizer::new(document, url, None)),
+                ParserKind::Normal,
+                confidence,
+                can_gc,
+            )
+        } else {
+            ServoParser::new(
+                document,
+                Tokenizer::Html(self::html::Tokenizer::new(
+                    document,
+                    url,
+                    None,
+                    ParsingAlgorithm::Normal,
+                )),
+                ParserKind::Normal,
+                confidence,
+                can_gc,
+            )
+        }
+    }
+
     pub(crate) fn parser_is_not_active(&self) -> bool {
         self.can_write()
     }
@@ -185,27 +218,10 @@ impl ServoParser {
         //
         // Set by callers of this function and asserted here
         assert!(document.is_html_document());
+
         // Step 2. Create an HTML parser parser, associated with document.
-        let parser = if pref!(dom_servoparser_async_html_tokenizer_enabled) {
-            ServoParser::new(
-                document,
-                Tokenizer::AsyncHtml(self::async_html::Tokenizer::new(document, url, None)),
-                ParserKind::Normal,
-                can_gc,
-            )
-        } else {
-            ServoParser::new(
-                document,
-                Tokenizer::Html(self::html::Tokenizer::new(
-                    document,
-                    url,
-                    None,
-                    ParsingAlgorithm::Normal,
-                )),
-                ParserKind::Normal,
-                can_gc,
-            )
-        };
+        let parser = Self::new_sync_or_async(document, url, EncodingConfidence::Irrelevant, can_gc);
+
         // Step 3. Place html into the input stream for parser. The encoding confidence is irrelevant.
         // Step 4. Start parser and let it run until it has consumed all the
         // characters just inserted into the input stream.
@@ -255,6 +271,7 @@ impl ServoParser {
             context_document.has_trustworthy_ancestor_or_current_origin(),
             context_document.custom_element_reaction_stack(),
             context_document.creation_sandboxing_flag_set(),
+            None,
             can_gc,
         );
 
@@ -288,6 +305,7 @@ impl ServoParser {
                 ParsingAlgorithm::Fragment,
             )),
             ParserKind::Normal,
+            EncodingConfidence::Irrelevant,
             can_gc,
         );
         parser.parse_complete_string_chunk(String::from(input), can_gc);
@@ -309,6 +327,7 @@ impl ServoParser {
                 ParsingAlgorithm::Normal,
             )),
             ParserKind::ScriptCreated,
+            EncodingConfidence::Tentative,
             CanGc::note(),
         );
         *parser.bom_sniff.borrow_mut() = None;
@@ -325,6 +344,7 @@ impl ServoParser {
             document,
             Tokenizer::Xml(self::xml::Tokenizer::new(document, url)),
             ParserKind::Normal,
+            EncodingConfidence::Irrelevant,
             can_gc,
         );
 
@@ -492,7 +512,12 @@ impl ServoParser {
     }
 
     #[cfg_attr(crown, allow(crown::unrooted_must_root))]
-    fn new_inherited(document: &Document, tokenizer: Tokenizer, kind: ParserKind) -> Self {
+    fn new_inherited(
+        document: &Document,
+        tokenizer: Tokenizer,
+        kind: ParserKind,
+        confidence: EncodingConfidence,
+    ) -> Self {
         // Store the whole input for the devtools Sources panel, if the devtools server is running
         // and we are parsing for a document load (not just things like innerHTML).
         // TODO: check if a devtools client is actually connected and/or wants the sources?
@@ -504,7 +529,10 @@ impl ServoParser {
             reflector: Reflector::new(),
             document: Dom::from_ref(document),
             bom_sniff: DomRefCell::new(Some(Vec::with_capacity(3))),
-            network_decoder: DomRefCell::new(Some(NetworkDecoder::new(document.encoding()))),
+            network_decoder: DomRefCell::new(Some(NetworkDecoder::new(
+                document.encoding(),
+                confidence,
+            ))),
             network_input: BufferQueue::default(),
             script_input: BufferQueue::default(),
             tokenizer,
@@ -524,10 +552,13 @@ impl ServoParser {
         document: &Document,
         tokenizer: Tokenizer,
         kind: ParserKind,
+        confidence: EncodingConfidence,
         can_gc: CanGc,
     ) -> DomRoot<Self> {
         reflect_dom_object(
-            Box::new(ServoParser::new_inherited(document, tokenizer, kind)),
+            Box::new(ServoParser::new_inherited(
+                document, tokenizer, kind, confidence,
+            )),
             document.window(),
             can_gc,
         )
@@ -680,6 +711,62 @@ impl ServoParser {
         }
     }
 
+    /// <https://html.spec.whatwg.org/multipage/#change-the-encoding>
+    fn change_the_encoding(&self, new_encoding: &'static Encoding) {
+        let Ok(mut network_decoder) =
+            RefMut::filter_map(self.network_decoder.borrow_mut(), |decoder| {
+                decoder.as_mut()
+            })
+        else {
+            return;
+        };
+        if network_decoder.confidence != EncodingConfidence::Tentative {
+            return;
+        };
+
+        // Step 1. If the encoding that is already being used to interpret the input stream is UTF-16BE/LE,
+        // then set the confidence to certain and return. The new encoding is ignored; if it was anything
+        // but the same encoding, then it would be clearly incorrect.
+        if network_decoder.encoding == UTF_16LE || network_decoder.encoding == UTF_16BE {
+            network_decoder.confidence = EncodingConfidence::Certain;
+        }
+
+        // Step 2. If the new encoding is UTF-16BE/LE, then change it to UTF-8.
+        let new_encoding = if new_encoding == UTF_16LE || new_encoding == UTF_16BE {
+            UTF_8
+        } else {
+            new_encoding
+        };
+
+        // Step 3. If the new encoding is x-user-defined, then change it to windows-1252.
+        let new_encoding = if new_encoding == X_USER_DEFINED {
+            WINDOWS_1252
+        } else {
+            new_encoding
+        };
+
+        // Step 4. If the new encoding is identical or equivalent to the encoding that
+        // is already being used to interpret the input stream, then set the confidence to certain and return.
+        if new_encoding == network_decoder.encoding {
+            network_decoder.confidence = EncodingConfidence::Certain;
+        }
+
+        // Step 5. If all the bytes up to the last byte converted by the current decoder have the same Unicode interpretations
+        // in both the current encoding and the new encoding [..]
+        // NOTE: We don't support this.
+
+        // Step 6. Otherwise, restart the navigate algorithm, with historyHandling set to "replace"
+        // and other inputs kept the same [...]
+        log::debug!("reloading with new encoding {new_encoding:?}");
+        self.document.window().Location().navigate(
+            self.document.url(),
+            NavigationHistoryBehavior::Replace,
+            NavigationType::ReloadByConstellation,
+            Some(new_encoding),
+            CanGc::note(),
+        );
+    }
+
     fn tokenize<F>(&self, feed: F, can_gc: CanGc)
     where
         F: Fn(&Tokenizer) -> TokenizerResult<DomRoot<HTMLScriptElement>>,
@@ -691,7 +778,13 @@ impl ServoParser {
             self.document.window().reflow_if_reflow_timer_expired();
             match feed(&self.tokenizer) {
                 TokenizerResult::Done => return,
-                TokenizerResult::EncodingIndicator(encoding) => todo!("handle {encoding:?}"),
+                TokenizerResult::EncodingIndicator(encoding) => {
+                    let Some(encoding) = Encoding::for_label(encoding.as_bytes()) else {
+                        log::debug!("Failed to parse {encoding:?} as an encoding hint");
+                        continue;
+                    };
+                    self.change_the_encoding(encoding);
+                },
                 TokenizerResult::Script(script) => {
                     // https://html.spec.whatwg.org/multipage/#parsing-main-incdata
                     // branch "An end tag whose tag name is "script"
@@ -1825,12 +1918,19 @@ struct NetworkDecoder {
     #[ignore_malloc_size_of = "Defined in tendril"]
     #[custom_trace]
     decoder: LossyDecoder<NetworkSink>,
+    #[no_trace]
+    encoding: &'static Encoding,
+    /// How confident we are that the current encoding is the correct one.
+    #[no_trace]
+    confidence: EncodingConfidence,
 }
 
 impl NetworkDecoder {
-    fn new(encoding: &'static Encoding) -> Self {
+    fn new(encoding: &'static Encoding, confidence: EncodingConfidence) -> Self {
         Self {
             decoder: LossyDecoder::new_encoding_rs(encoding, Default::default()),
+            encoding,
+            confidence,
         }
     }
 
@@ -1948,4 +2048,12 @@ fn attach_declarative_shadow_inner(host: &Node, template: &Node, attributes: &[A
         },
         Err(_) => false,
     }
+}
+
+/// <https://html.spec.whatwg.org/multipage/#concept-encoding-confidence>
+#[derive(Debug, MallocSizeOf, PartialEq)]
+pub(crate) enum EncodingConfidence {
+    Tentative,
+    Certain,
+    Irrelevant,
 }

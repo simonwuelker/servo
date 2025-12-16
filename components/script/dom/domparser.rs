@@ -106,6 +106,7 @@ impl DOMParserMethods<crate::DomTypeHolder> for DOMParser {
                     doc.has_trustworthy_ancestor_or_current_origin(),
                     doc.custom_element_reaction_stack(),
                     doc.creation_sandboxing_flag_set(),
+                    None,
                     can_gc,
                 );
                 // Step switch-1. Parse HTML from a string given document and compliantString.
@@ -135,6 +136,7 @@ impl DOMParserMethods<crate::DomTypeHolder> for DOMParser {
                     doc.has_trustworthy_ancestor_or_current_origin(),
                     doc.custom_element_reaction_stack(),
                     doc.creation_sandboxing_flag_set(),
+                    None,
                     can_gc,
                 );
                 // Step switch-1. Create an XML parser parser, associated with document,
