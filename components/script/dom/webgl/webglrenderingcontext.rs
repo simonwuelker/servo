@@ -225,6 +225,8 @@ pub(crate) struct WebGLRenderingContext {
     #[no_trace]
     api_type: GlType,
     droppable: DroppableWebGLRenderingContext,
+    /// <https://registry.khronos.org/webgl/specs/latest/1.0/#webgl-context-lost-flag>
+    webgl_context_lost_flag: Cell<bool>,
 }
 
 impl WebGLRenderingContext {
@@ -1983,6 +1985,68 @@ impl WebGLRenderingContext {
                 NullValue()
             },
         })
+    }
+
+    /// <https://registry.khronos.org/webgl/specs/latest/1.0/#5.15.2>
+    fn notify_context_lost(&self) {
+        // Step 1.  Let canvas be the context's canvas.
+
+        // Step 2. If context's webgl context lost flag is set, abort these steps.
+        // Step 3. Set context's webgl context lost flag.
+        if self.webgl_context_lost_flag.replace(true) {
+            return;
+        }
+
+        // TODO: Step 4. Set the invalidated flag of each WebGLObject instance created by this context
+        // TODO: Step 5. Disable all extensions except "WEBGL_lose_context".
+
+        // Step 5. Queue a task to perform the following steps:
+        // FIXME: This should use the webgl task source, but we don't have such a thing
+        let global = &self.global();
+        let this = Trusted::new(self);
+        global.task_manager()
+            .canvas_blob_task_source()
+            .queue(task!(webgl_context_lost: move || {
+            let this = this.root();
+
+            // Step 6.1 Fire a WebGL context event named "webglcontextlost" at canvas, with its statusMessage
+            // attribute set to "".
+            let was_cancelled = self.fire_a_webgl_context_event(atom!("webglcontextlost"), DOMString::from("WebGL context lost"), CanGc::note());
+
+            // Step 6.2  If the event's canceled flag is not set, abort these steps.
+            if !was_cancelled {
+                return;
+            }
+
+            // TODO Step 6.3  Perform the following steps asynchronously.
+            // TODO Step 6.4  Await a restorable drawing buffer.
+            // TODO Step 6.5  Queue a task to restore the drawing buffer for context.
+        }));
+    }
+
+    /// <https://registry.khronos.org/webgl/specs/latest/1.0/#fire-a-webgl-context-event>
+    fn fire_a_webgl_context_event(&self, type_: Atom, message: DOMString, can_gc: CanGc) -> bool {
+        let global = self.global();
+        let Some(window) = global.downcast::<Window>() else {
+            return false;
+        };
+
+        let event = WebGLContextEvent::new(
+            window,
+            type_,
+            EventBubbles::Bubbles,
+            EventCancelable::Cancelable,
+            message,
+            can_gc,
+        );
+        match self.Canvas() {
+            RootedHTMLCanvasElementOrOffscreenCanvas::HTMLCanvasElement(canvas) => {
+                event.upcast::<Event>().fire(canvas.upcast(), can_gc);
+            },
+            RootedHTMLCanvasElementOrOffscreenCanvas::OffscreenCanvas(canvas) => {
+                event.upcast::<Event>().fire(canvas.upcast(), can_gc);
+            },
+        };
     }
 }
 
