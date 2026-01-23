@@ -211,7 +211,6 @@ pub(crate) mod types {
 
 pub(crate) mod abortcontroller;
 pub(crate) mod abortsignal;
-#[expect(dead_code)]
 pub(crate) mod abstractrange;
 pub(crate) mod activation;
 pub(crate) mod animationevent;
