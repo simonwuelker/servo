@@ -41,6 +41,7 @@ use wr::units::{LayoutPixel, LayoutSize};
 use super::ClipId;
 use super::clip::StackingContextTreeClipStore;
 use crate::ArcRefCell;
+use crate::display_list::clip::ClipArea;
 use crate::display_list::conversions::{FilterToWebRender, ToWebRender};
 use crate::display_list::{BuilderForBoxFragment, DisplayListBuilder, offset_radii};
 use crate::fragment_tree::{
@@ -1465,8 +1466,10 @@ impl BoxFragment {
             .translate(containing_block_rect.origin.to_vector())
             .to_webrender();
         Some(stacking_context_tree.clip_store.add(
-            BorderRadius::zero(),
-            clip_rect,
+            ClipArea::RoundedRect {
+                radii: BorderRadius::zero(),
+                rect: clip_rect,
+            },
             parent_scroll_node_id,
             parent_clip_id,
         ))
@@ -1529,8 +1532,10 @@ impl BoxFragment {
             }
 
             let clip_id = stacking_context_tree.clip_store.add(
-                radii,
-                overflow_clip_rect,
+                ClipArea::RoundedRect {
+                    radii,
+                    rect: overflow_clip_rect,
+                },
                 parent_scroll_node_id,
                 parent_clip_id,
             );
@@ -1546,9 +1551,13 @@ impl BoxFragment {
             .translate(containing_block_rect.origin.to_vector())
             .to_webrender();
 
+        let radii =
+            BuilderForBoxFragment::new(self, containing_block_rect, false, false).border_radius;
         let clip_id = stacking_context_tree.clip_store.add(
-            BuilderForBoxFragment::new(self, containing_block_rect, false, false).border_radius,
-            scroll_frame_rect,
+            ClipArea::RoundedRect {
+                radii,
+                rect: scroll_frame_rect,
+            },
             parent_scroll_node_id,
             parent_clip_id,
         );

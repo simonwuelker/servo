@@ -15,6 +15,9 @@ use webrender_api::units::{LayoutRect, LayoutSideOffsets, LayoutSize};
 
 use super::{BuilderForBoxFragment, compute_margin_box_radius, normalize_radii};
 
+/// `clip-path: polygon(..)`s with more than this many vertices are ignored.
+const CLIP_PATH_POLYGON_MAX_VERTICES: usize = 64;
+
 /// An identifier for a clip used during StackingContextTree construction. This is a simple index in
 /// a [`ClipStore`]s vector of clips.
 #[derive(Clone, Copy, Debug, Eq, Hash, MallocSizeOf, PartialEq)]
@@ -31,10 +34,18 @@ impl ClipId {
 #[derive(Clone, MallocSizeOf)]
 pub(crate) struct Clip {
     pub id: ClipId,
-    pub radii: BorderRadius,
-    pub rect: LayoutRect,
+    pub area: ClipArea,
     pub parent_scroll_node_id: ScrollTreeNodeId,
     pub parent_clip_id: ClipId,
+}
+
+#[derive(Clone, MallocSizeOf)]
+pub(crate) enum ClipArea {
+    RoundedRect {
+        radii: BorderRadius,
+        rect: LayoutRect,
+    },
+    Polygon {},
 }
 
 /// A simple vector of [`Clip`] that is built during `StackingContextTree` construction.
@@ -50,16 +61,14 @@ impl StackingContextTreeClipStore {
 
     pub(crate) fn add(
         &mut self,
-        radii: webrender_api::BorderRadius,
-        rect: LayoutRect,
+        area: ClipArea,
         parent_scroll_node_id: ScrollTreeNodeId,
         parent_clip_id: ClipId,
     ) -> ClipId {
         let id = ClipId(self.0.len());
         self.0.push(Clip {
             id,
-            radii,
-            rect,
+            area,
             parent_scroll_node_id,
             parent_clip_id,
         });
@@ -98,19 +107,24 @@ impl StackingContextTreeClipStore {
                 BasicShape::Polygon(_) | BasicShape::PathOrShape(_) => None,
             }
         } else {
-            Some(self.add(
-                match geometry_box {
-                    ShapeBox::MarginBox => compute_margin_box_radius(
-                        fragment_builder.border_radius,
-                        layout_rect.size(),
-                        fragment_builder.fragment,
-                    ),
-                    _ => fragment_builder.border_radius,
+            let radii = match geometry_box {
+                ShapeBox::MarginBox => compute_margin_box_radius(
+                    fragment_builder.border_radius,
+                    layout_rect.size(),
+                    fragment_builder.fragment,
+                ),
+                _ => fragment_builder.border_radius,
+            };
+            let clip = self.add(
+                ClipArea::RoundedRect {
+                    radii,
+                    rect: layout_rect,
                 },
-                layout_rect,
                 parent_scroll_node_id,
                 parent_clip_chain_id,
-            ))
+            );
+
+            Some(clip)
         }
     }
 
@@ -157,8 +171,10 @@ impl StackingContextTreeClipStore {
                 };
                 normalize_radii(&layout_box, &mut radii);
                 Some(self.add(
-                    radii,
-                    shape_rect,
+                    ClipArea::RoundedRect {
+                        radii,
+                        rect: shape_rect,
+                    },
                     parent_scroll_node_id,
                     parent_clip_chain_id,
                 ))
@@ -207,7 +223,11 @@ impl StackingContextTreeClipStore {
                 let start = center.add_size(&-radius);
                 let rect = LayoutRect::from_origin_and_size(start, radius * 2.);
                 normalize_radii(&layout_box, &mut radii);
-                Some(self.add(radii, rect, parent_scroll_node_id, parent_clip_chain_id))
+                Some(self.add(
+                    ClipArea::RoundedRect { radii, rect },
+                    parent_scroll_node_id,
+                    parent_clip_chain_id,
+                ))
             },
             BasicShape::Ellipse(ellipse) => {
                 let center = match ellipse.position {
@@ -247,7 +267,11 @@ impl StackingContextTreeClipStore {
                 let start = center.add_size(&-size);
                 let rect = LayoutRect::from_origin_and_size(start, size * 2.);
                 normalize_radii(&rect, &mut radii);
-                Some(self.add(radii, rect, parent_scroll_node_id, parent_clip_chain_id))
+                Some(self.add(
+                    ClipArea::RoundedRect { radii, rect },
+                    parent_scroll_node_id,
+                    parent_clip_chain_id,
+                ))
             },
             _ => None,
         }

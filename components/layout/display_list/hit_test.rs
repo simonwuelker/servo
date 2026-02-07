@@ -18,7 +18,7 @@ use style::values::computed::ui::CursorKind;
 use webrender_api::BorderRadius;
 use webrender_api::units::{LayoutPoint, LayoutRect, LayoutSize, RectExt};
 
-use crate::display_list::clip::{Clip, ClipId};
+use crate::display_list::clip::{Clip, ClipArea, ClipId};
 use crate::display_list::stacking_context::StackingContextSection;
 use crate::display_list::{
     StackingContext, StackingContextContent, StackingContextTree, ToWebRender,
@@ -114,7 +114,12 @@ impl<'a> HitTest<'a> {
 
 impl Clip {
     fn contains(&self, point: LayoutPoint) -> bool {
-        rounded_rect_contains_point(self.rect, &self.radii, point)
+        match self.area {
+            ClipArea::RoundedRect { radii, rect } => {
+                rounded_rect_contains_point(rect, &radii, point)
+            },
+            ClipArea::Polygon {} => todo!(),
+        }
     }
 }
 

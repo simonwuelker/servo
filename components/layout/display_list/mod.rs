@@ -49,6 +49,7 @@ use wr::units::LayoutVector2D;
 
 use crate::cell::ArcRefCell;
 use crate::context::{ImageResolver, ResolvedImage};
+use crate::display_list::clip::ClipArea;
 pub(crate) use crate::display_list::conversions::ToWebRender;
 use crate::display_list::stacking_context::StackingContextSection;
 use crate::fragment_tree::{
@@ -346,17 +347,23 @@ impl DisplayListBuilder<'_> {
         );
 
         let spatial_id = self.spatial_id(clip.parent_scroll_node_id);
-        let new_clip_id = if clip.radii.is_zero() {
-            self.wr().define_clip_rect(spatial_id, clip.rect)
-        } else {
-            self.wr().define_clip_rounded_rect(
-                spatial_id,
-                ComplexClipRegion {
-                    rect: clip.rect,
-                    radii: clip.radii,
-                    mode: ClipMode::Clip,
-                },
-            )
+
+        let new_clip_id = match clip.area {
+            ClipArea::RoundedRect { radii, rect } => {
+                if radii.is_zero() {
+                    self.wr().define_clip_rect(spatial_id, rect)
+                } else {
+                    self.wr().define_clip_rounded_rect(
+                        spatial_id,
+                        ComplexClipRegion {
+                            rect,
+                            radii,
+                            mode: ClipMode::Clip,
+                        },
+                    )
+                }
+            },
+            ClipArea::Polygon {} => todo!("clip polygons"),
         };
 
         // WebRender has two different ways of expressing "no clip." ClipChainId::INVALID should be
@@ -389,8 +396,7 @@ impl DisplayListBuilder<'_> {
 
         Some(self.add_clip_to_display_list(&Clip {
             id: ClipId(self.clip_map.len()),
-            radii,
-            rect,
+            area: ClipArea::RoundedRect { radii, rect },
             parent_scroll_node_id: self.current_scroll_node_id,
             parent_clip_id: self.current_clip_id,
         }))
