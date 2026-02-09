@@ -86,7 +86,8 @@ use webrender_api::units::{DevicePixel, LayoutVector2D};
 
 use crate::context::{CachedImageOrError, ImageResolver, LayoutContext};
 use crate::display_list::{
-    DisplayListBuilder, HitTest, LargestContentfulPaintCandidateCollector, StackingContextTree,
+    ClipTreeContext, DisplayListBuilder, HitTest, LargestContentfulPaintCandidateCollector,
+    StackingContextTree,
 };
 use crate::query::{
     find_character_offset_in_fragment_descendants, get_the_text_steps, process_box_area_request,
@@ -1240,6 +1241,7 @@ impl LayoutThread {
             self.id.into(),
             !self.have_ever_generated_display_list.get(),
             &self.debug,
+            &self.clip_tree_context()
         );
 
         // When a new StackingContextTree is built, it contains a freshly built
@@ -1402,6 +1404,13 @@ impl LayoutThread {
                 TimerMetadataReflowType::FirstReflow
             },
         })
+    }
+
+    fn clip_tree_context(&self) -> ClipTreeContext<'_> {
+        ClipTreeContext {
+            paint_api: &self.paint_api,
+            image_cache: self.image_cache.as_ref(),
+        }
     }
 }
 

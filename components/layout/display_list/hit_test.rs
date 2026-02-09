@@ -118,7 +118,7 @@ impl Clip {
             ClipArea::RoundedRect { radii, rect } => {
                 rounded_rect_contains_point(rect, &radii, point)
             },
-            ClipArea::Polygon {} => todo!(),
+            ClipArea::Polygon { .. } => todo!(),
         }
     }
 }

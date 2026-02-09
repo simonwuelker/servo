@@ -1147,6 +1147,7 @@ malloc_size_of_is_0!(unicode_script::Script);
 malloc_size_of_is_0!(urlpattern::UrlPattern);
 malloc_size_of_is_0!(utf8::Incomplete);
 malloc_size_of_is_0!(std::net::TcpStream);
+malloc_size_of_is_0!(webrender_api::ImageMask);
 
 impl<S: tendril::TendrilSink<tendril::fmt::UTF8, A>, A: tendril::Atomicity> MallocSizeOf
     for tendril::stream::LossyDecoder<S, A>
@@ -1182,6 +1183,7 @@ malloc_size_of_is_webrender_malloc_size_of!(webrender_api::ColorF);
 malloc_size_of_is_webrender_malloc_size_of!(webrender_api::Epoch);
 malloc_size_of_is_webrender_malloc_size_of!(webrender_api::ExtendMode);
 malloc_size_of_is_webrender_malloc_size_of!(webrender_api::ExternalScrollId);
+malloc_size_of_is_webrender_malloc_size_of!(webrender_api::FillRule);
 malloc_size_of_is_webrender_malloc_size_of!(webrender_api::FontKey);
 malloc_size_of_is_webrender_malloc_size_of!(webrender_api::FontInstanceFlags);
 malloc_size_of_is_webrender_malloc_size_of!(webrender_api::FontInstanceKey);

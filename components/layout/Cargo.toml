@@ -32,6 +32,7 @@ html5ever = { workspace = true }
 icu_locid = { workspace = true }
 icu_segmenter = { workspace = true }
 itertools = { workspace = true }
+ipc-channel = { workspace = true }
 kurbo = { workspace = true }
 layout_api = { workspace = true }
 log = { workspace = true }
@@ -62,6 +63,7 @@ tracing = { workspace = true, optional = true }
 unicode-bidi = { workspace = true }
 unicode-script = { workspace = true }
 url = { workspace = true }
+vello_cpu = { workspace = true }
 webrender_api = { workspace = true }
 xi-unicode = { workspace = true }
 

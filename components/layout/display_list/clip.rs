@@ -2,18 +2,32 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use app_units::Au;
+use app_units::{Au, MAX_AU, MIN_AU};
 use base::id::ScrollTreeNodeId;
+use euclid::{Box2D, Point2D};
+use kurbo::Shape;
 use malloc_size_of_derive::MallocSizeOf;
-use style::values::computed::LengthPercentage;
+use paint_api::SerializableImageData;
+use style::Zero;
 use style::values::computed::basic_shape::{BasicShape, ClipPath};
 use style::values::computed::position::Position;
-use style::values::generics::basic_shape::{GenericShapeRadius, ShapeBox, ShapeGeometryBox};
+use style::values::computed::{FillRule, LengthPercentage};
+use style::values::generics::basic_shape::{
+    GenericPolygon, GenericShapeRadius, PolygonCoord, ShapeBox, ShapeGeometryBox,
+};
 use style::values::generics::position::GenericPositionOrAuto;
-use webrender_api::BorderRadius;
-use webrender_api::units::{LayoutRect, LayoutSideOffsets, LayoutSize};
+use vello_cpu::kurbo;
+use webrender_api::units::{
+    LayoutPixel, LayoutPoint, LayoutRect, LayoutRectAu, LayoutSideOffsets, LayoutSize,
+};
+use webrender_api::{
+    ImageDescriptor,
+    BorderRadius, FillRule as WebrenderFillRule, ImageDescriptorFlags, ImageFormat, ImageKey,
+    ImageMask,
+};
 
 use super::{BuilderForBoxFragment, compute_margin_box_radius, normalize_radii};
+use crate::display_list::ClipTreeContext;
 
 /// `clip-path: polygon(..)`s with more than this many vertices are ignored.
 const CLIP_PATH_POLYGON_MAX_VERTICES: usize = 64;
@@ -45,7 +59,12 @@ pub(crate) enum ClipArea {
         radii: BorderRadius,
         rect: LayoutRect,
     },
-    Polygon {},
+    /// `clip-path: polygon(..)`
+    Polygon {
+        mask: ImageMask,
+        fill_rule: WebrenderFillRule,
+        vertices: Vec<LayoutPoint>,
+    },
 }
 
 /// A simple vector of [`Clip`] that is built during `StackingContextTree` construction.
@@ -81,6 +100,7 @@ impl StackingContextTreeClipStore {
         parent_scroll_node_id: ScrollTreeNodeId,
         parent_clip_chain_id: ClipId,
         fragment_builder: BuilderForBoxFragment,
+        clip_context: &ClipTreeContext<'_>,
     ) -> Option<ClipId> {
         let geometry_box = match clip_path {
             ClipPath::Shape(_, ShapeGeometryBox::ShapeBox(shape_box)) => shape_box,
@@ -104,7 +124,14 @@ impl StackingContextTreeClipStore {
                         parent_scroll_node_id,
                         parent_clip_chain_id,
                     ),
-                BasicShape::Polygon(_) | BasicShape::PathOrShape(_) => None,
+                BasicShape::Polygon(polygon) => self.add_for_polygon(
+                    polygon,
+                    layout_rect,
+                    parent_scroll_node_id,
+                    parent_clip_chain_id,
+                    clip_context,
+                ),
+                BasicShape::PathOrShape(_) => None,
             }
         } else {
             let radii = match geometry_box {
@@ -275,6 +302,150 @@ impl StackingContextTreeClipStore {
             },
             _ => None,
         }
+    }
+
+    #[servo_tracing::instrument(name = "StackingContextClipStore::add_for_polygon", skip_all)]
+    fn add_for_polygon(
+        &mut self,
+        polygon: GenericPolygon<LengthPercentage>,
+        layout_box: LayoutRect,
+        parent_scroll_node_id: ScrollTreeNodeId,
+        parent_clip_chain_id: ClipId,
+        clip_context: &ClipTreeContext<'_>,
+    ) -> Option<ClipId> {
+        println!("Add for polygon");
+        if polygon.coordinates.len() > CLIP_PATH_POLYGON_MAX_VERTICES {
+            log::warn!(
+                "Ignoring \"clip-path: polygon()\" rule with {} vertices (more than {})",
+                polygon.coordinates.len(),
+                CLIP_PATH_POLYGON_MAX_VERTICES
+            );
+            return None;
+        }
+
+        // Construct a sequence of path operations that draw the polygon
+        let Some(first_vertex) = polygon.coordinates.first() else {
+            return None;
+        };
+
+        // Compute the used polygon coordinates. While we do this, we also compute
+        // the bounding box of the polygon. If it's smaller than the layout_box then
+        // we can save some space.
+        let mut vertices = Vec::with_capacity(polygon.coordinates.len());
+        let mut bounding_box = Box2D {
+            min: Point2D::new(MAX_AU, MAX_AU),
+            max: Point2D::new(MIN_AU, MIN_AU),
+        };
+        for coordinate in polygon.coordinates {
+            let x = coordinate
+                .0
+                .to_used_value(Au::from_f32_px(layout_box.width()));
+            let y = coordinate
+                .1
+                .to_used_value(Au::from_f32_px(layout_box.height()));
+
+            bounding_box.min.x.min_assign(x);
+            bounding_box.min.y.min_assign(y);
+            bounding_box.max.x.max_assign(x);
+            bounding_box.max.y.max_assign(y);
+
+            vertices.push(Point2D::new(x, y));
+        }
+
+        // Compute path elements with offsets as needed
+        let compute_offset = |coordinate: Point2D<Au, LayoutPixel>| -> kurbo::Point {
+            let with_offset = coordinate - bounding_box.min;
+            kurbo::Point::new(with_offset.x.to_f64_px(), with_offset.y.to_f64_px())
+        };
+        let mut path_elements: Vec<kurbo::PathEl> =
+            Vec::with_capacity(vertices.len() + 1);
+
+        path_elements.push(kurbo::PathEl::MoveTo(compute_offset(*vertices.first()?)));
+        for vertex in vertices.iter().skip(1) {
+            path_elements.push(kurbo::PathEl::LineTo(compute_offset(*vertex)));
+        }
+        path_elements.push(kurbo::PathEl::ClosePath);
+
+        // Finally, draw the polygon to a bitmap that we can hand over to webrender
+        let width = u16::try_from(bounding_box.width().to_nearest_px()).ok()?;
+        let height = u16::try_from(bounding_box.height().to_nearest_px()).ok()?;
+        let mut context = vello_cpu::RenderContext::new(width, height);
+
+        // The vello docs state about tolerance (https://docs.rs/kurbo/0.13.0/kurbo/trait.Shape.html#tymethod.path_elements):
+        // > For drawing as in UI elements, a value of 0.1 is appropriate, as it is unlikely to be visible to the eye.
+        context.fill_path(&path_elements.into_path(0.1));
+        context.flush();
+
+        let mut target = vello_cpu::Pixmap::new(width, height);
+        context.render_to_pixmap(&mut target);
+
+        let descriptor = ImageDescriptor::new(
+            width as i32,
+            height as i32,
+            ImageFormat::RGBA8,
+            ImageDescriptorFlags::empty(),
+        );
+        let image_key = clip_context.image_cache.get_image_key()?;
+        let data = SerializableImageData::Raw(ipc_channel::ipc::IpcSharedMemory::from_bytes(
+            target.data_as_u8_slice(),
+        ));
+        clip_context
+            .paint_api
+            .add_image(image_key, descriptor, data, false);
+
+        let fill_rule = match polygon.fill {
+            FillRule::Evenodd => WebrenderFillRule::Evenodd,
+            FillRule::Nonzero => WebrenderFillRule::Nonzero,
+        };
+        let mask = ImageMask {
+            image: image_key,
+            rect: Box2D {
+                min: bounding_box.min.map(|coordinate| coordinate.to_f32_px()),
+                max: bounding_box.max.map(|coordinate| coordinate.to_f32_px()),
+            },
+        };
+        let webrender_vertices = vertices
+            .into_iter()
+            .map(|vertex| vertex.map(|coordinate| coordinate.to_f32_px()))
+            .collect();
+        let clip_id = self.add(
+            ClipArea::Polygon {
+                mask,
+                vertices: webrender_vertices,
+                fill_rule,
+            },
+            parent_scroll_node_id,
+            parent_clip_chain_id,
+        );
+        Some(clip_id)
+
+        // let bounds = layout_bounds.cast::<i32>().cast_unit();
+        // let blob_commands = blob_commands
+        //     .into_iter()
+        //     .map(|data| BlobImageEntry { bounds, data })
+        //     .collect::<Vec<_>>();
+        // let compositor_api = &display_list.compositor_api;
+        // let blob_data = Arc::new(bincode::serialize(&blob_commands).unwrap());
+        // let absolute_bounds = layout_bounds.translate(layout_box.min.to_vector());
+        // compositor_api.update_images(vec![ImageUpdate::AddBlobImage(
+        //     blob_key,
+        //     descriptor,
+        //     layout_bounds.cast::<i32>().cast_unit(),
+        //     blob_data,
+        // )]);
+        // let new_clip_id = display_list.wr.define_clip_image_mask(
+        //     parent_scroll_node_id.spatial_id,
+        //     ImageMask {
+        //         image: blob_key.0,
+        //         rect: absolute_bounds,
+        //     },
+        //     &vertices,
+        //     match polygon.fill {
+        //         FillRule::Evenodd => WrFillRule::Evenodd,
+        //         FillRule::Nonzero => WrFillRule::Nonzero,
+        //     },
+        // );
+        // Some(display_list.define_clip_chain(*parent_clip_chain_id, [new_clip_id]))
     }
 }
 

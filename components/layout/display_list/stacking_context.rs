@@ -43,7 +43,7 @@ use super::clip::StackingContextTreeClipStore;
 use crate::ArcRefCell;
 use crate::display_list::clip::ClipArea;
 use crate::display_list::conversions::{FilterToWebRender, ToWebRender};
-use crate::display_list::{BuilderForBoxFragment, DisplayListBuilder, offset_radii};
+use crate::display_list::{BuilderForBoxFragment, ClipTreeContext, DisplayListBuilder, offset_radii};
 use crate::fragment_tree::{
     BoxFragment, ContainingBlockManager, Fragment, FragmentFlags, FragmentTree,
     PositioningFragment, SpecificLayoutInfo,
@@ -128,6 +128,7 @@ impl StackingContextTree {
         pipeline_id: wr::PipelineId,
         first_reflow: bool,
         debug: &DiagnosticsLogging,
+        clip_context: &ClipTreeContext<'_>,
     ) -> Self {
         let scrollable_overflow = fragment_tree.scrollable_overflow();
         let scrollable_overflow = LayoutSize::from_untyped(Size2D::new(
@@ -188,6 +189,7 @@ impl StackingContextTree {
                 &mut root_stacking_context,
                 StackingContextBuildMode::SkipHoisted,
                 &text_decorations,
+                clip_context,
             );
         }
         root_stacking_context.sort();
@@ -908,6 +910,7 @@ impl Fragment {
         stacking_context: &mut StackingContext,
         mode: StackingContextBuildMode,
         text_decorations: &Arc<Vec<FragmentTextDecoration>>,
+        clip_context: &ClipTreeContext<'_>,
     ) {
         if self
             .base()
@@ -939,6 +942,7 @@ impl Fragment {
                     containing_block_info,
                     stacking_context,
                     text_decorations,
+                    clip_context
                 );
             },
             Fragment::AbsoluteOrFixedPositioned(fragment) => {
@@ -954,6 +958,7 @@ impl Fragment {
                     stacking_context,
                     StackingContextBuildMode::IncludeHoisted,
                     &Default::default(),
+                    clip_context,
                 );
             },
             Fragment::Positioning(fragment) => {
@@ -964,6 +969,7 @@ impl Fragment {
                     containing_block_info,
                     stacking_context,
                     text_decorations,
+                    clip_context
                 );
             },
             Fragment::Text(_) | Fragment::Image(_) | Fragment::IFrame(_) => {
@@ -1049,6 +1055,7 @@ impl BoxFragment {
         containing_block_info: &ContainingBlockInfo,
         parent_stacking_context: &mut StackingContext,
         text_decorations: &Arc<Vec<FragmentTextDecoration>>,
+        clip_context: &ClipTreeContext<'_>
     ) {
         self.build_stacking_context_tree_maybe_creating_reference_frame(
             fragment,
@@ -1057,6 +1064,7 @@ impl BoxFragment {
             containing_block_info,
             parent_stacking_context,
             text_decorations,
+            clip_context
         );
     }
 
@@ -1068,6 +1076,7 @@ impl BoxFragment {
         containing_block_info: &ContainingBlockInfo,
         parent_stacking_context: &mut StackingContext,
         text_decorations: &Arc<Vec<FragmentTextDecoration>>,
+        clip_context: &ClipTreeContext<'_>,
     ) {
         let reference_frame_data =
             match self.reference_frame_data_if_necessary(&containing_block.rect) {
@@ -1080,6 +1089,7 @@ impl BoxFragment {
                         containing_block_info,
                         parent_stacking_context,
                         text_decorations,
+                        clip_context,
                     );
                 },
             };
@@ -1131,6 +1141,7 @@ impl BoxFragment {
             &new_containing_block_info,
             parent_stacking_context,
             text_decorations,
+            clip_context,
         );
     }
 
@@ -1142,6 +1153,7 @@ impl BoxFragment {
         containing_block_info: &ContainingBlockInfo,
         parent_stacking_context: &mut StackingContext,
         text_decorations: &Arc<Vec<FragmentTextDecoration>>,
+        clip_context: &ClipTreeContext<'_>,
     ) {
         let context_type = match self.get_stacking_context_type() {
             Some(context_type) => context_type,
@@ -1153,6 +1165,7 @@ impl BoxFragment {
                     containing_block_info,
                     parent_stacking_context,
                     text_decorations,
+                    clip_context
                 );
                 return;
             },
@@ -1184,6 +1197,7 @@ impl BoxFragment {
                     false, /* is_hit_test_for_scrollable_overflow */
                     false, /* is_collapsed_table_borders */
                 ),
+                clip_context,
             )
             .unwrap_or(containing_block.clip_id);
 
@@ -1207,6 +1221,7 @@ impl BoxFragment {
             containing_block_info,
             &mut child_stacking_context,
             text_decorations,
+            clip_context
         );
 
         let mut stolen_children = vec![];
@@ -1233,6 +1248,7 @@ impl BoxFragment {
         containing_block_info: &ContainingBlockInfo,
         stacking_context: &mut StackingContext,
         text_decorations: &Arc<Vec<FragmentTextDecoration>>,
+        clip_context: &ClipTreeContext<'_>,
     ) {
         let mut new_scroll_node_id = containing_block.scroll_node_id;
         let mut new_clip_id = containing_block.clip_id;
@@ -1269,6 +1285,7 @@ impl BoxFragment {
                 false, /* is_hit_test_for_scrollable_overflow */
                 false, /* is_collapsed_table_borders */
             ),
+            clip_context,
         ) {
             new_clip_id = clip_id;
         }
@@ -1416,6 +1433,7 @@ impl BoxFragment {
                 stacking_context,
                 StackingContextBuildMode::SkipHoisted,
                 text_decorations,
+                clip_context,
             );
         }
 
@@ -1896,6 +1914,7 @@ impl PositioningFragment {
         containing_block_info: &ContainingBlockInfo,
         stacking_context: &mut StackingContext,
         text_decorations: &Arc<Vec<FragmentTextDecoration>>,
+        clip_context: &ClipTreeContext<'_>,
     ) {
         let rect = self
             .base
@@ -1912,6 +1931,7 @@ impl PositioningFragment {
                 stacking_context,
                 StackingContextBuildMode::SkipHoisted,
                 text_decorations,
+                clip_context,
             );
         }
     }

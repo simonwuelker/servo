@@ -64,6 +64,7 @@ use crate::style_ext::{BorderStyleColor, ComputedValuesExt};
 
 mod background;
 mod clip;
+mod context;
 mod conversions;
 mod gradient;
 mod hit_test;
@@ -71,6 +72,7 @@ mod largest_contenful_paint_candidate_collector;
 mod stacking_context;
 
 use background::BackgroundPainter;
+pub(crate) use context::ClipTreeContext;
 pub(crate) use hit_test::HitTest;
 pub(crate) use largest_contenful_paint_candidate_collector::LargestContentfulPaintCandidateCollector;
 pub(crate) use stacking_context::*;
@@ -363,7 +365,16 @@ impl DisplayListBuilder<'_> {
                     )
                 }
             },
-            ClipArea::Polygon {} => todo!("clip polygons"),
+            ClipArea::Polygon {
+                mask,
+                ref vertices,
+                fill_rule,
+            } => {
+            println!("define wr clip image mask");
+                self
+                .wr()
+                .define_clip_image_mask(spatial_id, mask, vertices, fill_rule)
+                },
         };
 
         // WebRender has two different ways of expressing "no clip." ClipChainId::INVALID should be
