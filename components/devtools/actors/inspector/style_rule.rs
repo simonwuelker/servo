@@ -124,7 +124,7 @@ impl Actor for StyleRuleActor {
                 let node = registry.find::<NodeActor>(&self.node);
                 let walker = registry.find::<WalkerActor>(&node.walker);
                 walker
-                    .script_chan
+                    .script_sender
                     .send(ModifyRule(
                         walker.pipeline,
                         registry.actor_to_script(self.node.clone()),
@@ -155,7 +155,7 @@ impl StyleRuleActor {
 
         let (document_sender, document_receiver) = generic_channel::channel()?;
         walker
-            .script_chan
+            .script_sender
             .send(GetDocumentElement(walker.pipeline, document_sender))
             .ok()?;
         let node = document_receiver.recv().ok()??;
@@ -180,7 +180,7 @@ impl StyleRuleActor {
                 style_sender,
             ),
         };
-        walker.script_chan.send(req).ok()?;
+        walker.script_sender.send(req).ok()?;
         let style = style_receiver.recv().ok()??;
 
         Some(AppliedRule {
@@ -223,7 +223,7 @@ impl StyleRuleActor {
 
         let (style_sender, style_receiver) = generic_channel::channel()?;
         walker
-            .script_chan
+            .script_sender
             .send(GetComputedStyle(
                 walker.pipeline,
                 registry.actor_to_script(self.node.clone()),

@@ -288,14 +288,14 @@ impl ConsoleActor {
         }
     }
 
-    fn script_chan(&self, registry: &ActorRegistry) -> GenericSender<DevtoolScriptControlMsg> {
+    fn script_sender(&self, registry: &ActorRegistry) -> GenericSender<DevtoolScriptControlMsg> {
         match &self.root {
             Root::BrowsingContext(browsing_context) => registry
                 .find::<BrowsingContextActor>(browsing_context)
-                .script_chan
+                .script_sender
                 .clone(),
             Root::DedicatedWorker(worker) => {
-                registry.find::<WorkerActor>(worker).script_chan.clone()
+                registry.find::<WorkerActor>(worker).script_sender.clone()
             },
         }
     }
@@ -326,7 +326,7 @@ impl ConsoleActor {
             UniqueId::Pipeline(p) => p,
             UniqueId::Worker(_) => TEST_PIPELINE_ID,
         };
-        self.script_chan(registry)
+        self.script_sender(registry)
             .send(DevtoolScriptControlMsg::Eval(input.clone(), pipeline, chan))
             .unwrap();
 

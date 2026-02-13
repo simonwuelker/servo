@@ -122,7 +122,7 @@ impl Actor for TabDescriptorActor {
                 let ctx_actor = registry.find::<BrowsingContextActor>(&self.browsing_context_actor);
                 let pipeline = ctx_actor.pipeline_id();
                 ctx_actor
-                    .script_chan
+                    .script_sender
                     .send(DevtoolScriptControlMsg::Reload(pipeline))
                     .map_err(|_| ActorError::Internal)?;
 

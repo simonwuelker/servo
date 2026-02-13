@@ -107,7 +107,7 @@ pub(crate) struct ActorMsg {
 pub fn start_server(
     port: u16,
     embedder: EmbedderProxy,
-    mem_profiler_chan: ProfilerChan,
+    memory_profiler_channel: ProfilerChan,
 ) -> Sender<DevtoolsControlMsg> {
     let (sender, receiver) = unbounded();
     {
@@ -116,7 +116,7 @@ pub fn start_server(
         thread::Builder::new()
             .name("Devtools".to_owned())
             .spawn(move || {
-                mem_profiler_chan.run_with_memory_reporting(
+                memory_profiler_channel.run_with_memory_reporting(
                     || {
                         if let Some(instance) =
                             DevtoolsInstance::create(sender, receiver, port, embedder)
@@ -448,7 +448,7 @@ impl DevtoolsInstance {
                 worker_id: id,
                 url: page_info.url.clone(),
                 type_: WorkerType::Dedicated,
-                script_chan: script_sender,
+                script_sender,
                 streams: Default::default(),
             };
             let root = actors.find::<RootActor>("root");

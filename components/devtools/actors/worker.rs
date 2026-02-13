@@ -36,7 +36,7 @@ pub(crate) struct WorkerActor {
     pub worker_id: WorkerId,
     pub url: ServoUrl,
     pub type_: WorkerType,
-    pub script_chan: GenericSender<DevtoolScriptControlMsg>,
+    pub script_sender: GenericSender<DevtoolScriptControlMsg>,
     pub streams: AtomicRefCell<HashMap<StreamId, TcpStream>>,
 }
 
@@ -71,7 +71,7 @@ impl Actor for WorkerActor {
                     .borrow_mut()
                     .insert(stream_id, request.try_clone_stream().unwrap());
                 // FIXME: fix messages to not require forging a pipeline for worker messages
-                self.script_chan
+                self.script_sender
                     .send(WantsLiveNotifications(TEST_PIPELINE_ID, true))
                     .unwrap();
             },
@@ -105,7 +105,7 @@ impl Actor for WorkerActor {
     fn cleanup(&self, stream_id: StreamId) {
         self.streams.borrow_mut().remove(&stream_id);
         if self.streams.borrow().is_empty() {
-            self.script_chan
+            self.script_sender
                 .send(WantsLiveNotifications(TEST_PIPELINE_ID, false))
                 .unwrap();
         }

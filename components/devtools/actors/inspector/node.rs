@@ -128,7 +128,7 @@ pub(crate) struct NodeActorMsg {
 #[derive(MallocSizeOf)]
 pub(crate) struct NodeActor {
     name: String,
-    pub script_chan: GenericSender<DevtoolScriptControlMsg>,
+    pub script_sender: GenericSender<DevtoolScriptControlMsg>,
     pub pipeline: PipelineId,
     pub walker: String,
     pub style_rules: AtomicRefCell<HashMap<(String, usize), String>>,
@@ -170,7 +170,7 @@ impl Actor for NodeActor {
                 let walker = registry.find::<WalkerActor>(&self.walker);
                 walker.new_mutations(&mut request, &self.name, &modifications);
 
-                self.script_chan
+                self.script_sender
                     .send(DevtoolScriptControlMsg::ModifyAttribute(
                         self.pipeline,
                         registry.actor_to_script(self.name()),
@@ -189,7 +189,7 @@ impl Actor for NodeActor {
                     .ok_or(ActorError::BadParameterType)?;
 
                 let (tx, rx) = generic_channel::channel().ok_or(ActorError::Internal)?;
-                self.script_chan
+                self.script_sender
                     .send(DevtoolScriptControlMsg::GetEventListenerInfo(
                         self.pipeline,
                         registry.actor_to_script(target.to_owned()),
@@ -206,7 +206,7 @@ impl Actor for NodeActor {
             },
             "getUniqueSelector" => {
                 let (tx, rx) = generic_channel::channel().unwrap();
-                self.script_chan
+                self.script_sender
                     .send(DevtoolScriptControlMsg::GetDocumentElement(
                         self.pipeline,
                         tx,
@@ -218,7 +218,7 @@ impl Actor for NodeActor {
                     .ok_or(ActorError::Internal)?;
                 let node = doc_elem_info.encode(
                     registry,
-                    self.script_chan.clone(),
+                    self.script_sender.clone(),
                     self.pipeline,
                     self.walker.clone(),
                 );
@@ -237,7 +237,7 @@ impl Actor for NodeActor {
                     .ok_or(ActorError::BadParameterType)?;
 
                 let (tx, rx) = generic_channel::channel().unwrap();
-                self.script_chan
+                self.script_sender
                     .send(DevtoolScriptControlMsg::GetXPath(
                         self.pipeline,
                         registry.actor_to_script(target.to_owned()),
@@ -263,7 +263,7 @@ pub trait NodeInfoToProtocol {
     fn encode(
         self,
         actors: &ActorRegistry,
-        script_chan: GenericSender<DevtoolScriptControlMsg>,
+        script_sender: GenericSender<DevtoolScriptControlMsg>,
         pipeline: PipelineId,
         walker: String,
     ) -> NodeActorMsg;
@@ -273,7 +273,7 @@ impl NodeInfoToProtocol for NodeInfo {
     fn encode(
         self,
         actors: &ActorRegistry,
-        script_chan: GenericSender<DevtoolScriptControlMsg>,
+        script_sender: GenericSender<DevtoolScriptControlMsg>,
         pipeline: PipelineId,
         walker: String,
     ) -> NodeActorMsg {
@@ -284,7 +284,7 @@ impl NodeInfoToProtocol for NodeInfo {
 
                 let node_actor = NodeActor {
                     name: name.clone(),
-                    script_chan: script_chan.clone(),
+                    script_sender: script_sender.clone(),
                     pipeline,
                     walker: walker.clone(),
                     style_rules: AtomicRefCell::new(HashMap::new()),
@@ -313,7 +313,7 @@ impl NodeInfoToProtocol for NodeInfo {
             }
 
             let (tx, rx) = generic_channel::channel()?;
-            script_chan
+            script_sender
                 .send(DevtoolScriptControlMsg::GetChildren(
                     pipeline,
                     name.clone(),
@@ -323,7 +323,7 @@ impl NodeInfoToProtocol for NodeInfo {
             let mut children = rx.recv().ok()??;
 
             let child = children.pop()?;
-            let msg = child.encode(actors, script_chan.clone(), pipeline, walker);
+            let msg = child.encode(actors, script_sender.clone(), pipeline, walker);
 
             // If the node child is not a text node, do not represent it inline.
             if msg.node_type != TEXT_NODE {

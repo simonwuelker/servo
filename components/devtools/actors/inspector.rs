@@ -119,24 +119,24 @@ impl InspectorActor {
     pub fn register(
         registry: &ActorRegistry,
         pipeline: PipelineId,
-        script_chan: GenericSender<DevtoolScriptControlMsg>,
+        script_sender: GenericSender<DevtoolScriptControlMsg>,
     ) -> String {
         let highlighter = HighlighterActor {
             name: registry.new_name::<HighlighterActor>(),
-            script_sender: script_chan.clone(),
+            script_sender: script_sender.clone(),
             pipeline,
         };
 
         let page_style = PageStyleActor {
             name: registry.new_name::<PageStyleActor>(),
-            script_chan: script_chan.clone(),
+            script_sender: script_sender.clone(),
             pipeline,
         };
 
         let walker = WalkerActor {
             name: registry.new_name::<WalkerActor>(),
             mutations: AtomicRefCell::new(vec![]),
-            script_chan,
+            script_sender,
             pipeline,
         };
 

@@ -94,7 +94,7 @@ pub(crate) struct PageStyleMsg {
 #[derive(MallocSizeOf)]
 pub(crate) struct PageStyleActor {
     pub name: String,
-    pub script_chan: GenericSender<DevtoolScriptControlMsg>,
+    pub script_sender: GenericSender<DevtoolScriptControlMsg>,
     pub pipeline: PipelineId,
 }
 
@@ -147,7 +147,7 @@ impl PageStyleActor {
         let node = registry.find::<NodeActor>(target);
         let walker = registry.find::<WalkerActor>(&node.walker);
         let entries: Vec<_> = find_child(
-            &node.script_chan,
+            &node.script_sender,
             node.pipeline,
             target,
             registry,
@@ -165,7 +165,7 @@ impl PageStyleActor {
             let selectors = (|| {
                 let (selectors_sender, selector_receiver) = generic_channel::channel()?;
                 walker
-                    .script_chan
+                    .script_sender
                     .send(GetSelectors(
                         walker.pipeline,
                         registry.actor_to_script(node.actor.clone()),
@@ -272,7 +272,7 @@ impl PageStyleActor {
             .as_str()
             .ok_or(ActorError::BadParameterType)?;
         let (tx, rx) = generic_channel::channel().ok_or(ActorError::Internal)?;
-        self.script_chan
+        self.script_sender
             .send(GetLayout(
                 self.pipeline,
                 registry.actor_to_script(target.to_owned()),

@@ -30,7 +30,7 @@ pub(crate) struct WalkerActor {
     pub name: String,
     pub mutations: AtomicRefCell<Vec<(AttrModification, String)>>,
     pub pipeline: PipelineId,
-    pub script_chan: GenericSender<DevtoolScriptControlMsg>,
+    pub script_sender: GenericSender<DevtoolScriptControlMsg>,
 }
 
 #[derive(Serialize)]
@@ -138,7 +138,7 @@ impl Actor for WalkerActor {
                 let Some((tx, rx)) = generic_channel::channel() else {
                     return Err(ActorError::Internal);
                 };
-                self.script_chan
+                self.script_sender
                     .send(GetChildren(
                         self.pipeline,
                         registry.actor_to_script(target.into()),
@@ -158,7 +158,7 @@ impl Actor for WalkerActor {
                         .map(|child| {
                             child.encode(
                                 registry,
-                                self.script_chan.clone(),
+                                self.script_sender.clone(),
                                 self.pipeline,
                                 self.name(),
                             )
@@ -176,7 +176,7 @@ impl Actor for WalkerActor {
                 let Some((tx, rx)) = generic_channel::channel() else {
                     return Err(ActorError::Internal);
                 };
-                self.script_chan
+                self.script_sender
                     .send(GetDocumentElement(self.pipeline, tx))
                     .map_err(|_| ActorError::Internal)?;
                 let doc_elem_info = rx
@@ -185,7 +185,7 @@ impl Actor for WalkerActor {
                     .ok_or(ActorError::Internal)?;
                 let node = doc_elem_info.encode(
                     registry,
-                    self.script_chan.clone(),
+                    self.script_sender.clone(),
                     self.pipeline,
                     self.name(),
                 );
@@ -244,7 +244,7 @@ impl Actor for WalkerActor {
                     .as_str()
                     .ok_or(ActorError::BadParameterType)?;
                 let mut hierarchy = find_child(
-                    &self.script_chan,
+                    &self.script_sender,
                     self.pipeline,
                     &self.name,
                     registry,
@@ -299,7 +299,7 @@ impl WalkerActor {
 
     pub(crate) fn root(&self, registry: &ActorRegistry) -> Result<NodeActorMsg, ActorError> {
         let (tx, rx) = generic_channel::channel().ok_or(ActorError::Internal)?;
-        self.script_chan
+        self.script_sender
             .send(GetRootNode(self.pipeline, tx))
             .map_err(|_| ActorError::Internal)?;
         let root_node = rx
@@ -308,7 +308,7 @@ impl WalkerActor {
             .ok_or(ActorError::Internal)?;
         Ok(root_node.encode(
             registry,
-            self.script_chan.clone(),
+            self.script_sender.clone(),
             self.pipeline,
             self.name(),
         ))
@@ -319,7 +319,7 @@ impl WalkerActor {
 /// If it is found, returns a list with the child and all of its ancestors.
 /// TODO: Investigate how to cache this to some extent.
 pub fn find_child(
-    script_chan: &GenericSender<DevtoolScriptControlMsg>,
+    script_sender: &GenericSender<DevtoolScriptControlMsg>,
     pipeline: PipelineId,
     name: &str,
     registry: &ActorRegistry,
@@ -328,7 +328,7 @@ pub fn find_child(
     compare_fn: impl Fn(&NodeActorMsg) -> bool + Clone,
 ) -> Result<Vec<NodeActorMsg>, Vec<NodeActorMsg>> {
     let (tx, rx) = generic_channel::channel().unwrap();
-    script_chan
+    script_sender
         .send(GetChildren(
             pipeline,
             registry.actor_to_script(node.into()),
@@ -338,7 +338,7 @@ pub fn find_child(
     let children = rx.recv().unwrap().ok_or(vec![])?;
 
     for child in children {
-        let msg = child.encode(registry, script_chan.clone(), pipeline, name.into());
+        let msg = child.encode(registry, script_sender.clone(), pipeline, name.into());
         if compare_fn(&msg) {
             hierarchy.push(msg);
             return Ok(hierarchy);
@@ -349,7 +349,7 @@ pub fn find_child(
         }
 
         match find_child(
-            script_chan,
+            script_sender,
             pipeline,
             name,
             registry,

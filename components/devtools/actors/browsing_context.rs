@@ -148,7 +148,7 @@ pub(crate) struct BrowsingContextActor {
     style_sheets: String,
     pub thread: String,
     _tab: String,
-    pub script_chan: GenericSender<DevtoolScriptControlMsg>,
+    pub script_sender: GenericSender<DevtoolScriptControlMsg>,
     pub watcher: String,
 }
 
@@ -238,7 +238,7 @@ impl BrowsingContextActor {
 
         let target = BrowsingContextActor {
             name,
-            script_chan: script_sender,
+            script_sender,
             title: AtomicRefCell::new(title),
             url: AtomicRefCell::new(url.into_string()),
             active_pipeline_id: AtomicRefCell::new(pipeline_id),
@@ -325,7 +325,7 @@ impl BrowsingContextActor {
     }
 
     pub fn simulate_color_scheme(&self, theme: Theme) -> Result<(), ()> {
-        self.script_chan
+        self.script_sender
             .send(SimulateColorScheme(self.pipeline_id(), theme))
             .map_err(|_| ())
     }
@@ -340,7 +340,7 @@ impl BrowsingContextActor {
 
     pub(crate) fn instruct_script_to_send_live_updates(&self, should_send_updates: bool) {
         let result = self
-            .script_chan
+            .script_sender
             .send(DevtoolScriptControlMsg::WantsLiveNotifications(
                 self.pipeline_id(),
                 should_send_updates,
