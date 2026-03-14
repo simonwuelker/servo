@@ -90,8 +90,22 @@ impl FontFaceSetMethods<crate::DomTypeHolder> for FontFaceSet {
 
     /// <https://drafts.csswg.org/css-font-loading/#dom-fontfaceset-add>
     fn Add(&self, font_face: &FontFace) -> DomRoot<FontFaceSet> {
-        font_face.set_associated_font_face_set(self);
+        // Step 1. If font is already in the FontFaceSet’s set entries,
+        // skip to the last step of this algorithm immediately.
+        if font_face.is_member_of_font_face_set(&self) {
+            return DomRoot::from_ref(self);
+        }
+
+        // TODO: Step 2. If font is CSS-connected, throw an InvalidModificationError exception
+        // and exit this algorithm immediately.
+
+        // Step 3. Add the font argument to the FontFaceSet’s set entries.
+        font_face.add_associated_font_face_set(self);
         self.handle_font_face_status_changed(font_face);
+
+        // TODO: Step 4. If font’s status attribute is "loading":
+
+        // Step 5. Return the FontFaceSet.
         DomRoot::from_ref(self)
     }
 

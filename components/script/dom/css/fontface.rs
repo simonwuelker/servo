@@ -25,7 +25,7 @@ use crate::dom::bindings::codegen::UnionTypes::StringOrArrayBufferViewOrArrayBuf
 use crate::dom::bindings::error::{Error, ErrorResult, Fallible};
 use crate::dom::bindings::refcounted::Trusted;
 use crate::dom::bindings::reflector::{DomGlobal, Reflector, reflect_dom_object_with_proto};
-use crate::dom::bindings::root::{DomRoot, MutNullableDom};
+use crate::dom::bindings::root::{Dom, DomRoot};
 use crate::dom::bindings::str::DOMString;
 use crate::dom::css::fontfaceset::FontFaceSet;
 use crate::dom::globalscope::GlobalScope;
@@ -42,11 +42,8 @@ pub struct FontFace {
     family_name: DomRefCell<DOMString>,
     descriptors: DomRefCell<FontFaceDescriptors>,
 
-    /// A reference to the [`FontFaceSet`] that this `FontFace` is a member of, if it has been
-    /// added to one. `None` otherwise. The spec suggests that a `FontFace` can be a member of
-    /// multiple `FontFaceSet`s, but this doesn't seem to be the case in practice, as the
-    /// `FontFaceSet` constructor is not exposed on the global scope.
-    font_face_set: MutNullableDom<FontFaceSet>,
+    /// A reference to the [`FontFaceSet`]s that this `FontFace` is a member of.
+    font_face_sets: DomRefCell<Vec<Dom<FontFaceSet>>>,
 
     /// This holds the [`FontTemplate`] resulting from loading this `FontFace`, to be used when the
     /// `FontFace` is added to the global `FontFaceSet` and thus the `[FontContext]`.
@@ -193,7 +190,7 @@ impl FontFace {
         // attribute to "error"
         Self {
             reflector: Reflector::new(),
-            font_face_set: MutNullableDom::default(),
+            font_face_sets: Default::default(),
             font_status_promise,
             family_name: DomRefCell::default(),
             urls: DomRefCell::default(),
@@ -260,7 +257,7 @@ impl FontFace {
             // Set font face’s corresponding attributes to the serialization of the parsed values.
             descriptors: DomRefCell::new(serialize_parsed_descriptors(parsed_font_face_rule)),
 
-            font_face_set: MutNullableDom::default(),
+            font_face_sets: Default::default(),
             family_name: DomRefCell::new(family_name.clone()),
             urls: DomRefCell::new(Some(sources)),
             template: RefCell::default(),
@@ -290,8 +287,11 @@ impl FontFace {
         )
     }
 
-    pub(super) fn set_associated_font_face_set(&self, font_face_set: &FontFaceSet) {
-        self.font_face_set.set(Some(font_face_set));
+    pub(super) fn add_associated_font_face_set(&self, font_face_set: &FontFaceSet) {
+        debug_assert!(!self.is_member_of_font_face_set(font_face_set));
+        self.font_face_sets
+            .borrow_mut()
+            .push(Dom::from_ref(font_face_set));
     }
 
     pub(super) fn loaded(&self) -> bool {
@@ -319,6 +319,13 @@ impl FontFace {
 
         *self.descriptors.borrow_mut() = serialize_parsed_descriptors(&parsed_font_face_rule);
         Ok(())
+    }
+
+    pub(crate) fn is_member_of_font_face_set(&self, set: &FontFaceSet) -> bool {
+        self.font_face_sets
+            .borrow()
+            .iter()
+            .any(|font_face_set| *font_face_set == set)
     }
 }
 
@@ -514,7 +521,7 @@ impl FontFaceMethods<crate::DomTypeHolder> for FontFace {
                         }
                     }
 
-                    if let Some(font_face_set) = font_face.font_face_set.get() {
+                    for font_face_set in font_face.font_face_sets.borrow().iter() {
                         // For each FontFaceSet font face is in: ...
                         //
                         // This implements steps 5.1.1, 5.1.2, 5.2.1 and 5.2.2 - these
