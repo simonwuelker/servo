@@ -921,31 +921,6 @@ impl Window {
         self.script_thread().perform_a_microtask_checkpoint(cx);
     }
 
-    pub(crate) fn web_font_context(&self) -> WebFontDocumentContext {
-        let global = self.as_global_scope();
-        WebFontDocumentContext {
-            policy_container: global.policy_container(),
-            request_client: global.request_client(),
-            document_url: global.api_base_url(),
-            has_trustworthy_ancestor_origin: global.has_trustworthy_ancestor_origin(),
-            insecure_requests_policy: global.insecure_requests_policy(),
-            csp_handler: Box::new(FontCspHandler {
-                global: Trusted::new(global),
-                task_source: global
-                    .task_manager()
-                    .dom_manipulation_task_source()
-                    .to_sendable(),
-            }),
-            network_timing_handler: Box::new(FontNetworkTimingHandler {
-                global: Trusted::new(global),
-                task_source: global
-                    .task_manager()
-                    .dom_manipulation_task_source()
-                    .to_sendable(),
-            }),
-        }
-    }
-
     #[expect(unsafe_code)]
     pub(crate) fn gc(&self) {
         unsafe {

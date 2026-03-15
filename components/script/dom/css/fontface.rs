@@ -31,7 +31,6 @@ use crate::dom::css::fontfaceset::FontFaceSet;
 use crate::dom::globalscope::GlobalScope;
 use crate::dom::node::NodeTraits;
 use crate::dom::promise::Promise;
-use crate::dom::window::Window;
 use crate::script_runtime::CanGc;
 
 /// <https://drafts.csswg.org/css-font-loading/#fontface-interface>
@@ -335,8 +334,8 @@ impl FontFace {
         // successfully or not, queue a task to run the following steps synchronously:
         // FIXME: This is not asynchronous.
         let result = global
-            .as_window()
             .font_context()
+            .unwrap()
             .construct_web_font_from_data(&data, (&parsed_font_face_rule).into());
 
         if let Some(template) = result {
@@ -626,13 +625,11 @@ impl FontFaceMethods<crate::DomTypeHolder> for FontFace {
         let parsed_font_face_rule = self.font_face_rule_data(&global);
 
         // Construct a WebFontDocumentContext object for the current document.
-        let document_context = global.as_window().web_font_context();
+        let document_context = global.web_font_context();
 
         // Step 4. Using the value of font face’s [[Urls]] slot, attempt to load a font as defined
         // in [CSS-FONTS-3], as if it was the value of a @font-face rule’s src descriptor.
-        // TODO: FontFaceSet is not supported on Workers yet. The `as_window` call below should be
-        // replaced when we do support it.
-        global.as_window().font_context().load_web_font_for_script(
+        global.font_context().unwrap().load_web_font_for_script(
             global.webview_id(),
             sources,
             (&parsed_font_face_rule).into(),
@@ -653,14 +650,13 @@ impl FontFaceMethods<crate::DomTypeHolder> for FontFace {
 
     /// <https://drafts.csswg.org/css-font-loading/#font-face-constructor>
     fn Constructor(
-        window: &Window,
+        global: &GlobalScope,
         proto: Option<HandleObject>,
         can_gc: CanGc,
         family: DOMString,
         source: UnionTypes::StringOrArrayBufferViewOrArrayBuffer,
         descriptors: &FontFaceDescriptors,
     ) -> DomRoot<FontFace> {
-        let global = window.as_global_scope();
         FontFace::new(global, proto, family, source, descriptors, can_gc)
     }
 }

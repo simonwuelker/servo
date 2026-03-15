@@ -3557,6 +3557,30 @@ impl GlobalScope {
         // Step 5. Return timerKey.
         timer_key
     }
+
+    pub(crate) fn web_font_context(&self) -> WebFontDocumentContext {
+        WebFontDocumentContext {
+            policy_container: self.policy_container(),
+            request_client: self.request_client(),
+            document_url: self.api_base_url(),
+            has_trustworthy_ancestor_origin: self.has_trustworthy_ancestor_origin(),
+            insecure_requests_policy: self.insecure_requests_policy(),
+            csp_handler: Box::new(FontCspHandler {
+                global: Trusted::new(self),
+                task_source: self
+                    .task_manager()
+                    .dom_manipulation_task_source()
+                    .to_sendable(),
+            }),
+            network_timing_handler: Box::new(FontNetworkTimingHandler {
+                global: Trusted::new(self),
+                task_source: self
+                    .task_manager()
+                    .dom_manipulation_task_source()
+                    .to_sendable(),
+            }),
+        }
+    }
 }
 
 /// Returns the Rust global scope from a JS global object.
