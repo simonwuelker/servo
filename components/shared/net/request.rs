@@ -16,7 +16,6 @@ use mime::Mime;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use servo_url::{ImmutableOrigin, ServoUrl};
 use tokio::sync::oneshot::Sender as TokioSender;
 use url::Position;
 use uuid::Uuid;
@@ -24,6 +23,7 @@ use uuid::Uuid;
 use crate::policy_container::{PolicyContainer, RequestPolicyContainer};
 use crate::pub_domains::is_same_site;
 use crate::response::{HttpsState, RedirectTaint, Response};
+use crate::servo_url::{ImmutableOrigin, ServoUrl};
 use crate::{ReferrerPolicy, ResourceTimingType};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize)]

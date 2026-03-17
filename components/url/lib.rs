@@ -11,19 +11,19 @@ pub mod origin;
 
 use std::collections::hash_map::DefaultHasher;
 use std::fmt;
-use std::hash::Hasher;
+use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
 use std::net::IpAddr;
 use std::ops::{Index, Range, RangeFrom, RangeFull, RangeTo};
 use std::path::Path;
 use std::str::FromStr;
 
-use base::generic_channel::{self, GenericSender};
+use malloc_size_of::MallocSizeOf;
 use malloc_size_of_derive::MallocSizeOf;
 use serde::{Deserialize, Serialize};
 use servo_arc::Arc;
 pub use url::Host;
 use url::{Position, Url};
-use uuid::Uuid;
 
 pub use crate::origin::{ImmutableOrigin, MutableOrigin, OpaqueOrigin, OriginSnapshot};
 
@@ -38,72 +38,58 @@ pub enum UrlError {
     FromFilePath,
 }
 
+pub trait BlobToken:
+    Clone
+    + PartialEq
+    + Eq
+    + Hash
+    + PartialOrd
+    + Ord
+    + Serialize
+    + MallocSizeOf
+    + for<'a> Deserialize<'a>
+    + Send
+{
+    fn refresh(&self) -> Self;
+    fn neuter(&mut self);
+}
+
 pub trait BlobStorage {
-    fn acquire_blob_token(&self, url: &ServoUrl) -> Result<Option<SerializableBlobToken>, ()>;
+    type Token: BlobToken;
+
+    fn acquire_blob_token(
+        &self,
+        url: &Url,
+    ) -> Result<Option<TokenSerializationGuard<Self::Token>>, ()>;
 }
 
-#[derive(Deserialize, MallocSizeOf, Serialize)]
-pub struct BlobToken {
-    pub token: Uuid,
-    pub file_id: Uuid,
-    pub revoke_sender: GenericSender<BlobTokenRevocationRequest>,
-    pub refresh_token_sender: GenericSender<BlobTokenRefreshRequest>,
-    pub neutered: bool,
-}
-
-#[derive(Deserialize, MallocSizeOf, Serialize)]
-pub struct BlobTokenRevocationRequest {
-    pub blob_id: Uuid,
-    pub token: Uuid,
-}
-
-#[derive(Deserialize, MallocSizeOf, Serialize)]
-pub struct BlobTokenRefreshRequest {
-    pub blob_id: Uuid,
-    pub new_token_sender: GenericSender<Uuid>,
-}
-
-impl serde::Serialize for SerializableBlobToken {
+impl<T: BlobToken> serde::Serialize for TokenSerializationGuard<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let (new_token_sender, new_token_receiver) = generic_channel::channel().unwrap();
-        self.0
-            .refresh_token_sender
-            .send(BlobTokenRefreshRequest {
-                blob_id: self.0.file_id.clone(),
-                new_token_sender,
-            })
-            .unwrap();
-        let new_token = new_token_receiver.recv().unwrap();
-        let mut new_token = BlobToken {
-            token: new_token,
-            file_id: self.0.file_id.clone(),
-            revoke_sender: self.0.revoke_sender.clone(),
-            refresh_token_sender: self.0.refresh_token_sender.clone(),
-            neutered: false,
-        };
-        let result = serializer.serialize_newtype_struct("SerializableBlobToken", &new_token);
+        let mut new_token = self.token.refresh();
+        let result = new_token.serialize(serializer);
         if result.is_ok() {
-            new_token.neutered = true;
+            // This token belongs to whoever receives the serialized message, so don't free it.
+            new_token.neuter();
         }
         result
     }
 }
 
-impl<'a> serde::Deserialize<'a> for SerializableBlobToken {
+impl<'a, T: BlobToken> serde::Deserialize<'a> for TokenSerializationGuard<T> {
     fn deserialize<D>(de: D) -> Result<Self, <D as serde::Deserializer<'a>>::Error>
     where
         D: serde::Deserializer<'a>,
     {
-        struct MethodVisitor;
+        struct MethodVisitor<T>(PhantomData<T>);
 
-        impl<'de> serde::de::Visitor<'de> for MethodVisitor {
-            type Value = SerializableBlobToken;
+        impl<'de, T: BlobToken> serde::de::Visitor<'de> for MethodVisitor<T> {
+            type Value = TokenSerializationGuard<T>;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(formatter, "a SerializableBlobToken")
+                write!(formatter, "a TokenSerializationGuard")
             }
 
             fn visit_newtype_struct<D>(
@@ -113,85 +99,69 @@ impl<'a> serde::Deserialize<'a> for SerializableBlobToken {
             where
                 D: serde::Deserializer<'de>,
             {
-                Ok(SerializableBlobToken(Arc::new(BlobToken::deserialize(
-                    deserializer,
-                )?)))
+                Ok(TokenSerializationGuard {
+                    token: Arc::new(T::deserialize(deserializer)?),
+                })
             }
         }
 
-        de.deserialize_newtype_struct("SerializableBlobToken", MethodVisitor)
+        de.deserialize_newtype_struct("TokenSerializationGuard", MethodVisitor::<T>(PhantomData))
     }
 }
 
-impl Drop for BlobToken {
-    fn drop(&mut self) {
-        if !self.neutered {
-            let _ = self.revoke_sender.send(BlobTokenRevocationRequest {
-                token: self.token.clone(),
-                blob_id: self.file_id.clone(),
-            });
+#[derive(Deserialize, Serialize)]
+pub struct BlobStoreAgnosticServoUrl<B: BlobStorage> {
+    url: Arc<Url>,
+    token: Option<TokenSerializationGuard<B::Token>>,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, MallocSizeOf, Ord, PartialOrd)]
+pub struct TokenSerializationGuard<T: BlobToken> {
+    #[conditional_malloc_size_of]
+    token: Arc<T>,
+}
+
+impl<T: BlobToken> TokenSerializationGuard<T> {
+    pub fn new(token: T) -> Self {
+        Self {
+            token: Arc::new(token),
         }
     }
 }
 
-impl Eq for BlobToken {}
-impl std::hash::Hash for BlobToken {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.token.hash(state);
-    }
-}
-impl Ord for BlobToken {
-    fn cmp(&self, other: &BlobToken) -> std::cmp::Ordering {
-        self.token.cmp(&other.token)
-    }
-}
-impl PartialOrd for BlobToken {
-    fn partial_cmp(&self, other: &BlobToken) -> Option<std::cmp::Ordering> {
-        self.token.partial_cmp(&other.token)
-    }
-}
-impl PartialEq for BlobToken {
-    fn eq(&self, other: &BlobToken) -> bool {
-        self.token == other.token
-    }
-}
-
-#[derive(Clone, Deserialize, Eq, Hash, MallocSizeOf, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct ServoUrl(
-    #[conditional_malloc_size_of] Arc<Url>,
-    Option<SerializableBlobToken>,
-);
-
-#[derive(Clone, PartialEq, Eq, Hash, MallocSizeOf, Ord, PartialOrd)]
-pub struct SerializableBlobToken(#[conditional_malloc_size_of] pub Arc<BlobToken>);
-
-impl ServoUrl {
-    pub fn blob_token(&self) -> &Option<SerializableBlobToken> {
-        &self.1
+impl<B: BlobStorage> BlobStoreAgnosticServoUrl<B> {
+    pub fn blob_token(&self) -> &Option<TokenSerializationGuard<B::Token>> {
+        &self.token
     }
 
-    pub fn from_url(url: Url) -> Self {
-        ServoUrl(Arc::new(url), None)
+    pub fn from_url_with_token(url: Url, token: Option<TokenSerializationGuard<B::Token>>) -> Self {
+        debug_assert!(token.is_some() || url.scheme() != "blob");
+        Self {
+            url: Arc::new(url),
+            token,
+        }
+    }
+
+    pub fn from_url_without_token(url: Url) -> Self {
+        debug_assert_ne!(url.scheme(), "blob");
+        Self {
+            url: Arc::new(url),
+            token: None,
+        }
     }
 
     pub fn parse_with_base_and_blob_store(
         base: Option<&Self>,
         input: &str,
-        blob_store: &dyn BlobStorage,
+        blob_store: &B,
     ) -> Result<Self, url::ParseError> {
-        let mut parsed = Self::parse_with_base(base, input)?;
+        let parsed = Url::options()
+            .base_url(base.map(|b| &*b.url))
+            .parse(input)?;
         let Ok(token) = blob_store.acquire_blob_token(&parsed) else {
-            return Ok(parsed);
+            return Ok(Self::from_url_without_token(parsed));
         };
-        parsed.1 = token;
-        Ok(parsed)
-    }
-
-    pub fn parse_with_base(base: Option<&Self>, input: &str) -> Result<Self, url::ParseError> {
-        Url::options()
-            .base_url(base.map(|b| &*b.0))
-            .parse(input)
-            .map(Self::from_url)
+        Ok(Self::from_url_with_token(parsed, token))
     }
 
     pub fn into_string(self) -> String {
@@ -203,39 +173,35 @@ impl ServoUrl {
     }
 
     pub fn get_arc(&self) -> Arc<Url> {
-        self.0.clone()
+        self.url.clone()
     }
 
     pub fn as_url(&self) -> &Url {
-        &self.0
-    }
-
-    pub fn parse(input: &str) -> Result<Self, url::ParseError> {
-        Url::parse(input).map(Self::from_url)
+        &self.url
     }
 
     pub fn cannot_be_a_base(&self) -> bool {
-        self.0.cannot_be_a_base()
+        self.url.cannot_be_a_base()
     }
 
     pub fn domain(&self) -> Option<&str> {
-        self.0.domain()
+        self.url.domain()
     }
 
     pub fn fragment(&self) -> Option<&str> {
-        self.0.fragment()
+        self.url.fragment()
     }
 
     pub fn path(&self) -> &str {
-        self.0.path()
+        self.url.path()
     }
 
     pub fn origin(&self) -> ImmutableOrigin {
-        ImmutableOrigin::new(self.0.origin())
+        ImmutableOrigin::new(self.url.origin())
     }
 
     pub fn scheme(&self) -> &str {
-        self.0.scheme()
+        self.url.scheme()
     }
 
     pub fn is_secure_scheme(&self) -> bool {
@@ -263,16 +229,19 @@ impl ServoUrl {
     /// <https://url.spec.whatwg.org/#url-equivalence>
     /// In the future this may be removed if the helper is added upstream in rust-url
     /// see <https://github.com/servo/rust-url/issues/1063> for details
-    pub fn is_equal_excluding_fragments(&self, other: &ServoUrl) -> bool {
-        self.0[..Position::AfterQuery] == other.0[..Position::AfterQuery]
+    pub fn is_equal_excluding_fragments<Other: BlobStorage>(
+        &self,
+        other: &BlobStoreAgnosticServoUrl<Other>,
+    ) -> bool {
+        self.url[..Position::AfterQuery] == other.url[..Position::AfterQuery]
     }
 
     pub fn as_str(&self) -> &str {
-        self.0.as_str()
+        self.url.as_str()
     }
 
     pub fn as_mut_url(&mut self) -> &mut Url {
-        Arc::make_mut(&mut self.0)
+        Arc::make_mut(&mut self.url)
     }
 
     pub fn set_username(&mut self, user: &str) -> Result<(), UrlError> {
@@ -298,48 +267,49 @@ impl ServoUrl {
     }
 
     pub fn username(&self) -> &str {
-        self.0.username()
+        self.url.username()
     }
 
     pub fn password(&self) -> Option<&str> {
-        self.0.password()
+        self.url.password()
     }
 
     pub fn to_file_path(&self) -> Result<::std::path::PathBuf, UrlError> {
-        self.0.to_file_path().map_err(|_| UrlError::ToFilePath)
+        self.url.to_file_path().map_err(|_| UrlError::ToFilePath)
     }
 
     pub fn host(&self) -> Option<url::Host<&str>> {
-        self.0.host()
+        self.url.host()
     }
 
     pub fn host_str(&self) -> Option<&str> {
-        self.0.host_str()
+        self.url.host_str()
     }
 
     pub fn port(&self) -> Option<u16> {
-        self.0.port()
+        self.url.port()
     }
 
     pub fn port_or_known_default(&self) -> Option<u16> {
-        self.0.port_or_known_default()
+        self.url.port_or_known_default()
     }
 
-    pub fn join(&self, input: &str) -> Result<ServoUrl, url::ParseError> {
-        self.0.join(input).map(Self::from_url)
+    pub fn join(&self, input: &str) -> Result<Self, url::ParseError> {
+        let url = self.url.join(input)?;
+        Ok(Self::from_url_with_token(url, self.token.clone()))
     }
 
     pub fn path_segments(&self) -> Option<::std::str::Split<'_, char>> {
-        self.0.path_segments()
+        self.url.path_segments()
     }
 
     pub fn query(&self) -> Option<&str> {
-        self.0.query()
+        self.url.query()
     }
 
     pub fn from_file_path<P: AsRef<Path>>(path: P) -> Result<Self, UrlError> {
         Url::from_file_path(path)
-            .map(Self::from_url)
+            .map(Self::from_url_without_token)
             .map_err(|_| UrlError::FromFilePath)
     }
 
@@ -398,34 +368,34 @@ impl ServoUrl {
         let scheme_is_about = self.scheme() == "about";
 
         // its path contains a single string "blank",
-        let path_is_blank = self.0.path() == "blank";
+        let path_is_blank = self.url.path() == "blank";
 
         // its username and password are the empty string,
         let empty_username_and_password =
-            self.0.username().is_empty() && self.0.password().is_none();
+            self.url.username().is_empty() && self.url.password().is_none();
 
         // and its host is null.
-        let null_host = self.0.host().is_none();
+        let null_host = self.url.host().is_none();
 
         scheme_is_about && path_is_blank && empty_username_and_password && null_host
     }
 }
 
-impl fmt::Display for ServoUrl {
+impl<B: BlobStorage> fmt::Display for BlobStoreAgnosticServoUrl<B> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        self.0.fmt(formatter)
+        self.url.fmt(formatter)
     }
 }
 
-impl fmt::Debug for ServoUrl {
+impl<B: BlobStorage> fmt::Debug for BlobStoreAgnosticServoUrl<B> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        let url_string = self.0.as_str();
+        let url_string = self.url.as_str();
         if self.scheme() != "data" || url_string.len() <= DATA_URL_DISPLAY_LENGTH {
             return url_string.fmt(formatter);
         }
 
         let mut hasher = DefaultHasher::new();
-        hasher.write(self.0.as_str().as_bytes());
+        hasher.write(self.url.as_str().as_bytes());
 
         format!(
             "{}... ({:x})",
@@ -439,43 +409,90 @@ impl fmt::Debug for ServoUrl {
     }
 }
 
-impl Index<RangeFull> for ServoUrl {
+impl<B: BlobStorage> Index<RangeFull> for BlobStoreAgnosticServoUrl<B> {
     type Output = str;
     fn index(&self, _: RangeFull) -> &str {
-        &self.0[..]
+        &self.url[..]
     }
 }
 
-impl Index<RangeFrom<Position>> for ServoUrl {
+impl<B: BlobStorage> Index<RangeFrom<Position>> for BlobStoreAgnosticServoUrl<B> {
     type Output = str;
     fn index(&self, range: RangeFrom<Position>) -> &str {
-        &self.0[range]
+        &self.url[range]
     }
 }
 
-impl Index<RangeTo<Position>> for ServoUrl {
+impl<B: BlobStorage> Index<RangeTo<Position>> for BlobStoreAgnosticServoUrl<B> {
     type Output = str;
     fn index(&self, range: RangeTo<Position>) -> &str {
-        &self.0[range]
+        &self.url[range]
     }
 }
 
-impl Index<Range<Position>> for ServoUrl {
+impl<B: BlobStorage> Index<Range<Position>> for BlobStoreAgnosticServoUrl<B> {
     type Output = str;
     fn index(&self, range: Range<Position>) -> &str {
-        &self.0[range]
+        &self.url[range]
+    }
+}
+
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, MallocSizeOf, Hash,
+)]
+pub struct DummyBlobToken;
+
+impl BlobToken for DummyBlobToken {
+    fn refresh(&self) -> Self {
+        Self
+    }
+    fn neuter(&mut self) {}
+}
+
+pub struct DummyBlobStorage;
+
+impl BlobStorage for DummyBlobStorage {
+    type Token = DummyBlobToken;
+
+    fn acquire_blob_token(
+        &self,
+        url: &Url,
+    ) -> Result<Option<TokenSerializationGuard<Self::Token>>, ()> {
+        assert_ne!(
+            url.scheme(),
+            "blob",
+            "No blob store attached, cannot use blob url"
+        );
+        Err(())
+    }
+}
+
+/// A reference-counted URL type.
+///
+/// This URL does not have blob store attached, so trying to use it for
+/// `blob:` URLs will panic.
+pub type ServoUrl = BlobStoreAgnosticServoUrl<DummyBlobStorage>;
+
+impl ServoUrl {
+    pub fn from_url(url: Url) -> Self {
+        Self::from_url_without_token(url)
+    }
+
+    pub fn parse_with_base(base: Option<&Self>, input: &str) -> Result<Self, url::ParseError> {
+        Url::options()
+            .base_url(base.map(|b| &*b.url))
+            .parse(input)
+            .map(Self::from_url)
+    }
+
+    pub fn parse(input: &str) -> Result<Self, url::ParseError> {
+        Url::parse(input).map(Self::from_url)
     }
 }
 
 impl From<Url> for ServoUrl {
     fn from(url: Url) -> Self {
-        ServoUrl::from_url(url)
-    }
-}
-
-impl From<Arc<Url>> for ServoUrl {
-    fn from(url: Arc<Url>) -> Self {
-        ServoUrl(url, None)
+        Self::from_url(url)
     }
 }
 
@@ -485,5 +502,47 @@ impl FromStr for ServoUrl {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let url = Url::from_str(value)?;
         Ok(url.into())
+    }
+}
+
+// Need manual trait impls due to https://github.com/rust-lang/rust/issues/26925
+impl<B: BlobStorage> Clone for BlobStoreAgnosticServoUrl<B> {
+    fn clone(&self) -> Self {
+        Self {
+            url: self.url.clone(),
+            token: self.token.clone(),
+        }
+    }
+}
+
+impl<B: BlobStorage> PartialEq for BlobStoreAgnosticServoUrl<B> {
+    fn eq(&self, other: &Self) -> bool {
+        self.url.eq(&other.url)
+    }
+}
+
+impl<B: BlobStorage> Eq for BlobStoreAgnosticServoUrl<B> {}
+
+impl<B: BlobStorage> Hash for BlobStoreAgnosticServoUrl<B> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.url.hash(state);
+    }
+}
+
+impl<B: BlobStorage> PartialOrd for BlobStoreAgnosticServoUrl<B> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.url.partial_cmp(&other.url)
+    }
+}
+
+impl<B: BlobStorage> Ord for BlobStoreAgnosticServoUrl<B> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.url.cmp(&other.url)
+    }
+}
+
+impl<B: BlobStorage> MallocSizeOf for BlobStoreAgnosticServoUrl<B> {
+    fn size_of(&self, ops: &mut malloc_size_of::MallocSizeOfOps) -> usize {
+        self.url.size_of(ops) + self.token.size_of(ops)
     }
 }

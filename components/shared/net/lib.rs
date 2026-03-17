@@ -32,7 +32,6 @@ use request::RequestId;
 use rustc_hash::FxHashMap;
 use rustls_pki_types::CertificateDer;
 use serde::{Deserialize, Serialize};
-use servo_url::{ImmutableOrigin, ServoUrl};
 use uuid::Uuid;
 
 use crate::fetch::headers::determine_nosniff;
@@ -41,6 +40,7 @@ use crate::http_status::HttpStatus;
 use crate::mime_classifier::{ApacheBugFlag, MimeClassifier};
 use crate::request::{PreloadId, Request, RequestBuilder};
 use crate::response::{HttpsState, Response, ResponseInit};
+use crate::servo_url::{ImmutableOrigin, ServoUrl};
 
 pub mod blob_url_store;
 pub mod filemanager_thread;
@@ -52,6 +52,7 @@ pub mod pub_domains;
 pub mod quality;
 pub mod request;
 pub mod response;
+pub mod servo_url;
 
 /// <https://fetch.spec.whatwg.org/#document-accept-header-value>
 pub const DOCUMENT_ACCEPT_HEADER_VALUE: HeaderValue =
@@ -656,8 +657,20 @@ pub enum CoreResourceMsg {
     /// and exit
     Exit(GenericOneshotSender<()>),
     CollectMemoryReport(ReportsChan),
-    RevokeTokenForFile(Uuid, Uuid),
-    RefreshTokenForFile(Uuid)
+    RevokeTokenForFile(BlobTokenRevocationRequest),
+    RefreshTokenForFile(BlobTokenRefreshRequest),
+}
+
+#[derive(Debug, Deserialize, MallocSizeOf, Serialize)]
+pub struct BlobTokenRevocationRequest {
+    pub blob_id: Uuid,
+    pub token: Uuid,
+}
+
+#[derive(Debug, Deserialize, MallocSizeOf, Serialize)]
+pub struct BlobTokenRefreshRequest {
+    pub blob_id: Uuid,
+    pub new_token_sender: GenericSender<Uuid>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

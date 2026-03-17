@@ -817,37 +817,3 @@ pub(crate) fn create_a_potential_cors_request(
         .destination(destination)
         .use_url_credentials(true)
 }
-
-pub(crate) struct BlobResolver<'a>(pub &'a GenericSender<CoreResourceMsg>);
-
-impl servo_url::BlobStorage for BlobResolver<'_> {
-    fn acquire_blob_token(
-        &self,
-        url: &ServoUrl,
-    ) -> Result<Option<servo_url::SerializableBlobToken>, ()> {
-        if url.scheme() != "blob" {
-            return Ok(None);
-        }
-        let Ok((file_id, origin)) = net_traits::blob_url_store::parse_blob_url(&url) else {
-            return Ok(None);
-        };
-        let (sender, receiver) = generic_channel::channel().unwrap();
-        self.0
-            .send(CoreResourceMsg::ToFileManager(
-                FileManagerThreadMsg::GetTokenForFile(file_id, origin, sender),
-            ))
-            .map_err(|_| ())?;
-        let Ok(reply) = receiver.recv() else {
-            return Err(());
-        };
-        Ok(reply.token.map(|token_id| {
-            servo_url::SerializableBlobToken(servo_arc::Arc::new(servo_url::BlobToken {
-                token: token_id,
-                file_id,
-                revoke_sender: reply.revoke_sender,
-                refresh_token_sender: reply.refresh_sender,
-                neutered: false,
-            }))
-        }))
-    }
-}

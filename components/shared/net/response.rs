@@ -12,10 +12,10 @@ use malloc_size_of_derive::MallocSizeOf;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use servo_arc::Arc;
-use servo_url::ServoUrl;
 
 use crate::fetch::headers::extract_mime_type_as_mime;
 use crate::http_status::HttpStatus;
+use crate::servo_url::ServoUrl;
 use crate::{
     FetchMetadata, FilteredMetadata, Metadata, NetworkError, ReferrerPolicy, ResourceFetchTiming,
     ResourceTimingType, TlsSecurityInfo,

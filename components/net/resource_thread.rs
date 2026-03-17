@@ -283,11 +283,10 @@ impl ResourceChannelManager {
                                 log::error!("Blob revocation channel received unexpected message");
                                 continue;
                             };
-                            self.resource_manager.filemanager.handle(
-                                FileManagerThreadMsg::RevokeTokenForFile(token, file_id)
-                            );
-                        }
-                        else if id == refresh_id {
+                            self.resource_manager
+                                .filemanager
+                                .handle(FileManagerThreadMsg::RevokeTokenForFile(token, file_id));
+                        } else if id == refresh_id {
                             let CoreResourceMsg::RefreshTokenForFile(file_id) = msg else {
                                 log::error!("Blob revocation channel received unexpected message");
                                 continue;
@@ -753,7 +752,7 @@ impl CoreResourceManager {
         //
         // See https://github.com/servo/servo/issues/25226
         let (file_token, blob_url_file_id) = match url.blob_token() {
-            Some(servo_url::SerializableBlobToken(token)) => (
+            Some(servo_url::TokenSerializationGuard(token)) => (
                 net_traits::filemanager_thread::FileTokenCheck::Required(token.token.clone()),
                 Some(token.file_id.clone()),
             ),

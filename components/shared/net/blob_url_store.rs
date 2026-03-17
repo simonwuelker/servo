@@ -5,7 +5,7 @@
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
-use servo_url::{ImmutableOrigin, ServoUrl};
+use servo_url::ImmutableOrigin;
 use url::Url;
 use uuid::Uuid;
 
@@ -39,7 +39,7 @@ pub struct BlobBuf {
 /// Parse URL as Blob URL scheme's definition
 ///
 /// <https://w3c.github.io/FileAPI/#url-intro>
-pub fn parse_blob_url(url: &ServoUrl) -> Result<(Uuid, ImmutableOrigin), &'static str> {
+pub fn parse_blob_url(url: &Url) -> Result<(Uuid, ImmutableOrigin), &'static str> {
     if url.query().is_some() {
         return Err("URL should not contain a query");
     }

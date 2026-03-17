@@ -21,7 +21,8 @@ use log::warn;
 use mime::{self, Mime};
 use net_traits::blob_url_store::{BlobBuf, BlobURLStoreError};
 use net_traits::filemanager_thread::{
-    FileManagerResult, FileManagerThreadError, FileManagerThreadMsg, FileTokenCheck, GetTokenForFileReply, ReadFileProgress, RelativePos
+    FileManagerResult, FileManagerThreadError, FileManagerThreadMsg, FileTokenCheck,
+    GetTokenForFileReply, ReadFileProgress, RelativePos,
 };
 use net_traits::response::{Response, ResponseBody};
 use net_traits::{CoreResourceMsg, http_percent_encode};
@@ -199,7 +200,7 @@ impl FileManager {
                 let _ = sender.send(GetTokenForFileReply {
                     token,
                     revoke_sender: self.revoke_sender.clone(),
-                    refresh_sender: self.refresh_sender.clone()
+                    refresh_sender: self.refresh_sender.clone(),
                 });
             },
             FileManagerThreadMsg::RevokeTokenForFile(token, id) => {
