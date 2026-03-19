@@ -22,6 +22,7 @@ use net_traits::image_cache::{
     RasterizationCompleteResponse, VectorImage,
 };
 use net_traits::request::CorsSettings;
+use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
 use net_traits::{FetchMetadata, FetchResponseMsg, FilteredMetadata, NetworkError};
 use paint_api::{CrossProcessPaintApi, ImageUpdate, SerializableImageData};
 use parking_lot::Mutex;
@@ -32,7 +33,6 @@ use resvg::tiny_skia;
 use resvg::usvg::{self, fontdb};
 use rustc_hash::FxHashMap;
 use servo_config::pref;
-use servo_url::{ImmutableOrigin, ServoUrl};
 use webrender_api::ImageKey as WebRenderImageKey;
 use webrender_api::units::DeviceIntSize;
 

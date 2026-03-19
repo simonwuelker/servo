@@ -22,6 +22,7 @@ use net_traits::request::{
     CredentialsMode, Destination, InsecureRequestsPolicy, Referrer, RequestBuilder, RequestClient,
     RequestMode, ServiceWorkersMode,
 };
+use net_traits::servo_url::ServoUrl;
 use net_traits::{
     CoreResourceThread, FetchResponseMsg, ResourceFetchTiming, ResourceThreads, fetch_async,
 };
@@ -30,7 +31,6 @@ use parking_lot::{Mutex, RwLock};
 use rustc_hash::FxHashSet;
 use servo_arc::Arc as ServoArc;
 use servo_config::pref;
-use servo_url::ServoUrl;
 use style::Atom;
 use style::computed_values::font_variant_caps::T as FontVariantCaps;
 use style::device::Device;
@@ -43,7 +43,6 @@ use style::stylesheets::{
     CssRule, CustomMediaMap, DocumentStyleSheet, FontFaceRule, StylesheetInDocument,
 };
 use style::values::computed::font::{FamilyName, FontFamilyNameSyntax, SingleFontFamily};
-use url::Url;
 use uuid::Uuid;
 use webrender_api::{FontInstanceFlags, FontInstanceKey, FontKey, FontVariation};
 
@@ -917,7 +916,7 @@ impl WebFontLoadInitiator {
 
 struct RemoteWebFontDownloader {
     state: Option<WebFontDownloadState>,
-    url: ServoArc<Url>,
+    url: ServoUrl,
     web_font_family_name: LowercaseFontFamilyName,
     response_valid: bool,
     response_data: Vec<u8>,
@@ -937,16 +936,20 @@ impl RemoteWebFontDownloader {
         state: WebFontDownloadState,
     ) {
         // https://drafts.csswg.org/css-fonts/#font-fetching-requirements
-        let url = match url_source.url.url() {
-            Some(url) => url.clone(),
-            None => return,
+        let Some(url) = url_source
+            .url
+            .url()
+            .cloned()
+            .and_then(|url| ServoUrl::from_shared_non_blob_url(url).ok())
+        else {
+            return;
         };
 
         let document_context = &state.document_context;
 
         let request = RequestBuilder::new(
             state.webview_id,
-            url.clone().into(),
+            url.clone(),
             Referrer::ReferrerUrl(document_context.document_url.clone()),
         )
         .destination(Destination::Font)
@@ -962,7 +965,7 @@ impl RemoteWebFontDownloader {
 
         debug!("Loading @font-face {} from {}", web_font_family_name, url);
         let mut downloader = Self {
-            url,
+            url: url.clone(),
             web_font_family_name,
             response_valid: false,
             response_data: Vec::new(),
@@ -1105,7 +1108,7 @@ impl RemoteWebFontDownloader {
                     .expect("must have download state before termination")
                     .document_context
                     .network_timing_handler
-                    .submit_timing(ServoUrl::from_url(self.url.as_ref().clone()), timing);
+                    .submit_timing(self.url.clone().into(), timing);
                 DownloaderResponseResult::Finished
             },
         }

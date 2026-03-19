@@ -57,7 +57,7 @@ use script_bindings::settings_stack::run_a_callback;
 use script_bindings::trace::CustomTraceable;
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use servo_config::pref;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 
 use crate::DomTypeHolder;
 use crate::document_loader::LoadType;

@@ -6,7 +6,6 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use base::generic_channel::{self, GenericSender};
 use base::id::WebViewId;
 use ipc_channel::ipc;
 use js::jsapi::{ExceptionStackBehavior, JS_IsExceptionPending};
@@ -14,8 +13,6 @@ use js::jsval::UndefinedValue;
 use js::realm::CurrentRealm;
 use js::rust::HandleValue;
 use js::rust::wrappers::JS_SetPendingException;
-use net_traits::filemanager_thread::FileManagerThreadMsg;
-use net_traits::policy_container::{PolicyContainer, RequestPolicyContainer};
 use net_traits::request::{
     CorsSettings, CredentialsMode, Destination, Referrer, Request as NetTraitsRequest,
     RequestBuilder, RequestId, RequestMode, ServiceWorkersMode,
@@ -27,7 +24,7 @@ use net_traits::{
 use rustc_hash::FxHashMap;
 use script_bindings::cformat;
 use serde::{Deserialize, Serialize};
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use timers::TimerEventRequest;
 use uuid::Uuid;
 

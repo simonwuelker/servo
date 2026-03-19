@@ -9,7 +9,7 @@ use js::glue::JSPrincipalsCallbacks;
 use js::jsapi::{CallArgs, HandleObject as RawHandleObject, JSContext as RawJSContext, JSObject};
 use js::realm::CurrentRealm;
 use js::rust::{HandleObject, MutableHandleObject};
-use servo_url::{MutableOrigin, ServoUrl};
+use net_traits::servo_url::{MutableOrigin, ServoUrl};
 
 use crate::DomTypes;
 use crate::codegen::PrototypeList;

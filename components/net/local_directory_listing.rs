@@ -10,9 +10,9 @@ use embedder_traits::resources::{Resource, read_string};
 use headers::{ContentType, HeaderMapExt};
 use net_traits::request::Request;
 use net_traits::response::{Response, ResponseBody};
+use net_traits::servo_url::ServoUrl;
 use net_traits::{NetworkError, ResourceFetchTiming};
 use servo_config::pref;
-use servo_url::ServoUrl;
 use url::Url;
 
 pub(crate) async fn fetch(request: &mut Request, url: ServoUrl, path_buf: PathBuf) -> Response {

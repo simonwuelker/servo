@@ -29,7 +29,7 @@ use net_traits::image_cache::{ImageCache, ImageResponse};
 use net_traits::request::CorsSettings;
 use pixels::{Snapshot, SnapshotAlphaMode, SnapshotPixelFormat};
 use servo_arc::Arc as ServoArc;
-use servo_url::{ImmutableOrigin, ServoUrl};
+use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
 use style::color::{AbsoluteColor, ColorFlags, ColorSpace};
 use style::properties::longhands::font_variant_caps::computed_value::T as FontVariantCaps;
 use style::properties::style_structs::Font;

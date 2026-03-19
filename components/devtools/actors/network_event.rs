@@ -17,10 +17,10 @@ use http::HeaderMap;
 use malloc_size_of_derive::MallocSizeOf;
 use net::cookie::ServoCookie;
 use net_traits::fetch::headers::extract_mime_type_as_dataurl_mime;
+use net_traits::servo_url::ServoUrl;
 use net_traits::{CookieSource, TlsSecurityInfo};
 use serde::Serialize;
 use serde_json::{Map, Value};
-use servo_url::ServoUrl;
 
 use crate::StreamId;
 use crate::actor::{Actor, ActorEncode, ActorError, ActorRegistry};

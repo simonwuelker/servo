@@ -14,10 +14,10 @@ use log::error;
 use net_traits::filemanager_thread::RelativePos;
 use net_traits::request::Request;
 use net_traits::response::Response;
+use net_traits::servo_url::ServoUrl;
 use net_traits::{DiscardFetch, NetworkError};
 use rustc_hash::FxHashMap;
-use servo_url::ServoUrl;
-use url::Position;
+use url::{Position, Url};
 
 use crate::fetch::methods::{DoneChannel, FetchContext, RangeRequestBounds, fetch};
 
@@ -164,8 +164,9 @@ impl ProtocolRegistry {
                 let paths = handler.privileged_paths();
                 paths
                     .iter()
-                    .filter_map(move |path| ServoUrl::parse(&format!("{scheme}:{path}")).ok())
+                    .filter_map(move |path| Url::parse(&format!("{scheme}:{path}")).ok())
             })
+            .filter_map(|url| ServoUrl::from_non_blob_url(url).ok())
             .collect()
     }
 }
@@ -211,7 +212,11 @@ impl ProtocolHandler for WebPageContentProtocolHandler {
         // Step 7. Replace the first instance of "%s" in handlerURLString with encodedURL.
         let handler_url_string = self.url.replacen("%s", encoded_url, 1);
         // Step 8. Let resultURL be the result of parsing handlerURLString.
-        let Ok(result_url) = ServoUrl::parse(&handler_url_string) else {
+        let Some(result_url) = handler_url_string
+            .parse::<servo_url::ServoUrl>()
+            .ok()
+            .and_then(|url| url.with_blob_storage())
+        else {
             return Box::pin(future::ready(Response::network_error(
                 NetworkError::ProtocolHandlerSubstitutionError,
             )));

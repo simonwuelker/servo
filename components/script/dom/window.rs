@@ -85,7 +85,7 @@ use selectors::attr::CaseSensitivity;
 use servo_arc::Arc as ServoArc;
 use servo_config::pref;
 use servo_geometry::DeviceIndependentIntRect;
-use servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
+use net_traits::servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
 use storage_traits::StorageThreads;
 use storage_traits::webstorage_thread::WebStorageType;
 use style::error_reporting::{ContextualParseError, ParseErrorReporter};

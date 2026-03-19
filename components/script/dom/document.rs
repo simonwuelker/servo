@@ -49,6 +49,7 @@ use net_traits::request::{
     InsecureRequestsPolicy, PreloadId, PreloadKey, PreloadedResources, RequestBuilder,
 };
 use net_traits::response::HttpsState;
+use net_traits::servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
 use percent_encoding::percent_decode;
 use profile_traits::generic_channel as profile_generic_channel;
 use profile_traits::time::TimerMetadataFrameType;
@@ -60,7 +61,6 @@ use script_traits::{DocumentActivity, ProgressiveWebMetricType};
 use servo_arc::Arc;
 use servo_config::pref;
 use servo_media::{ClientContextId, ServoMedia};
-use servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
 use style::attr::AttrValue;
 use style::context::QuirksMode;
 use style::invalidation::element::restyle_hints::RestyleHint;
@@ -206,6 +206,7 @@ use crate::stylesheet_set::StylesheetSetRef;
 use crate::task::NonSendTaskBox;
 use crate::task_source::TaskSourceName;
 use crate::timers::OneshotTimerCallback;
+use crate::url::{lock_blob, RelativeTo};
 use crate::xpath::parse_expression;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -3472,6 +3473,7 @@ impl Document {
                 servo_url::encoding::encode_as_url_query_string(input, encoding)
             }))
             .parse(url)
+            .map(|url| lock_blob(url, RelativeTo::Document(self)))
             .map(ServoUrl::from)
     }
 
@@ -3877,7 +3879,7 @@ impl Document {
         custom_element_reaction_stack: Rc<CustomElementReactionStack>,
         creation_sandboxing_flag_set: SandboxingFlagSet,
     ) -> Document {
-        let url = url.unwrap_or_else(|| ServoUrl::parse("about:blank").unwrap());
+        let url = url.unwrap_or_else(|| ServoUrl::parse_with_base(None, "about:blank").unwrap());
 
         let (ready_state, domcontentloaded_dispatched) = if source == DocumentSource::FromParser {
             (DocumentReadyState::Loading, false)
@@ -3891,7 +3893,7 @@ impl Document {
         };
         let interactive_time = ProgressiveWebMetrics::new(
             window.time_profiler_chan().clone(),
-            url.clone(),
+            url.clone().unlock_blob(),
             frame_type,
         );
 
@@ -5283,7 +5285,7 @@ impl DocumentMethods<crate::DomTypeHolder> for Document {
         let document = Document::new(
             window,
             HasBrowsingContext::No,
-            Some(ServoUrl::parse("about:blank").unwrap()),
+            Some(ServoUrl::parse_with_base(None, "about:blank").unwrap()),
             None,
             doc.origin().clone(),
             IsHTMLDocument::HTMLDocument,

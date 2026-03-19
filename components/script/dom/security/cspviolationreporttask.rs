@@ -8,7 +8,7 @@ use net_traits::request::{
     CredentialsMode, Destination, RequestBody, RequestId, create_request_body_with_content,
 };
 use net_traits::{FetchMetadata, NetworkError, ResourceFetchTiming};
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use stylo_atoms::Atom;
 
 use crate::conversions::Convert;

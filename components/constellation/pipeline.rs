@@ -11,11 +11,11 @@ use constellation_traits::{LoadData, ServiceWorkerManagerFactory};
 use embedder_traits::{AnimationState, FocusSequenceNumber};
 use layout_api::ScriptThreadFactory;
 use log::{debug, error, warn};
+use net_traits::servo_url::ServoUrl;
 use paint_api::{CompositionPipeline, PaintMessage, PaintProxy};
 use script_traits::{
     DiscardBrowsingContext, DocumentActivity, NewPipelineInfo, ScriptThreadMessage,
 };
-use servo_url::ServoUrl;
 
 use crate::Constellation;
 use crate::event_loop::EventLoop;

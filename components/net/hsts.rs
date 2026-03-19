@@ -17,9 +17,9 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf;
 use net_traits::IncludeSubdomains;
 use net_traits::pub_domains::reg_suffix;
+use net_traits::servo_url::{Host, ServoUrl};
 use serde::{Deserialize, Serialize};
 use servo_config::pref;
-use servo_url::{Host, ServoUrl};
 use time::UtcDateTime;
 
 #[derive(Clone, Debug, Deserialize, MallocSizeOf, Serialize)]

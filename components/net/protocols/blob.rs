@@ -39,7 +39,7 @@ impl ProtocolHandler for BlobProtocolHander {
         let range_header = request.headers.typed_get::<Range>();
         let is_range_request = range_header.is_some();
 
-        let (id, origin) = match parse_blob_url(&url) {
+        let (id, origin) = match parse_blob_url(&url.as_url()) {
             Ok((id, origin)) => (id, origin),
             Err(error) => {
                 return Box::pin(ready(Response::network_error(

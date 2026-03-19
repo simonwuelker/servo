@@ -28,7 +28,7 @@ use net_traits::request::{
 };
 use net_traits::{FetchMetadata, Metadata, NetworkError, ReferrerPolicy, ResourceFetchTiming};
 use profile_traits::mem::{ProcessReports, perform_memory_report};
-use servo_url::{MutableOrigin, ServoUrl};
+use net_traits::servo_url::{MutableOrigin, ServoUrl};
 use timers::TimerScheduler;
 use uuid::Uuid;
 
@@ -681,7 +681,7 @@ impl WorkerGlobalScopeMethods<crate::DomTypeHolder> for WorkerGlobalScope {
                 "WorkerGlobalScope importScripts",
             )?;
             //let url = self.worker_url.borrow().join(&url.str());
-            let url = crate::url::parse_url(
+            let url = crate::url::resolve_blob_url(
                 &url.str(),
                 crate::url::RelativeTo::Global(self.upcast::<GlobalScope>()),
             );

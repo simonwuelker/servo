@@ -23,7 +23,7 @@ use net_traits::request::Destination;
 use profile_traits::ipc as ProfiledIpc;
 use script_bindings::script_runtime::temp_cx;
 use script_traits::{NewPipelineInfo, UpdatePipelineIdReason};
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use style::attr::{AttrValue, LengthOrPercentageOrAuto};
 use stylo_atoms::Atom;
 

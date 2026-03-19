@@ -23,7 +23,7 @@ use net_traits::{
 use pixels::PixelFormat;
 use script_bindings::root::Dom;
 use servo_arc::Arc;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use style::attr::AttrValue;
 use style::media_queries::MediaList as StyleMediaList;
 use style::stylesheets::Stylesheet;

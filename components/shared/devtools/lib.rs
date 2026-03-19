@@ -32,10 +32,11 @@ use http::{HeaderMap, Method};
 use malloc_size_of_derive::MallocSizeOf;
 use net_traits::http_status::HttpStatus;
 use net_traits::request::Destination;
+use net_traits::servo_url::ServoUrl;
 use net_traits::{DebugVec, TlsSecurityInfo};
 use profile_traits::mem::ReportsChan;
 use serde::{Deserialize, Serialize};
-use servo_url::ServoUrl;
+use url::Url;
 use uuid::Uuid;
 
 // Information would be attached to NewGlobal to be received and show in devtools.
@@ -368,7 +369,7 @@ pub enum DevtoolScriptControlMsg {
     RequestAnimationFrame(PipelineId, String),
     /// Direct the WebView containing the given pipeline to load a new URL,
     /// as if it was typed by the user.
-    NavigateTo(PipelineId, ServoUrl),
+    NavigateTo(PipelineId, Url),
     /// Direct the WebView containing the given pipeline to traverse history backward
     /// up to one step.
     GoBack(PipelineId),

@@ -15,7 +15,7 @@ use html5ever::tree_builder::{QuirksMode as HTML5EverQuirksMode, TreeBuilder, Tr
 use html5ever::{QualName, local_name, ns};
 use markup5ever::TokenizerResult;
 use script_bindings::trace::CustomTraceable;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use style::attr::AttrValue;
 use style::context::QuirksMode as StyleContextQuirksMode;
 use xml5ever::LocalName;

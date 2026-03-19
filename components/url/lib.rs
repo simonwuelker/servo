@@ -9,12 +9,13 @@
 pub mod encoding;
 pub mod origin;
 
+use std::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::net::IpAddr;
-use std::ops::{Index, Range, RangeFrom, RangeFull, RangeTo};
+use std::ops::{Deref, Index, Range, RangeFrom, RangeFull, RangeTo};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -52,15 +53,6 @@ pub trait BlobToken:
 {
     fn refresh(&self) -> Self;
     fn neuter(&mut self);
-}
-
-pub trait BlobStorage {
-    type Token: BlobToken;
-
-    fn acquire_blob_token(
-        &self,
-        url: &Url,
-    ) -> Result<Option<TokenSerializationGuard<Self::Token>>, ()>;
 }
 
 impl<T: BlobToken> serde::Serialize for TokenSerializationGuard<T> {
@@ -110,11 +102,17 @@ impl<'a, T: BlobToken> serde::Deserialize<'a> for TokenSerializationGuard<T> {
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct BlobStoreAgnosticServoUrl<B: BlobStorage> {
+pub struct BlobStoreAgnosticServoUrl<T: BlobToken> {
     url: Arc<Url>,
-    token: Option<TokenSerializationGuard<B::Token>>,
+    /// A token that guarantees that the `Blob` referenced by this URL is not removed
+    /// from the blob storage before this URL is dropped. `None` if the scheme of the URL
+    /// is not `blob`.
+    #[serde(deserialize_with = "<Option<TokenSerializationGuard<T>>>::deserialize")]
+    token: Option<TokenSerializationGuard<T>>,
 }
 
+/// Guarantees that blob entries kept alive the contained token are not deallocated even
+/// if this token is serialized, dropped, and then later deserialized (possibly in a different thread).
 #[derive(Clone, PartialEq, Eq, Hash, MallocSizeOf, Ord, PartialOrd)]
 pub struct TokenSerializationGuard<T: BlobToken> {
     #[conditional_malloc_size_of]
@@ -129,12 +127,12 @@ impl<T: BlobToken> TokenSerializationGuard<T> {
     }
 }
 
-impl<B: BlobStorage> BlobStoreAgnosticServoUrl<B> {
-    pub fn blob_token(&self) -> &Option<TokenSerializationGuard<B::Token>> {
+impl<T: BlobToken> BlobStoreAgnosticServoUrl<T> {
+    pub fn blob_token(&self) -> &Option<TokenSerializationGuard<T>> {
         &self.token
     }
 
-    pub fn from_url_with_token(url: Url, token: Option<TokenSerializationGuard<B::Token>>) -> Self {
+    pub fn from_url_with_token(url: Url, token: Option<TokenSerializationGuard<T>>) -> Self {
         debug_assert!(token.is_some() || url.scheme() != "blob");
         Self {
             url: Arc::new(url),
@@ -142,26 +140,23 @@ impl<B: BlobStorage> BlobStoreAgnosticServoUrl<B> {
         }
     }
 
-    pub fn from_url_without_token(url: Url) -> Self {
-        debug_assert_ne!(url.scheme(), "blob");
-        Self {
-            url: Arc::new(url),
-            token: None,
+    pub fn from_shared_non_blob_url(url: Arc<Url>) -> Result<Self, IsBlobUrlError> {
+        if url.scheme() == "blob" {
+            return Err(IsBlobUrlError);
         }
+
+        Ok(Self { url, token: None })
     }
 
-    pub fn parse_with_base_and_blob_store(
-        base: Option<&Self>,
-        input: &str,
-        blob_store: &B,
-    ) -> Result<Self, url::ParseError> {
-        let parsed = Url::options()
-            .base_url(base.map(|b| &*b.url))
-            .parse(input)?;
-        let Ok(token) = blob_store.acquire_blob_token(&parsed) else {
-            return Ok(Self::from_url_without_token(parsed));
-        };
-        Ok(Self::from_url_with_token(parsed, token))
+    pub fn from_non_blob_url(url: Url) -> Result<Self, IsBlobUrlError> {
+        if url.scheme() == "blob" {
+            return Err(IsBlobUrlError);
+        }
+
+        Ok(Self {
+            url: Arc::new(url),
+            token: None,
+        })
     }
 
     pub fn into_string(self) -> String {
@@ -229,7 +224,7 @@ impl<B: BlobStorage> BlobStoreAgnosticServoUrl<B> {
     /// <https://url.spec.whatwg.org/#url-equivalence>
     /// In the future this may be removed if the helper is added upstream in rust-url
     /// see <https://github.com/servo/rust-url/issues/1063> for details
-    pub fn is_equal_excluding_fragments<Other: BlobStorage>(
+    pub fn is_equal_excluding_fragments<Other: BlobToken>(
         &self,
         other: &BlobStoreAgnosticServoUrl<Other>,
     ) -> bool {
@@ -309,7 +304,7 @@ impl<B: BlobStorage> BlobStoreAgnosticServoUrl<B> {
 
     pub fn from_file_path<P: AsRef<Path>>(path: P) -> Result<Self, UrlError> {
         Url::from_file_path(path)
-            .map(Self::from_url_without_token)
+            .map(|url| Self::from_non_blob_url(url).unwrap())
             .map_err(|_| UrlError::FromFilePath)
     }
 
@@ -379,15 +374,64 @@ impl<B: BlobStorage> BlobStoreAgnosticServoUrl<B> {
 
         scheme_is_about && path_is_blank && empty_username_and_password && null_host
     }
+
+    pub fn as_non_blob_url(&self) -> Option<ServoUrl> {
+        if self.token.is_some() {
+            return None;
+        }
+        debug_assert_ne!(self.scheme(), "blob");
+
+        Some(ServoUrl {
+            url: self.url.clone(),
+            token: None,
+        })
+    }
+
+    pub fn parse_with_base(base: Option<&Url>, input: &str) -> Result<Self, ParseNonBlobUrlError> {
+        Url::options()
+            .base_url(base)
+            .parse(input)
+            .map_err(ParseNonBlobUrlError::Url)
+            .and_then(|url| Self::from_non_blob_url(url).map_err(Into::into))
+    }
+
+    /// Convert this URL into one a more general type that might contain a `blob:`.
+    ///
+    /// The URL itself remains unchanged by this operation.
+    pub fn with_blob_storage<T2: BlobToken>(self) -> Option<BlobStoreAgnosticServoUrl<T2>> {
+        if self.scheme() == "blob" {
+            return None;
+        }
+
+        Some(BlobStoreAgnosticServoUrl {
+            url: self.url,
+            token: None,
+        })
+    }
+
+    pub fn unlock_blob(self) -> ServoUrl {
+        ServoUrl {
+            url: self.url,
+            token: None,
+        }
+    }
 }
 
-impl<B: BlobStorage> fmt::Display for BlobStoreAgnosticServoUrl<B> {
+impl<T: BlobToken> Deref for BlobStoreAgnosticServoUrl<T> {
+    type Target = Url;
+
+    fn deref(&self) -> &Self::Target {
+        &self.url
+    }
+}
+
+impl<T: BlobToken> fmt::Display for BlobStoreAgnosticServoUrl<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         self.url.fmt(formatter)
     }
 }
 
-impl<B: BlobStorage> fmt::Debug for BlobStoreAgnosticServoUrl<B> {
+impl<T: BlobToken> fmt::Debug for BlobStoreAgnosticServoUrl<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         let url_string = self.url.as_str();
         if self.scheme() != "data" || url_string.len() <= DATA_URL_DISPLAY_LENGTH {
@@ -409,28 +453,28 @@ impl<B: BlobStorage> fmt::Debug for BlobStoreAgnosticServoUrl<B> {
     }
 }
 
-impl<B: BlobStorage> Index<RangeFull> for BlobStoreAgnosticServoUrl<B> {
+impl<T: BlobToken> Index<RangeFull> for BlobStoreAgnosticServoUrl<T> {
     type Output = str;
     fn index(&self, _: RangeFull) -> &str {
         &self.url[..]
     }
 }
 
-impl<B: BlobStorage> Index<RangeFrom<Position>> for BlobStoreAgnosticServoUrl<B> {
+impl<T: BlobToken> Index<RangeFrom<Position>> for BlobStoreAgnosticServoUrl<T> {
     type Output = str;
     fn index(&self, range: RangeFrom<Position>) -> &str {
         &self.url[range]
     }
 }
 
-impl<B: BlobStorage> Index<RangeTo<Position>> for BlobStoreAgnosticServoUrl<B> {
+impl<T: BlobToken> Index<RangeTo<Position>> for BlobStoreAgnosticServoUrl<T> {
     type Output = str;
     fn index(&self, range: RangeTo<Position>) -> &str {
         &self.url[range]
     }
 }
 
-impl<B: BlobStorage> Index<Range<Position>> for BlobStoreAgnosticServoUrl<B> {
+impl<T: BlobToken> Index<Range<Position>> for BlobStoreAgnosticServoUrl<T> {
     type Output = str;
     fn index(&self, range: Range<Position>) -> &str {
         &self.url[range]
@@ -449,64 +493,66 @@ impl BlobToken for DummyBlobToken {
     fn neuter(&mut self) {}
 }
 
-pub struct DummyBlobStorage;
-
-impl BlobStorage for DummyBlobStorage {
-    type Token = DummyBlobToken;
-
-    fn acquire_blob_token(
-        &self,
-        url: &Url,
-    ) -> Result<Option<TokenSerializationGuard<Self::Token>>, ()> {
-        assert_ne!(
-            url.scheme(),
-            "blob",
-            "No blob store attached, cannot use blob url"
-        );
-        Err(())
-    }
-}
-
 /// A reference-counted URL type.
-///
-/// This URL does not have blob store attached, so trying to use it for
-/// `blob:` URLs will panic.
-pub type ServoUrl = BlobStoreAgnosticServoUrl<DummyBlobStorage>;
+pub type ServoUrl = BlobStoreAgnosticServoUrl<DummyBlobToken>;
+pub type ServoNonLockingUrl = ServoUrl;
 
-impl ServoUrl {
-    pub fn from_url(url: Url) -> Self {
-        Self::from_url_without_token(url)
-    }
-
-    pub fn parse_with_base(base: Option<&Self>, input: &str) -> Result<Self, url::ParseError> {
-        Url::options()
-            .base_url(base.map(|b| &*b.url))
-            .parse(input)
-            .map(Self::from_url)
-    }
-
-    pub fn parse(input: &str) -> Result<Self, url::ParseError> {
-        Url::parse(input).map(Self::from_url)
-    }
-}
+#[derive(Clone, Copy, Debug)]
+pub struct IsBlobUrlError;
 
 impl From<Url> for ServoUrl {
     fn from(url: Url) -> Self {
-        Self::from_url(url)
+        Self {
+            url: Arc::new(url),
+            token: None,
+        }
+    }
+}
+
+impl From<Arc<Url>> for ServoUrl {
+    fn from(url: Arc<Url>) -> Self {
+        Self { url, token: None }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ParseNonBlobUrlError {
+    Url(url::ParseError),
+    IsBlobUrl,
+}
+
+impl fmt::Display for ParseNonBlobUrlError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Url(url_parse_error) => url_parse_error.fmt(f),
+            Self::IsBlobUrl => "Unexpected blob url".fmt(f),
+        }
+    }
+}
+
+impl From<url::ParseError> for ParseNonBlobUrlError {
+    fn from(value: url::ParseError) -> Self {
+        Self::Url(value)
+    }
+}
+
+impl From<IsBlobUrlError> for ParseNonBlobUrlError {
+    fn from(_: IsBlobUrlError) -> Self {
+        Self::IsBlobUrl
     }
 }
 
 impl FromStr for ServoUrl {
-    type Err = <Url as FromStr>::Err;
+    type Err = ParseNonBlobUrlError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let url = Url::from_str(value)?;
-        Ok(url.into())
+        Self::from_non_blob_url(url).map_err(From::from)
     }
 }
 
 // Need manual trait impls due to https://github.com/rust-lang/rust/issues/26925
-impl<B: BlobStorage> Clone for BlobStoreAgnosticServoUrl<B> {
+impl<T: BlobToken> Clone for BlobStoreAgnosticServoUrl<T> {
     fn clone(&self) -> Self {
         Self {
             url: self.url.clone(),
@@ -515,33 +561,37 @@ impl<B: BlobStorage> Clone for BlobStoreAgnosticServoUrl<B> {
     }
 }
 
-impl<B: BlobStorage> PartialEq for BlobStoreAgnosticServoUrl<B> {
-    fn eq(&self, other: &Self) -> bool {
+impl<T1: BlobToken, T2: BlobToken> PartialEq<BlobStoreAgnosticServoUrl<T2>>
+    for BlobStoreAgnosticServoUrl<T1>
+{
+    fn eq(&self, other: &BlobStoreAgnosticServoUrl<T2>) -> bool {
         self.url.eq(&other.url)
     }
 }
 
-impl<B: BlobStorage> Eq for BlobStoreAgnosticServoUrl<B> {}
+impl<T: BlobToken> Eq for BlobStoreAgnosticServoUrl<T> {}
 
-impl<B: BlobStorage> Hash for BlobStoreAgnosticServoUrl<B> {
+impl<T: BlobToken> Hash for BlobStoreAgnosticServoUrl<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.url.hash(state);
     }
 }
 
-impl<B: BlobStorage> PartialOrd for BlobStoreAgnosticServoUrl<B> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+impl<T1: BlobToken, T2: BlobToken> PartialOrd<BlobStoreAgnosticServoUrl<T2>>
+    for BlobStoreAgnosticServoUrl<T1>
+{
+    fn partial_cmp(&self, other: &BlobStoreAgnosticServoUrl<T2>) -> Option<Ordering> {
         self.url.partial_cmp(&other.url)
     }
 }
 
-impl<B: BlobStorage> Ord for BlobStoreAgnosticServoUrl<B> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+impl<T: BlobToken> Ord for BlobStoreAgnosticServoUrl<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
         self.url.cmp(&other.url)
     }
 }
 
-impl<B: BlobStorage> MallocSizeOf for BlobStoreAgnosticServoUrl<B> {
+impl<T: BlobToken> MallocSizeOf for BlobStoreAgnosticServoUrl<T> {
     fn size_of(&self, ops: &mut malloc_size_of::MallocSizeOfOps) -> usize {
         self.url.size_of(ops) + self.token.size_of(ops)
     }

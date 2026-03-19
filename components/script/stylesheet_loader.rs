@@ -16,7 +16,7 @@ use net_traits::{
 };
 use servo_arc::Arc;
 use servo_config::pref;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use style::context::QuirksMode;
 use style::global_style_data::STYLE_THREAD_POOL;
 use style::media_queries::MediaList;
@@ -606,7 +606,7 @@ impl StyleStylesheetLoader for ElementStylesheetLoader<'_> {
             }));
         }
 
-        let resolved_url = match url.url().cloned() {
+        let resolved_url = match url.url().cloned().and_then(|url| ServoUrl::from_shared_non_blob_url(url).ok()) {
             Some(url) => url,
             None => {
                 return Arc::new(lock.wrap(ImportRule {

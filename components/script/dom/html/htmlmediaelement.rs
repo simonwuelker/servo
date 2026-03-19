@@ -41,7 +41,7 @@ use servo_media::player::audio::AudioRenderer;
 use servo_media::player::video::{VideoFrame, VideoFrameRenderer};
 use servo_media::player::{PlaybackState, Player, PlayerError, PlayerEvent, SeekLock, StreamType};
 use servo_media::{ClientContextId, ServoMedia, SupportsMediaType};
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use stylo_atoms::Atom;
 use uuid::Uuid;
 use webrender_api::{

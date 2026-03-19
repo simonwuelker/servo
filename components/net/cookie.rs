@@ -13,6 +13,7 @@ use cookie::Cookie;
 use log::{Level, debug, log_enabled};
 use net_traits::CookieSource;
 use net_traits::pub_domains::is_pub_domain;
+use net_traits::servo_url::ServoUrl;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, tag_no_case, take, take_while_m_n};
 use nom::combinator::{opt, recognize};
@@ -20,7 +21,6 @@ use nom::multi::{many0, many1, separated_list1};
 use nom::sequence::{delimited, preceded, terminated};
 use nom::{IResult, Parser};
 use serde::{Deserialize, Serialize};
-use servo_url::ServoUrl;
 use time::{Date, Duration, Month, OffsetDateTime, Time};
 
 /// A stored cookie that wraps the definition in cookie-rs. This is used to implement

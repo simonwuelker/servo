@@ -9,7 +9,7 @@ use base::id::{BrowsingContextId, HistoryStateId, PipelineId, WebViewId};
 use constellation_traits::LoadData;
 use embedder_traits::ViewportDetails;
 use log::debug;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 
 use crate::browsingcontext::NewBrowsingContextInfo;
 

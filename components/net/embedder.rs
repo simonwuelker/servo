@@ -9,7 +9,7 @@ use embedder_traits::{
     AuthenticationResponse, EmbedderControlId, FilePickerRequest, WebResourceRequest,
     WebResourceResponseMsg,
 };
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use tokio::sync::mpsc::UnboundedSender as TokioSender;
 use tokio::sync::oneshot::Sender as TokioOneshotSender;
 

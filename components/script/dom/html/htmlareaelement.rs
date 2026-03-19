@@ -12,7 +12,7 @@ use euclid::default::Point2D;
 use html5ever::{LocalName, Prefix, local_name};
 use js::context::JSContext;
 use js::rust::HandleObject;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use style::attr::AttrValue;
 use stylo_atoms::Atom;
 use stylo_dom::ElementState;

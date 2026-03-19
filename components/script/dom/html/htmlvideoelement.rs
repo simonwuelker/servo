@@ -20,7 +20,7 @@ use net_traits::{
 };
 use pixels::{Snapshot, SnapshotAlphaMode, SnapshotPixelFormat};
 use servo_media::player::video::VideoFrame;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use style::attr::{AttrValue, LengthOrPercentageOrAuto};
 
 use crate::document_loader::{LoadBlocker, LoadType};

@@ -19,8 +19,8 @@ use net_traits::request::{
     Referrer as NetTraitsRequestReferrer, Request as NetTraitsRequest, RequestBuilder,
     RequestMode as NetTraitsRequestMode, TraversableForUserPrompts,
 };
+use net_traits::servo_url::ServoUrl;
 use script_bindings::cformat;
-use servo_url::ServoUrl;
 
 use crate::body::{BodyMixin, BodyType, Extractable, clone_body_stream_for_dom_body, consume_body};
 use crate::conversions::Convert;
@@ -121,7 +121,7 @@ impl Request {
             RequestInfo::USVString(USVString(ref usv_string)) => {
                 // Step 5.1. Let parsedURL be the result of parsing input with baseURL.
                 let parsed_url =
-                    crate::url::parse_url(usv_string, crate::url::RelativeTo::Global(&global));
+                    crate::url::resolve_blob_url(usv_string, crate::url::RelativeTo::Global(&global));
                 // Step 5.2. If parsedURL is failure, then throw a TypeError.
                 if parsed_url.is_err() {
                     return Err(Error::Type(c"Url could not be parsed".to_owned()));

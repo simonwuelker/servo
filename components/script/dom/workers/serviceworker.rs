@@ -10,7 +10,7 @@ use dom_struct::dom_struct;
 use js::context::JSContext;
 use js::jsapi::{Heap, JSObject};
 use js::rust::{CustomAutoRooter, CustomAutoRooterGuard, HandleValue};
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 
 use crate::dom::abstractworker::SimpleWorkerErrorHandler;
 use crate::dom::bindings::cell::DomRefCell;

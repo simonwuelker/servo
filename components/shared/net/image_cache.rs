@@ -12,12 +12,12 @@ use paint_api::CrossProcessPaintApi;
 use pixels::{CorsStatus, ImageMetadata, RasterImage};
 use profile_traits::mem::Report;
 use serde::{Deserialize, Serialize};
-use servo_url::{ImmutableOrigin, ServoUrl};
 use webrender_api::ImageKey;
 use webrender_api::units::DeviceIntSize;
 
 use crate::FetchResponseMsg;
 use crate::request::CorsSettings;
+use crate::servo_url::{ImmutableOrigin, ServoUrl};
 
 // ======================================================================
 // Aux structs and enums.

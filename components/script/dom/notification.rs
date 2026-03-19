@@ -24,7 +24,7 @@ use net_traits::request::{Destination, RequestBuilder, RequestId};
 use net_traits::{FetchMetadata, FetchResponseMsg, NetworkError, ResourceFetchTiming};
 use pixels::RasterImage;
 use rustc_hash::FxHashSet;
-use servo_url::{ImmutableOrigin, ServoUrl};
+use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
 use uuid::Uuid;
 
 use super::bindings::cell::DomRefCell;

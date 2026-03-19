@@ -28,12 +28,12 @@ use embedder_traits::{
 };
 pub use from_script_message::*;
 use malloc_size_of_derive::MallocSizeOf;
+use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
 use paint_api::PinchZoomInfos;
 use profile_traits::mem::MemoryReportResult;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use servo_config::prefs::PrefValue;
-use servo_url::{ImmutableOrigin, ServoUrl};
 pub use structured_data::*;
 use strum::IntoStaticStr;
 use webrender_api::units::LayoutVector2D;
@@ -133,7 +133,11 @@ pub enum UserContentManagerAction {
 pub enum PaintMetricEvent {
     FirstPaint(CrossProcessInstant, bool /* first_reflow */),
     FirstContentfulPaint(CrossProcessInstant, bool /* first_reflow */),
-    LargestContentfulPaint(CrossProcessInstant, usize /* area */, Option<ServoUrl>),
+    LargestContentfulPaint(
+        CrossProcessInstant,
+        usize, /* area */
+        Option<servo_url::ServoUrl>,
+    ),
 }
 
 impl fmt::Debug for EmbedderToConstellationMessage {

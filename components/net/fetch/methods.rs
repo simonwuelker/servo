@@ -31,6 +31,7 @@ use net_traits::request::{
     RequestMode, ResponseTainting, is_cors_safelisted_method, is_cors_safelisted_request_header,
 };
 use net_traits::response::{Response, ResponseBody, ResponseType, TerminationReason};
+use net_traits::servo_url::{Host, ImmutableOrigin, ServoUrl};
 use net_traits::{
     FetchTaskTarget, NetworkError, ReferrerPolicy, ResourceAttribute, ResourceFetchTiming,
     ResourceTimeValue, ResourceTimingType, WebSocketDomAction, WebSocketNetworkEvent,
@@ -41,7 +42,6 @@ use rustc_hash::FxHashMap;
 use rustls_pki_types::CertificateDer;
 use serde::{Deserialize, Serialize};
 use servo_arc::Arc as ServoArc;
-use servo_url::{Host, ImmutableOrigin, ServoUrl};
 use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::mpsc::{UnboundedReceiver as TokioReceiver, UnboundedSender as TokioSender};
 

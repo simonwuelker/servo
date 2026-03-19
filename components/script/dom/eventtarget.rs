@@ -21,7 +21,7 @@ use js::rust::{CompileOptionsWrapper, HandleObject, transform_u16_to_source_text
 use libc::c_char;
 use rustc_hash::{FxBuildHasher, FxHashSet};
 use script_bindings::cformat;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use style::str::HTML_SPACE_CHARACTERS;
 use stylo_atoms::Atom;
 

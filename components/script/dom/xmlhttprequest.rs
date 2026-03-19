@@ -37,7 +37,7 @@ use script_bindings::conversions::SafeToJSValConvertible;
 use script_bindings::num::Finite;
 use script_bindings::trace::RootedTraceableBox;
 use script_traits::DocumentActivity;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use stylo_atoms::Atom;
 use url::Position;
 
@@ -365,7 +365,7 @@ impl XMLHttpRequestMethods<crate::DomTypeHolder> for XMLHttpRequest {
                 // Step 2
                 let global = self.global();
                 let Ok(mut parsed_url) =
-                    crate::url::parse_url(&url.0, crate::url::RelativeTo::Global(&global))
+                    crate::url::resolve_blob_url(&url.0, crate::url::RelativeTo::Global(&global))
                 else {
                     return Err(Error::Syntax(None));
                 };

@@ -24,7 +24,7 @@ use script_bindings::codegen::GenericBindings::WindowBinding::WindowMethods;
 use script_bindings::inheritance::Castable;
 use script_bindings::root::{Dom, DomRoot};
 use script_bindings::script_runtime::CanGc;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use webrender_api::units::{DeviceIntRect, DevicePoint};
 
 use crate::dom::activation::Activatable;

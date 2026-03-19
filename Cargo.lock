@@ -7627,6 +7627,7 @@ dependencies = [
  "servo-net-traits",
  "servo-profile-traits",
  "servo-url",
+ "url",
  "uuid",
 ]
 
@@ -7642,7 +7643,7 @@ dependencies = [
  "servo-malloc-size-of",
  "servo-net-traits",
  "servo-profile-traits",
- "servo-url",
+ "url",
  "uuid",
 ]
 
@@ -7756,6 +7757,7 @@ dependencies = [
  "serde",
  "servo-base",
  "servo-malloc-size-of",
+ "servo-net-traits",
  "servo-profile-traits",
  "servo-url",
  "stylo",
@@ -8538,6 +8540,7 @@ dependencies = [
  "servo-dom-struct",
  "servo-jstraceable-derive",
  "servo-malloc-size-of",
+ "servo-net-traits",
  "servo-profile-traits",
  "servo-url",
  "servo-webxr-api",

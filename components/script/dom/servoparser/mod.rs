@@ -36,7 +36,7 @@ use profile_traits::time_profile;
 use script_bindings::script_runtime::temp_cx;
 use script_traits::DocumentActivity;
 use servo_config::pref;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use style::context::QuirksMode as ServoQuirksMode;
 use tendril::stream::LossyDecoder;
 use tendril::{ByteTendril, TendrilSink};

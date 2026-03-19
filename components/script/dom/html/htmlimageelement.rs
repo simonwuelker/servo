@@ -31,7 +31,7 @@ use pixels::{CorsStatus, ImageMetadata, Snapshot};
 use regex::Regex;
 use rustc_hash::FxHashSet;
 use script_bindings::script_runtime::temp_cx;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use servo_url::origin::MutableOrigin;
 use style::attr::{AttrValue, LengthOrPercentageOrAuto, parse_unsigned_integer};
 use style::stylesheets::CssRuleType;

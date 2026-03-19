@@ -21,7 +21,7 @@ use net_traits::request::{
     RequestClient,
 };
 use net_traits::{CoreResourceMsg, FetchChannels, ReferrerPolicy, ResourceThreads};
-use servo_url::{ImmutableOrigin, ServoUrl};
+use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
 
 use crate::dom::bindings::reflector::DomGlobal;
 use crate::dom::bindings::trace::{CustomTraceable, JSTraceable};

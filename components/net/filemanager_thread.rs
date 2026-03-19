@@ -25,6 +25,7 @@ use net_traits::filemanager_thread::{
     GetTokenForFileReply, ReadFileProgress, RelativePos,
 };
 use net_traits::response::{Response, ResponseBody};
+use net_traits::servo_url::BlobTokenCommunicator;
 use net_traits::{CoreResourceMsg, http_percent_encode};
 use parking_lot::{Mutex, RwLock};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -84,21 +85,23 @@ enum FileImpl {
 pub struct FileManager {
     embedder_proxy: GenericEmbedderProxy<NetToEmbedderMsg>,
     store: Arc<FileManagerStore>,
-    revoke_sender: GenericSender<CoreResourceMsg>,
-    refresh_sender: GenericSender<CoreResourceMsg>,
+    // Need a mutex around here because the Senders are not threadsafe
+    communicator: Arc<Mutex<BlobTokenCommunicator>>,
 }
 
 impl FileManager {
     pub fn new(
         embedder_proxy: GenericEmbedderProxy<NetToEmbedderMsg>,
         revoke_sender: GenericSender<CoreResourceMsg>,
-        refresh_sender: GenericSender<CoreResourceMsg>,
+        refresh_token_sender: GenericSender<CoreResourceMsg>,
     ) -> FileManager {
         FileManager {
             embedder_proxy,
             store: Arc::new(FileManagerStore::new()),
-            revoke_sender,
-            refresh_sender,
+            communicator: Arc::new(Mutex::new(BlobTokenCommunicator {
+                revoke_sender,
+                refresh_token_sender,
+            })),
         }
     }
 
@@ -197,10 +200,11 @@ impl FileManager {
                     _ => None,
                 };
 
+                let communicator = self.communicator.lock();
                 let _ = sender.send(GetTokenForFileReply {
                     token,
-                    revoke_sender: self.revoke_sender.clone(),
-                    refresh_sender: self.refresh_sender.clone(),
+                    revoke_sender: communicator.revoke_sender.clone(),
+                    refresh_sender: communicator.refresh_token_sender.clone(),
                 });
             },
             FileManagerThreadMsg::RevokeTokenForFile(token, id) => {

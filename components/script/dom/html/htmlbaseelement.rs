@@ -6,7 +6,7 @@ use dom_struct::dom_struct;
 use html5ever::{LocalName, Prefix, local_name};
 use js::context::JSContext;
 use js::rust::HandleObject;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 
 use crate::dom::attr::Attr;
 use crate::dom::bindings::cell::DomRefCell;

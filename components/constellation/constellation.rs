@@ -149,6 +149,7 @@ use log::{debug, error, info, trace, warn};
 use media::WindowGLContext;
 use net::image_cache::ImageCacheFactoryImpl;
 use net_traits::pub_domains::registered_domain_name;
+use net_traits::servo_url::{Host, ImmutableOrigin, ServoUrl};
 use net_traits::{self, AsyncRuntime, ResourceThreads, exit_fetch_thread, start_fetch_thread};
 use paint_api::{
     PaintMessage, PaintProxy, PinchZoomInfos, PipelineExitSource, SendableFrameTree,
@@ -165,7 +166,7 @@ use script_traits::{
     ProgressiveWebMetricType, ScriptThreadMessage, UpdatePipelineIdReason,
 };
 use servo_config::{opts, pref};
-use servo_url::{Host, ImmutableOrigin, ServoUrl};
+use servo_url::ServoNonLockingUrl;
 use storage_traits::StorageThreads;
 use storage_traits::client_storage::ClientStorageThreadMessage;
 use storage_traits::indexeddb::{IndexedDBThreadMsg, SyncOperation};
@@ -973,7 +974,7 @@ where
         {
             None
         } else {
-            registered_domain_name(&load_data.url)
+            registered_domain_name(load_data.url.as_url())
         };
 
         if let Some(event_loop) = self.get_event_loop_for_new_pipeline(
@@ -2086,7 +2087,7 @@ where
         let Some(source_pipeline) = self.pipelines.get(&source_pipeline_id) else {
             return warn!("{source_pipeline_id}: ScriptMsg from closed pipeline");
         };
-        let Some(host) = registered_domain_name(&source_pipeline.url) else {
+        let Some(host) = registered_domain_name(source_pipeline.url.as_url()) else {
             return warn!("Invalid host url");
         };
         let browsing_context_group = if let Some(bcg) = self
@@ -3717,7 +3718,7 @@ where
             .send(EmbedderMsg::AllowNavigationRequest(
                 webview_id,
                 source_id,
-                load_data.url,
+                load_data.url.unlock_blob(),
             ));
     }
 
@@ -4825,25 +4826,27 @@ where
             _ => Some(previous_url.clone()),
         };
 
-        let mut entries: Vec<ServoUrl> = session_history
+        let mut entries: Vec<ServoNonLockingUrl> = session_history
             .past
             .iter()
             .rev()
             .scan(current_url.clone(), &resolve_url_past)
+            .map(|url| url.unlock_blob())
             .collect();
 
         entries.reverse();
 
         let current_index = entries.len();
 
-        entries.push(current_url.clone());
+        entries.push(current_url.clone().unlock_blob());
 
         entries.extend(
             session_history
                 .future
                 .iter()
                 .rev()
-                .scan(current_url, &resolve_url_future),
+                .scan(current_url, &resolve_url_future)
+                .map(|url| url.unlock_blob())
         );
         self.embedder_proxy.send(EmbedderMsg::HistoryChanged(
             webview_id,

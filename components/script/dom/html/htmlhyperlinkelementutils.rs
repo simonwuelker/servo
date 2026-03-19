@@ -3,7 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use html5ever::local_name;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 
 use crate::dom::bindings::cell::DomRefCell;
 use crate::dom::bindings::conversions::DerivedFrom;

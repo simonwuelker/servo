@@ -24,11 +24,11 @@ use embedder_traits::GenericEmbedderProxy;
 use hyper_serde::Serde;
 use ipc_channel::ipc::IpcSender;
 use log::{debug, trace, warn};
-use net_traits::blob_url_store::parse_blob_url;
 use net_traits::filemanager_thread::{FileManagerThreadMsg, FileTokenCheck};
 use net_traits::pub_domains::public_suffix_list_size_of;
 use net_traits::request::{Destination, PreloadEntry, PreloadId, RequestBuilder, RequestId};
 use net_traits::response::{Response, ResponseInit};
+use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
 use net_traits::{
     AsyncRuntime, CookieAsyncResponse, CookieData, CookieSource, CoreResourceMsg,
     CoreResourceThread, CustomResponseMediator, DiscardFetch, FetchChannels, FetchTaskTarget,
@@ -47,7 +47,6 @@ use rustls_pki_types::CertificateDer;
 use rustls_pki_types::pem::PemObject;
 use serde::{Deserialize, Serialize};
 use servo_arc::Arc as ServoArc;
-use servo_url::{ImmutableOrigin, ServoUrl};
 use tokio::sync::Mutex as TokioMutex;
 
 use crate::async_runtime::{init_async_runtime, spawn_task};
@@ -279,39 +278,46 @@ impl ResourceChannelManager {
                     },
                     GenericSelectionResult::MessageReceived(id, msg) => {
                         if id == revoker_id {
-                            let CoreResourceMsg::RevokeTokenForFile(token, file_id) = msg else {
+                            let CoreResourceMsg::RevokeTokenForFile(revocation_request) = msg
+                            else {
                                 log::error!("Blob revocation channel received unexpected message");
                                 continue;
                             };
-                            self.resource_manager
-                                .filemanager
-                                .handle(FileManagerThreadMsg::RevokeTokenForFile(token, file_id));
+                            self.resource_manager.filemanager.invalidate_token(
+                                &FileTokenCheck::Required(revocation_request.token),
+                                &revocation_request.blob_id,
+                            )
                         } else if id == refresh_id {
-                            let CoreResourceMsg::RefreshTokenForFile(file_id) = msg else {
+                            let CoreResourceMsg::RefreshTokenForFile(refresh_request) = msg else {
                                 log::error!("Blob revocation channel received unexpected message");
                                 continue;
                             };
                             let refreshed_token = match self
                                 .resource_manager
                                 .filemanager
-                                .get_token_for_file(&file_id, true)
+                                .get_token_for_file(&refresh_request.blob_id, true)
                             {
                                 FileTokenCheck::Required(token) => token,
                                 FileTokenCheck::NotRequired => {
                                     println!(
-                                        "attempted refresh for file {file_id:?}, but not required"
+                                        "attempted refresh for file {:?}, but not required",
+                                        refresh_request.blob_id
                                     );
                                     continue;
                                 },
                                 FileTokenCheck::ShouldFail => {
                                     println!(
-                                        "attempted refresh for file {file_id:?}, but already revoked"
+                                        "attempted refresh for file {:?}, but already revoked",
+                                        refresh_request.blob_id
                                     );
                                     continue;
                                 },
                             };
-                            println!("refreshing with {refreshed_token:?} for file {file_id:?}");
-                            // let _ = sender.send(token);
+                            println!(
+                                "refreshing with {refreshed_token:?} for file {:?}",
+                                refresh_request.blob_id
+                            );
+                            let _ = refresh_request.new_token_sender.send(refreshed_token);
                         } else if id == reporter_id {
                             if let CoreResourceMsg::CollectMemoryReport(report_chan) = msg {
                                 self.process_report(
@@ -633,7 +639,9 @@ impl ResourceChannelManager {
                 return false;
             },
             // Ignore these messages as they are only sent on very specific channels.
-            CoreResourceMsg::CollectMemoryReport(_) | CoreResourceMsg::RevokeTokenForFile(..) => {},
+            CoreResourceMsg::CollectMemoryReport(_) |
+            CoreResourceMsg::RevokeTokenForFile(..) |
+            CoreResourceMsg::RefreshTokenForFile(..) => {},
         }
         true
     }
@@ -751,22 +759,23 @@ impl CoreResourceManager {
         // but could instead be contained in the actual CoreResourceMsg::Fetch message.
         //
         // See https://github.com/servo/servo/issues/25226
-        let (file_token, blob_url_file_id) = match url.blob_token() {
-            Some(servo_url::TokenSerializationGuard(token)) => (
-                net_traits::filemanager_thread::FileTokenCheck::Required(token.token.clone()),
-                Some(token.file_id.clone()),
-            ),
-            None => match url.scheme() {
-                "blob" => {
-                    if let Ok((id, _)) = parse_blob_url(&url) {
-                        (self.filemanager.get_token_for_file(&id, false), Some(id))
-                    } else {
-                        (FileTokenCheck::ShouldFail, None)
-                    }
-                },
-                _ => (FileTokenCheck::NotRequired, None),
-            },
-        };
+        // let (file_token, blob_url_file_id) = match url.blob_token() {
+        //     Some(servo_url::TokenSerializationGuard(token)) => (
+        //         net_traits::filemanager_thread::FileTokenCheck::Required(token.token.clone()),
+        //         Some(token.file_id.clone()),
+        //     ),
+        //     None => match url.scheme() {
+        //         "blob" => {
+        //             if let Ok((id, _)) = parse_blob_url(&url) {
+        //                 (self.filemanager.get_token_for_file(&id, false), Some(id))
+        //             } else {
+        //                 (FileTokenCheck::ShouldFail, None)
+        //             }
+        //         },
+        //         _ => (FileTokenCheck::NotRequired, None),
+        //     },
+        // };
+        let (file_token, blob_url_file_id) = (FileTokenCheck::NotRequired, None);
 
         let ca_certificates = self.ca_certificates.clone();
         let ignore_certificate_errors = self.ignore_certificate_errors;

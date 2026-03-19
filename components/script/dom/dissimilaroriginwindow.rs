@@ -10,6 +10,7 @@ use js::jsapi::{Heap, JSObject};
 use js::jsval::UndefinedValue;
 use js::rust::{CustomAutoRooter, CustomAutoRooterGuard, HandleValue, MutableHandleValue};
 use servo_url::ServoUrl;
+use url::Url;
 
 use crate::dom::bindings::codegen::Bindings::DissimilarOriginWindowBinding;
 use crate::dom::bindings::codegen::Bindings::DissimilarOriginWindowBinding::DissimilarOriginWindowMethods;
@@ -234,10 +235,7 @@ impl DissimilarOriginWindow {
         let target_origin = match target_origin.0[..].as_ref() {
             "*" => None,
             "/" => Some(source_origin.clone()),
-            url => match ServoUrl::parse(url) {
-                Ok(url) => Some(url.origin()),
-                Err(_) => return Err(Error::Syntax(None)),
-            },
+            url =>  Url::parse(url).map_err(|_| Error::Syntax(None))?.origin().into(),
         };
         let msg = ScriptToConstellationMessage::PostMessage {
             target,

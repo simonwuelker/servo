@@ -11,7 +11,7 @@ use net_traits::{
     BoxedFetchCallback, FetchMetadata, FetchResponseMsg, NetworkError, ResourceFetchTiming,
     ResourceTimingType,
 };
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 
 use crate::dom::bindings::inheritance::Castable;
 use crate::dom::bindings::root::DomRoot;

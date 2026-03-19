@@ -20,7 +20,7 @@ use net_traits::request::{
 use net_traits::{FetchMetadata, NetworkError, ResourceFetchTiming};
 use regex::Regex;
 use servo_config::pref;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 
 use crate::body::Extractable;
 use crate::dom::bindings::cell::DomRefCell;
@@ -591,7 +591,7 @@ impl NavigatorMethods<crate::DomTypeHolder> for Navigator {
         // Step 2. In parallel: unregister the handler described by normalizedScheme and normalizedURLString.
         self.send_protocol_update_registration_to_embedder(ProtocolHandlerUpdateRegistration {
             scheme,
-            url,
+            url: url.unlock_blob(),
             register_or_unregister: RegisterOrUnregister::Unregister,
         });
         Ok(())

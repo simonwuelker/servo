@@ -57,6 +57,7 @@ use net_traits::request::{
 use net_traits::response::{
     CacheState, HttpsState, RedirectTaint, Response, ResponseBody, ResponseType,
 };
+use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
 use net_traits::{
     CookieSource, DOCUMENT_ACCEPT_HEADER_VALUE, DebugVec, FetchMetadata, NetworkError,
     RedirectEndValue, RedirectStartValue, ReferrerPolicy, ResourceAttribute, ResourceFetchTiming,
@@ -67,7 +68,6 @@ use profile_traits::mem::{Report, ReportKind};
 use profile_traits::path;
 use rustc_hash::FxHashMap;
 use servo_arc::Arc;
-use servo_url::{ImmutableOrigin, ServoUrl};
 use tokio::sync::mpsc::{
     Receiver as TokioReceiver, Sender as TokioSender, UnboundedReceiver, UnboundedSender, channel,
     unbounded_channel,
@@ -1109,8 +1109,11 @@ fn location_url_for_response(
             HeaderValue::to_str(header_value)
                 .map(|location_string| {
                     // Step 3. If location is a header value, then set location to the result of parsing location with response’s URL.
-                    ServoUrl::parse_with_base(response.actual_response().url(), location_string)
-                        .map_err(|error| error.to_string())
+                    ServoUrl::parse_with_base(
+                        response.actual_response().url().map(|url| url.as_url()),
+                        location_string,
+                    )
+                    .map_err(|error| error.to_string())
                 })
                 .ok()
         });

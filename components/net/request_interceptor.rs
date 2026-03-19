@@ -9,6 +9,7 @@ use net_traits::NetworkError;
 use net_traits::http_status::HttpStatus;
 use net_traits::request::Request;
 use net_traits::response::{Response, ResponseBody};
+use net_traits::servo_url::ServoUrl;
 
 use crate::embedder::NetToEmbedderMsg;
 use crate::fetch::methods::FetchContext;
@@ -52,8 +53,11 @@ impl RequestInterceptor {
             match message {
                 WebResourceResponseMsg::Start(webresource_response) => {
                     let timing = context.timing.lock().clone();
-                    let mut response_override =
-                        Response::new(webresource_response.url.into(), timing);
+                    let Ok(non_blob_url) = ServoUrl::from_non_blob_url(webresource_response.url)
+                    else {
+                        continue;
+                    };
+                    let mut response_override = Response::new(non_blob_url, timing);
                     response_override.headers = webresource_response.headers;
                     response_override.status = HttpStatus::new(
                         webresource_response.status_code,

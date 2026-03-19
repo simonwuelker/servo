@@ -106,10 +106,12 @@ impl StorageOrigins {
         let mut result = Vec::new();
 
         self.origin_descriptors.retain(|_, descriptor| {
-            let url =
-                ServoUrl::parse(&descriptor.name).expect("Should always be able to parse origins.");
+            let url = descriptor
+                .name
+                .parse::<ServoUrl>()
+                .expect("Should always be able to parse origins.");
 
-            let Some(domain) = registered_domain_name(&url) else {
+            let Some(domain) = registered_domain_name(url.as_url()) else {
                 warn!("Failed to get a registered domain name for: {url}");
                 return true;
             };

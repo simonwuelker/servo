@@ -18,7 +18,7 @@ use js::rust::{HandleObject, Stencil};
 use net_traits::http_status::HttpStatus;
 use net_traits::request::{CorsSettings, Destination, ParserMetadata, RequestBuilder, RequestId};
 use net_traits::{FetchMetadata, Metadata, NetworkError, ResourceFetchTiming};
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use style::attr::AttrValue;
 use style::str::{HTML_SPACE_CHARACTERS, StaticStringVec};
 use stylo_atoms::Atom;

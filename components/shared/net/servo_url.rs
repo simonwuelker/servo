@@ -5,27 +5,26 @@
 use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 
-use base::generic_channel::{self, GenericSender};
+use base::generic_channel::{self, GenericSend, GenericSender};
 use malloc_size_of_derive::MallocSizeOf;
 use serde::{Deserialize, Serialize};
 use servo_arc::Arc;
-pub use servo_url::{ImmutableOrigin, MutableOrigin};
+pub use servo_url::{Host, ImmutableOrigin, MutableOrigin, OriginSnapshot};
 use url::Url;
 use uuid::Uuid;
 
-use crate::FileManagerThreadMsg;
+use crate::{ResourceThreads, FileManagerThreadMsg};
 use crate::blob_url_store::parse_blob_url;
 
-pub type ServoUrl = servo_url::BlobStoreAgnosticServoUrl<BlobResolver>;
+pub type ServoUrl = servo_url::BlobStoreAgnosticServoUrl<BlobToken>;
+pub type ServoMaybeBlobUrl = servo_url::BlobStoreAgnosticServoUrl<BlobToken>;
 
 use crate::{BlobTokenRefreshRequest, BlobTokenRevocationRequest, CoreResourceMsg};
 
 #[derive(Clone, MallocSizeOf)]
-pub struct BlobResolver {
-    /// Channels that are given to BlobTokens for communicating with the
-    /// file manager thread.
-    #[conditional_malloc_size_of]
-    communicator: Arc<Mutex<BlobTokenCommunicator>>,
+pub struct BlobResolver<'a> {
+    pub origin: ImmutableOrigin,
+    pub resource_threads: &'a ResourceThreads,
 }
 
 #[derive(Clone, Deserialize, MallocSizeOf, Serialize)]
@@ -75,40 +74,30 @@ impl servo_url::BlobToken for BlobToken {
     }
 }
 
-impl servo_url::BlobStorage for BlobResolver {
-    type Token = BlobToken;
-
-    fn acquire_blob_token(
-        &self,
-        url: &Url,
-    ) -> Result<Option<servo_url::TokenSerializationGuard<Self::Token>>, ()> {
+impl<'a> BlobResolver<'a> {
+    pub fn acquire_blob_token_for(&self, url: &Url) -> Option<servo_url::TokenSerializationGuard<BlobToken>> {
         if url.scheme() != "blob" {
-            return Ok(None);
+            return None;
         }
-        let Ok((file_id, origin)) = parse_blob_url(url) else {
-            return Ok(None);
-        };
+        let (file_id, origin) = parse_blob_url(url)
+            .inspect_err(|error| log::warn!("Failed to acquire token for {url}: {error}"))
+            .ok()?;
         let (sender, receiver) = generic_channel::channel().unwrap();
-        self.communicator
-            .lock()
-            .unwrap()
-            .refresh_token_sender
+        self.resource_threads
             .send(CoreResourceMsg::ToFileManager(
                 FileManagerThreadMsg::GetTokenForFile(file_id, origin, sender),
             ))
-            .map_err(|_| ())?;
-        let Ok(reply) = receiver.recv() else {
-            return Err(());
-        };
+            .ok()?;
+        let reply = receiver.recv().ok()?;
         let serializable_token = reply.token.map(|token_id| {
             servo_url::TokenSerializationGuard::new(BlobToken {
                 token: token_id,
                 file_id,
-                communicator: self.communicator.clone(),
+                communicator: Arc::new(Mutex::new(BlobTokenCommunicator { revoke_sender: reply.revoke_sender, refresh_token_sender: reply.refresh_sender })),
                 neutered: false,
             })
         });
-        Ok(serializable_token)
+        serializable_token
     }
 }
 

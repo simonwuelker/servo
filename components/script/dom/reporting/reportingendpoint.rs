@@ -15,7 +15,7 @@ use net_traits::request::{
 use net_traits::{FetchMetadata, NetworkError, ResourceFetchTiming};
 use script_bindings::str::DOMString;
 use serde::Serialize;
-use servo_url::{ImmutableOrigin, ServoUrl};
+use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
 
 use crate::dom::bindings::codegen::Bindings::CSPViolationReportBodyBinding::CSPViolationReportBody;
 use crate::dom::bindings::codegen::Bindings::ReportingObserverBinding::Report;

@@ -11,9 +11,9 @@ use base::id::TEST_PIPELINE_ID;
 use devtools_traits::DevtoolScriptControlMsg::WantsLiveNotifications;
 use devtools_traits::{DevtoolScriptControlMsg, WorkerId};
 use malloc_size_of_derive::MallocSizeOf;
+use net_traits::servo_url::ServoUrl;
 use serde::Serialize;
 use serde_json::{Map, Value};
-use servo_url::ServoUrl;
 
 use crate::StreamId;
 use crate::actor::{Actor, ActorEncode, ActorError, ActorRegistry};

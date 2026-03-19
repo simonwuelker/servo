@@ -66,7 +66,7 @@ use profile_traits::{
 use rustc_hash::{FxBuildHasher, FxHashMap};
 use script_bindings::interfaces::GlobalScopeHelpers;
 use script_bindings::settings_stack::run_a_script;
-use servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
+use net_traits::servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
 use storage_traits::StorageThreads;
 use strum::VariantArray;
 use timers::{TimerEventRequest, TimerId};

@@ -44,7 +44,8 @@ use profile_traits::mem;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use servo_config::prefs::PrefValue;
-use servo_url::{ImmutableOrigin, ServoUrl};
+use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
+use servo_url::ServoNonLockingUrl;
 use storage_traits::StorageThreads;
 use storage_traits::webstorage_thread::WebStorageType;
 use strum::IntoStaticStr;
@@ -117,7 +118,7 @@ pub enum ProgressiveWebMetricType {
         /// The pixel area of the largest contentful element.
         area: usize,
         /// The URL of the largest contentful element, if any.
-        url: Option<ServoUrl>,
+        url: Option<ServoNonLockingUrl>,
     },
     /// Time to interactive
     TimeToInteractive,

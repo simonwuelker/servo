@@ -25,7 +25,7 @@ use script_bindings::codegen::GenericBindings::DebuggerGlobalScopeBinding::{
 };
 use script_bindings::reflector::DomObject;
 use script_bindings::str::DOMString;
-use servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
+use net_traits::servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
 use storage_traits::StorageThreads;
 
 use crate::dom::bindings::codegen::Bindings::DebuggerGetEnvironmentEventBinding::EnvironmentInfo;
@@ -371,7 +371,7 @@ impl DebuggerGlobalScopeMethods<crate::DomTypeHolder> for DebuggerGlobalScope {
             // (currently impossible to do robustly due to <https://bugzilla.mozilla.org/show_bug.cgi?id=1982001>)
             let url_original = args.url.str();
             // FIXME: use page/worker url as base here
-            let url_original = ServoUrl::parse(&url_original).ok();
+            let url_original = ServoUrl::parse_with_base(None, &url_original).ok();
 
             // If the source has a `urlOverride` (aka `displayURL` aka `//# sourceURL`), it should be a valid url,
             // possibly relative to the page/worker url, and we should treat the source as coming from that url for

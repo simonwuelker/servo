@@ -17,9 +17,9 @@ use base::id::BrowsingContextId;
 use devtools_traits::get_time_stamp;
 use log::warn;
 use malloc_size_of_derive::MallocSizeOf;
+use net_traits::servo_url::ServoUrl;
 use serde::Serialize;
 use serde_json::{Map, Value};
-use servo_url::ServoUrl;
 
 use self::network_parent::NetworkParentActor;
 use super::breakpoint::BreakpointListActor;

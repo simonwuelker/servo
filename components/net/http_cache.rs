@@ -22,13 +22,13 @@ use malloc_size_of_derive::MallocSizeOf;
 use net_traits::http_status::HttpStatus;
 use net_traits::request::Request;
 use net_traits::response::{HttpsState, Response, ResponseBody};
+use net_traits::servo_url::ServoUrl;
 use net_traits::{CacheEntryDescriptor, FetchMetadata, Metadata, ResourceFetchTiming};
 use parking_lot::Mutex as ParkingLotMutex;
 use quick_cache::sync::{Cache, DefaultLifecycle, PlaceholderGuard};
 use quick_cache::{DefaultHashBuilder, UnitWeighter};
 use servo_arc::Arc;
 use servo_config::pref;
-use servo_url::ServoUrl;
 use tokio::sync::mpsc::{UnboundedSender as TokioSender, unbounded_channel as unbounded};
 use tokio::sync::{OwnedRwLockWriteGuard, RwLock as TokioRwLock};
 

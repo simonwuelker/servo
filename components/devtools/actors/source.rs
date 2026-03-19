@@ -10,9 +10,10 @@ use base::generic_channel::{GenericSender, channel};
 use base::id::PipelineId;
 use devtools_traits::DevtoolScriptControlMsg;
 use malloc_size_of_derive::MallocSizeOf;
+use net_traits::servo_url::ServoUrl;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use servo_url::ServoUrl;
+use url::Url;
 
 use crate::StreamId;
 use crate::actor::{Actor, ActorError, ActorRegistry, DowncastableActorArc};
@@ -75,7 +76,7 @@ impl SourceManager {
     ) -> Option<DowncastableActorArc<SourceActor>> {
         for name in self.source_actor_names.borrow().iter() {
             let source = registry.find::<SourceActor>(name);
-            if source.url == ServoUrl::from_str(source_url).ok()? {
+            if source.url.as_url() == &Url::from_str(source_url).ok()? {
                 return Some(source);
             }
         }

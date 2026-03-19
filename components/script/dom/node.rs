@@ -42,7 +42,7 @@ use script_bindings::codegen::InheritTypes::DocumentFragmentTypeId;
 use script_traits::DocumentActivity;
 use servo_arc::Arc as ServoArc;
 use servo_config::pref;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use smallvec::SmallVec;
 use style::Atom;
 use style::attr::AttrValue;

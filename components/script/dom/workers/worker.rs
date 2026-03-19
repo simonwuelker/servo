@@ -179,7 +179,7 @@ impl WorkerMethods<crate::DomTypeHolder> for Worker {
             "Worker constructor",
         )?;
         // Step 2-4.
-        let worker_url = match crate::url::parse_url(
+        let worker_url = match crate::url::resolve_blob_url(
             &compliant_script_url.str(),
             crate::url::RelativeTo::Global(&global),
         ) {

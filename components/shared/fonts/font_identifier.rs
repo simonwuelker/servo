@@ -3,9 +3,9 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use malloc_size_of_derive::MallocSizeOf;
+use net_traits::servo_url::ServoUrl;
 pub use platform::LocalFontIdentifier;
 use serde::{Deserialize, Serialize};
-use servo_url::ServoUrl;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize)]

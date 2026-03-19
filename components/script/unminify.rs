@@ -10,7 +10,7 @@ use std::process::Command;
 use std::rc::Rc;
 
 use script_bindings::domstring::BytesView;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use tempfile::NamedTempFile;
 use uuid::Uuid;
 

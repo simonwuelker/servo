@@ -717,7 +717,9 @@ impl Handler {
         self.verify_top_level_browsing_context_is_open(webview_id)?;
         // Step 3. If URL is not an absolute URL or is not an absolute URL with fragment
         // or not a local scheme, return error with error code invalid argument.
-        let url = ServoUrl::parse(&parameters.url)
+        let url = parameters
+            .url
+            .parse::<ServoUrl>()
             .map(|url| url.into_url())
             .map_err(|_| WebDriverError::new(ErrorStatus::InvalidArgument, "Invalid URL"))?;
 
