@@ -206,7 +206,7 @@ use crate::stylesheet_set::StylesheetSetRef;
 use crate::task::NonSendTaskBox;
 use crate::task_source::TaskSourceName;
 use crate::timers::OneshotTimerCallback;
-use crate::url::{lock_blob, RelativeTo};
+use crate::url::{RelativeTo, lock_blob};
 use crate::xpath::parse_expression;
 
 #[derive(Clone, Copy, PartialEq)]

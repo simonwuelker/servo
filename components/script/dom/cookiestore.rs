@@ -14,10 +14,10 @@ use hyper_serde::Serde;
 use itertools::Itertools;
 use js::jsval::NullValue;
 use net_traits::CookieSource::NonHTTP;
+use net_traits::servo_url::ServoUrl;
 use net_traits::{CookieAsyncResponse, CookieData, CoreResourceMsg};
 use script_bindings::codegen::GenericBindings::CookieStoreBinding::CookieSameSite;
 use script_bindings::script_runtime::CanGc;
-use net_traits::servo_url::ServoUrl;
 use time::OffsetDateTime;
 
 use crate::dom::bindings::cell::DomRefCell;

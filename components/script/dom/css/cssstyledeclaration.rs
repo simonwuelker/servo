@@ -8,8 +8,8 @@ use std::sync::LazyLock;
 
 use dom_struct::dom_struct;
 use html5ever::local_name;
-use servo_arc::Arc;
 use net_traits::servo_url::ServoUrl;
+use servo_arc::Arc;
 use style::attr::AttrValue;
 use style::properties::{
     Importance, LonghandId, PropertyDeclarationBlock, PropertyId, ShorthandId,

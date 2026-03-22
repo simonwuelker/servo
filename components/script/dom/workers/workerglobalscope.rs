@@ -26,9 +26,9 @@ use net_traits::policy_container::PolicyContainer;
 use net_traits::request::{
     CredentialsMode, Destination, InsecureRequestsPolicy, ParserMetadata, RequestBuilder, RequestId,
 };
+use net_traits::servo_url::{MutableOrigin, ServoUrl};
 use net_traits::{FetchMetadata, Metadata, NetworkError, ReferrerPolicy, ResourceFetchTiming};
 use profile_traits::mem::{ProcessReports, perform_memory_report};
-use net_traits::servo_url::{MutableOrigin, ServoUrl};
 use timers::TimerScheduler;
 use uuid::Uuid;
 
@@ -83,6 +83,7 @@ use crate::script_module::ScriptFetchOptions;
 use crate::script_runtime::{CanGc, IntroductionType, JSContext, JSContextHelper, Runtime};
 use crate::task::TaskCanceller;
 use crate::timers::{IsInterval, TimerCallback};
+use crate::url::{RelativeTo, parse_url_and_lock_blob};
 
 pub(crate) fn prepare_workerscope_init(
     global: &GlobalScope,
@@ -680,10 +681,10 @@ impl WorkerGlobalScopeMethods<crate::DomTypeHolder> for WorkerGlobalScope {
                 url,
                 "WorkerGlobalScope importScripts",
             )?;
-            //let url = self.worker_url.borrow().join(&url.str());
-            let url = crate::url::resolve_blob_url(
+
+            let url = parse_url_and_lock_blob(
                 &url.str(),
-                crate::url::RelativeTo::Global(self.upcast::<GlobalScope>()),
+                RelativeTo::Global(self.upcast::<GlobalScope>()),
             );
             match url {
                 Ok(url) => urls.push(url),

@@ -29,6 +29,7 @@ use js::typedarray::{ArrayBufferU8, HeapArrayBuffer};
 use net_traits::fetch::headers::extract_mime_type_as_dataurl_mime;
 use net_traits::http_status::HttpStatus;
 use net_traits::request::{CredentialsMode, Referrer, RequestBuilder, RequestId, RequestMode};
+use net_traits::servo_url::ServoUrl;
 use net_traits::{
     FetchMetadata, FilteredMetadata, NetworkError, ReferrerPolicy, ResourceFetchTiming,
     trim_http_whitespace,
@@ -37,7 +38,6 @@ use script_bindings::conversions::SafeToJSValConvertible;
 use script_bindings::num::Finite;
 use script_bindings::trace::RootedTraceableBox;
 use script_traits::DocumentActivity;
-use net_traits::servo_url::ServoUrl;
 use stylo_atoms::Atom;
 use url::Position;
 
@@ -79,6 +79,7 @@ use crate::network_listener::{self, FetchResponseListener, ResourceTimingListene
 use crate::script_runtime::{CanGc, JSContext};
 use crate::task_source::{SendableTaskSource, TaskSourceName};
 use crate::timers::{OneshotTimerCallback, OneshotTimerHandle};
+use crate::url::{RelativeTo, parse_url_and_lock_blob};
 
 #[derive(Clone, Copy, Debug, JSTraceable, MallocSizeOf, PartialEq)]
 enum XMLHttpRequestState {
@@ -365,7 +366,7 @@ impl XMLHttpRequestMethods<crate::DomTypeHolder> for XMLHttpRequest {
                 // Step 2
                 let global = self.global();
                 let Ok(mut parsed_url) =
-                    crate::url::resolve_blob_url(&url.0, crate::url::RelativeTo::Global(&global))
+                    parse_url_and_lock_blob(&url.0, RelativeTo::Global(&global))
                 else {
                     return Err(Error::Syntax(None));
                 };

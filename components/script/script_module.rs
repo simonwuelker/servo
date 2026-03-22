@@ -49,6 +49,7 @@ use net_traits::request::{
     CredentialsMode, Destination, ParserMetadata, Referrer, RequestBuilder, RequestClient,
     RequestId, RequestMode,
 };
+use net_traits::servo_url::ServoUrl;
 use net_traits::{FetchMetadata, Metadata, NetworkError, ReferrerPolicy, ResourceFetchTiming};
 use script_bindings::cformat;
 use script_bindings::domstring::BytesView;
@@ -57,7 +58,6 @@ use script_bindings::settings_stack::run_a_callback;
 use script_bindings::trace::CustomTraceable;
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use servo_config::pref;
-use net_traits::servo_url::ServoUrl;
 
 use crate::DomTypeHolder;
 use crate::document_loader::LoadType;

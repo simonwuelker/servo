@@ -42,6 +42,7 @@ use crate::dom::workerglobalscope::prepare_workerscope_init;
 use crate::realms::enter_auto_realm;
 use crate::script_runtime::{CanGc, ThreadSafeJSContext};
 use crate::task::TaskOnce;
+use crate::url::{RelativeTo, parse_url_and_lock_blob};
 
 pub(crate) type TrustedWorkerAddress = Trusted<Worker>;
 
@@ -179,14 +180,13 @@ impl WorkerMethods<crate::DomTypeHolder> for Worker {
             "Worker constructor",
         )?;
         // Step 2-4.
-        let worker_url = match crate::url::resolve_blob_url(
-            &compliant_script_url.str(),
-            crate::url::RelativeTo::Global(&global),
-        ) {
-            //global.api_base_url().join(&compliant_script_url.str()) {
-            Ok(url) => url,
-            Err(_) => return Err(Error::Syntax(None)),
-        };
+        let worker_url =
+            match parse_url_and_lock_blob(&compliant_script_url.str(), RelativeTo::Global(&global))
+            {
+                //global.api_base_url().join(&compliant_script_url.str()) {
+                Ok(url) => url,
+                Err(_) => return Err(Error::Syntax(None)),
+            };
 
         let (sender, receiver) = unbounded();
         let closing = Arc::new(AtomicBool::new(false));

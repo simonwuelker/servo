@@ -17,10 +17,10 @@ use net_traits::request::{
     CredentialsMode, Destination, RequestBuilder, RequestId, RequestMode,
     is_cors_safelisted_request_content_type,
 };
+use net_traits::servo_url::ServoUrl;
 use net_traits::{FetchMetadata, NetworkError, ResourceFetchTiming};
 use regex::Regex;
 use servo_config::pref;
-use net_traits::servo_url::ServoUrl;
 
 use crate::body::Extractable;
 use crate::dom::bindings::cell::DomRefCell;

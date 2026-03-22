@@ -17,13 +17,13 @@ use net_traits::image_cache::{
     ImageOrMetadataAvailable, ImageResponse, PendingImageId,
 };
 use net_traits::request::{Destination, Initiator, ParserMetadata, RequestBuilder, RequestId};
+use net_traits::servo_url::ServoUrl;
 use net_traits::{
     FetchMetadata, FetchResponseMsg, NetworkError, ReferrerPolicy, ResourceFetchTiming,
 };
 use pixels::PixelFormat;
 use script_bindings::root::Dom;
 use servo_arc::Arc;
-use net_traits::servo_url::ServoUrl;
 use style::attr::AttrValue;
 use style::media_queries::MediaList as StyleMediaList;
 use style::stylesheets::Stylesheet;

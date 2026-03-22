@@ -4,7 +4,7 @@
 
 use cssparser::{Parser, ParserInput};
 use dom_struct::dom_struct;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 
 use crate::dom::bindings::codegen::Bindings::CSSStyleValueBinding::CSSStyleValueMethods;
 use crate::dom::bindings::reflector::{Reflector, reflect_dom_object};

@@ -9,7 +9,7 @@ use euclid::default::Size2D;
 use js::context::JSContext;
 use pixels::Snapshot;
 use script_bindings::reflector::AssociatedMemory;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use webrender_api::ImageKey;
 
 use super::canvas_state::CanvasState;

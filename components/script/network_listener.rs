@@ -7,11 +7,11 @@ use std::sync::{Arc, Mutex};
 use content_security_policy::Violation;
 use js::context::JSContext;
 use net_traits::request::RequestId;
+use net_traits::servo_url::ServoUrl;
 use net_traits::{
     BoxedFetchCallback, FetchMetadata, FetchResponseMsg, NetworkError, ResourceFetchTiming,
     ResourceTimingType,
 };
-use net_traits::servo_url::ServoUrl;
 
 use crate::dom::bindings::inheritance::Castable;
 use crate::dom::bindings::root::DomRoot;

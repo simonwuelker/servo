@@ -8,7 +8,7 @@ use dom_struct::dom_struct;
 use euclid::{Scale, Size2D};
 use js::context::JSContext;
 use script_bindings::reflector::Reflector;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 use style_traits::CSSPixel;
 use webrender_api::ImageKey;
 use webrender_api::units::DevicePixel;

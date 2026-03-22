@@ -13,8 +13,8 @@ pub use servo_url::{Host, ImmutableOrigin, MutableOrigin, OriginSnapshot};
 use url::Url;
 use uuid::Uuid;
 
-use crate::{ResourceThreads, FileManagerThreadMsg};
 use crate::blob_url_store::parse_blob_url;
+use crate::{FileManagerThreadMsg, ResourceThreads};
 
 pub type ServoUrl = servo_url::BlobStoreAgnosticServoUrl<BlobToken>;
 pub type ServoMaybeBlobUrl = servo_url::BlobStoreAgnosticServoUrl<BlobToken>;
@@ -75,7 +75,10 @@ impl servo_url::BlobToken for BlobToken {
 }
 
 impl<'a> BlobResolver<'a> {
-    pub fn acquire_blob_token_for(&self, url: &Url) -> Option<servo_url::TokenSerializationGuard<BlobToken>> {
+    pub fn acquire_blob_token_for(
+        &self,
+        url: &Url,
+    ) -> Option<servo_url::TokenSerializationGuard<BlobToken>> {
         if url.scheme() != "blob" {
             return None;
         }
@@ -93,7 +96,10 @@ impl<'a> BlobResolver<'a> {
             servo_url::TokenSerializationGuard::new(BlobToken {
                 token: token_id,
                 file_id,
-                communicator: Arc::new(Mutex::new(BlobTokenCommunicator { revoke_sender: reply.revoke_sender, refresh_token_sender: reply.refresh_sender })),
+                communicator: Arc::new(Mutex::new(BlobTokenCommunicator {
+                    revoke_sender: reply.revoke_sender,
+                    refresh_token_sender: reply.refresh_sender,
+                })),
                 neutered: false,
             })
         });

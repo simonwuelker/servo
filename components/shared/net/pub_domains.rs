@@ -21,8 +21,8 @@ use embedder_traits::resources::{self, Resource};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf;
 use rustc_hash::FxHashSet;
-use url::{Host, Origin, Url};
 use servo_url::ImmutableOrigin;
+use url::{Host, Origin, Url};
 
 // We can use FxHash here.
 // The list is given by publicsuffix.org so an attack is highly unlikely

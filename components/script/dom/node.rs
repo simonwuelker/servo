@@ -36,13 +36,13 @@ use layout_api::{
 use libc::{self, c_void, uintptr_t};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use net_traits::image_cache::Image;
+use net_traits::servo_url::ServoUrl;
 use pixels::ImageMetadata;
 use script_bindings::codegen::GenericBindings::EventBinding::EventMethods;
 use script_bindings::codegen::InheritTypes::DocumentFragmentTypeId;
 use script_traits::DocumentActivity;
 use servo_arc::Arc as ServoArc;
 use servo_config::pref;
-use net_traits::servo_url::ServoUrl;
 use smallvec::SmallVec;
 use style::Atom;
 use style::attr::AttrValue;

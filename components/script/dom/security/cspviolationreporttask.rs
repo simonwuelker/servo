@@ -7,8 +7,8 @@ use headers::{ContentType, HeaderMap, HeaderMapExt};
 use net_traits::request::{
     CredentialsMode, Destination, RequestBody, RequestId, create_request_body_with_content,
 };
-use net_traits::{FetchMetadata, NetworkError, ResourceFetchTiming};
 use net_traits::servo_url::ServoUrl;
+use net_traits::{FetchMetadata, NetworkError, ResourceFetchTiming};
 use stylo_atoms::Atom;
 
 use crate::conversions::Convert;

@@ -12,10 +12,10 @@ use net_traits::request::{
     CredentialsMode, Destination, RequestBody, RequestId, RequestMode,
     create_request_body_with_content,
 };
+use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
 use net_traits::{FetchMetadata, NetworkError, ResourceFetchTiming};
 use script_bindings::str::DOMString;
 use serde::Serialize;
-use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
 
 use crate::dom::bindings::codegen::Bindings::CSPViolationReportBodyBinding::CSPViolationReportBody;
 use crate::dom::bindings::codegen::Bindings::ReportingObserverBinding::Report;

@@ -56,6 +56,7 @@ use net_traits::request::{
     InsecureRequestsPolicy, Origin as RequestOrigin, Referrer, RequestBuilder, RequestClient,
 };
 use net_traits::response::HttpsState;
+use net_traits::servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
 use net_traits::{
     CoreResourceMsg, CoreResourceThread, ReferrerPolicy, ResourceThreads, fetch_async,
 };
@@ -66,7 +67,6 @@ use profile_traits::{
 use rustc_hash::{FxBuildHasher, FxHashMap};
 use script_bindings::interfaces::GlobalScopeHelpers;
 use script_bindings::settings_stack::run_a_script;
-use net_traits::servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
 use storage_traits::StorageThreads;
 use strum::VariantArray;
 use timers::{TimerEventRequest, TimerId};

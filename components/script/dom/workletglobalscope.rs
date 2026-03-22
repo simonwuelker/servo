@@ -16,7 +16,7 @@ use net_traits::ResourceThreads;
 use net_traits::image_cache::ImageCache;
 use profile_traits::{mem, time};
 use script_traits::Painter;
-use servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
+use net_traits::servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
 use storage_traits::StorageThreads;
 use stylo_atoms::Atom;
 

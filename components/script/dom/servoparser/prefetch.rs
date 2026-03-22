@@ -20,8 +20,8 @@ use net_traits::request::{
     CorsSettings, CredentialsMode, Destination, InsecureRequestsPolicy, ParserMetadata, Referrer,
     RequestClient,
 };
-use net_traits::{CoreResourceMsg, FetchChannels, ReferrerPolicy, ResourceThreads};
 use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
+use net_traits::{CoreResourceMsg, FetchChannels, ReferrerPolicy, ResourceThreads};
 
 use crate::dom::bindings::reflector::DomGlobal;
 use crate::dom::bindings::trace::{CustomTraceable, JSTraceable};

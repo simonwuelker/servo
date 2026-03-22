@@ -17,9 +17,9 @@ use js::rust::wrappers2::{
     JS_GetScriptPrivate, JS_SetPendingException,
 };
 use js::rust::{CompileOptionsWrapper, MutableHandleValue, transform_str_to_source_text};
+use net_traits::servo_url::ServoUrl;
 use script_bindings::cformat;
 use script_bindings::settings_stack::run_a_script;
-use net_traits::servo_url::ServoUrl;
 
 use crate::DomTypeHolder;
 use crate::dom::bindings::codegen::Bindings::WindowBinding::WindowMethods;

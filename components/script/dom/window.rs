@@ -69,6 +69,7 @@ use net_traits::image_cache::{
     ImageResponse, PendingImageId, PendingImageResponse, RasterizationCompleteResponse,
 };
 use net_traits::request::Referrer;
+use net_traits::servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
 use net_traits::{ResourceFetchTiming, ResourceThreads};
 use num_traits::ToPrimitive;
 use paint_api::{CrossProcessPaintApi, PinchZoomInfos};
@@ -85,7 +86,6 @@ use selectors::attr::CaseSensitivity;
 use servo_arc::Arc as ServoArc;
 use servo_config::pref;
 use servo_geometry::DeviceIndependentIntRect;
-use net_traits::servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
 use storage_traits::StorageThreads;
 use storage_traits::webstorage_thread::WebStorageType;
 use style::error_reporting::{ContextualParseError, ParseErrorReporter};

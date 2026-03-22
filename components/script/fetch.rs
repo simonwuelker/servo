@@ -17,6 +17,7 @@ use net_traits::request::{
     CorsSettings, CredentialsMode, Destination, Referrer, Request as NetTraitsRequest,
     RequestBuilder, RequestId, RequestMode, ServiceWorkersMode,
 };
+use net_traits::servo_url::ServoUrl;
 use net_traits::{
     CoreResourceMsg, CoreResourceThread, FetchChannels, FetchMetadata, FetchResponseMsg,
     FilteredMetadata, Metadata, NetworkError, ResourceFetchTiming, cancel_async_fetch,
@@ -24,7 +25,6 @@ use net_traits::{
 use rustc_hash::FxHashMap;
 use script_bindings::cformat;
 use serde::{Deserialize, Serialize};
-use net_traits::servo_url::ServoUrl;
 use timers::TimerEventRequest;
 use uuid::Uuid;
 

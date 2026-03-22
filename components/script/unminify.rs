@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::rc::Rc;
 
-use script_bindings::domstring::BytesView;
 use net_traits::servo_url::ServoUrl;
+use script_bindings::domstring::BytesView;
 use tempfile::NamedTempFile;
 use uuid::Uuid;
 

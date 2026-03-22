@@ -23,6 +23,7 @@ use net_traits::image_cache::{
     ImageResponse, PendingImageId,
 };
 use net_traits::request::{CorsSettings, Destination, Initiator, RequestId};
+use net_traits::servo_url::ServoUrl;
 use net_traits::{
     FetchMetadata, FetchResponseMsg, NetworkError, ReferrerPolicy, ResourceFetchTiming,
 };
@@ -31,7 +32,6 @@ use pixels::{CorsStatus, ImageMetadata, Snapshot};
 use regex::Regex;
 use rustc_hash::FxHashSet;
 use script_bindings::script_runtime::temp_cx;
-use net_traits::servo_url::ServoUrl;
 use servo_url::origin::MutableOrigin;
 use style::attr::{AttrValue, LengthOrPercentageOrAuto, parse_unsigned_integer};
 use style::stylesheets::CssRuleType;

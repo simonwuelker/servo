@@ -74,6 +74,7 @@ use metrics::MAX_TASK_NS;
 use net_traits::image_cache::{ImageCache, ImageCacheFactory, ImageCacheResponseMessage};
 use net_traits::request::{Referrer, RequestId};
 use net_traits::response::ResponseInit;
+use net_traits::servo_url::{ImmutableOrigin, MutableOrigin, OriginSnapshot, ServoUrl};
 use net_traits::{
     FetchMetadata, FetchResponseMsg, Metadata, NetworkError, ResourceFetchTiming, ResourceThreads,
     ResourceTimingType,
@@ -92,7 +93,6 @@ use script_traits::{
 };
 use servo_arc::Arc as ServoArc;
 use servo_config::{opts, pref, prefs};
-use servo_url::{ImmutableOrigin, MutableOrigin, OriginSnapshot, ServoUrl};
 use storage_traits::StorageThreads;
 use storage_traits::webstorage_thread::WebStorageType;
 use style::context::QuirksMode;
@@ -4040,7 +4040,7 @@ impl ScriptThread {
         cx: &mut js::context::JSContext,
         mut incomplete: InProgressLoad,
     ) {
-        let url = ServoUrl::parse("about:srcdoc").unwrap();
+        let url = "about:srcdoc".parse::<ServoUrl>().unwrap();
         let mut meta = Metadata::default(url.clone());
         meta.set_content_type(Some(&mime::TEXT_HTML));
         meta.set_referrer_policy(incomplete.load_data.referrer_policy);

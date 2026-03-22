@@ -17,6 +17,7 @@ use embedder_traits::resources::{self, Resource};
 use js::context::JSContext;
 use js::rust::wrappers2::JS_DefineDebuggerObject;
 use net_traits::ResourceThreads;
+use net_traits::servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
 use profile_traits::{mem, time};
 use script_bindings::codegen::GenericBindings::DebuggerEvalEventBinding::EvalResultValue;
 use script_bindings::codegen::GenericBindings::DebuggerGetPossibleBreakpointsEventBinding::RecommendedBreakpointLocation;
@@ -25,7 +26,6 @@ use script_bindings::codegen::GenericBindings::DebuggerGlobalScopeBinding::{
 };
 use script_bindings::reflector::DomObject;
 use script_bindings::str::DOMString;
-use net_traits::servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
 use storage_traits::StorageThreads;
 
 use crate::dom::bindings::codegen::Bindings::DebuggerGetEnvironmentEventBinding::EnvironmentInfo;
@@ -382,7 +382,10 @@ impl DebuggerGlobalScopeMethods<crate::DomTypeHolder> for DebuggerGlobalScope {
                 .as_ref()
                 .map(|url| url.str())
                 // FIXME: use page/worker url as base here, not `url_original`
-                .and_then(|url| ServoUrl::parse_with_base(url_original.as_ref(), &url).ok());
+                .and_then(|url| {
+                    ServoUrl::parse_with_base(url_original.as_ref().map(|url| url.as_url()), &url)
+                        .ok()
+                });
 
             // If the `introductionType` is “eval or eval-like”, the `url` won’t be meaningful, so ignore these
             // sources unless we have a `urlOverride` (aka `displayURL` aka `//# sourceURL`).

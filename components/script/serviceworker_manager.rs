@@ -22,9 +22,9 @@ use crossbeam_channel::{Receiver, Sender, select, unbounded};
 use fonts::FontContext;
 use ipc_channel::ipc;
 use ipc_channel::router::ROUTER;
+use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
 use net_traits::{CoreResourceMsg, CustomResponseMediator};
 use servo_config::pref;
-use servo_url::{ImmutableOrigin, ServoUrl};
 
 use crate::dom::abstractworker::{MessageData, WorkerScriptMsg};
 use crate::dom::serviceworkerglobalscope::{

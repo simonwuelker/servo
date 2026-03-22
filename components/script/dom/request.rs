@@ -42,6 +42,7 @@ use crate::dom::promise::Promise;
 use crate::dom::stream::readablestream::ReadableStream;
 use crate::fetch::RequestWithGlobalScope;
 use crate::script_runtime::CanGc;
+use crate::url::{RelativeTo, parse_url_and_lock_blob};
 
 #[dom_struct]
 pub(crate) struct Request {
@@ -120,8 +121,7 @@ impl Request {
             // Step 5. If input is a string, then:
             RequestInfo::USVString(USVString(ref usv_string)) => {
                 // Step 5.1. Let parsedURL be the result of parsing input with baseURL.
-                let parsed_url =
-                    crate::url::resolve_blob_url(usv_string, crate::url::RelativeTo::Global(&global));
+                let parsed_url = parse_url_and_lock_blob(usv_string, RelativeTo::Global(&global));
                 // Step 5.2. If parsedURL is failure, then throw a TypeError.
                 if parsed_url.is_err() {
                     return Err(Error::Type(c"Url could not be parsed".to_owned()));

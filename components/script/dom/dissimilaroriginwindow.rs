@@ -235,7 +235,10 @@ impl DissimilarOriginWindow {
         let target_origin = match target_origin.0[..].as_ref() {
             "*" => None,
             "/" => Some(source_origin.clone()),
-            url =>  Url::parse(url).map_err(|_| Error::Syntax(None))?.origin().into(),
+            url => {
+                let url = Url::parse(url).map_err(|_| Error::Syntax(None))?;
+                Some(url.origin().into())
+            },
         };
         let msg = ScriptToConstellationMessage::PostMessage {
             target,

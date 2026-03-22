@@ -26,6 +26,7 @@ use js::realm::{AutoRealm, CurrentRealm};
 use layout_api::MediaFrame;
 use media::{GLPlayerMsg, GLPlayerMsgForward, WindowGLContext};
 use net_traits::request::{Destination, RequestId};
+use net_traits::servo_url::ServoUrl;
 use net_traits::{
     CoreResourceThread, FetchMetadata, FilteredMetadata, NetworkError, ResourceFetchTiming,
 };
@@ -41,7 +42,6 @@ use servo_media::player::audio::AudioRenderer;
 use servo_media::player::video::{VideoFrame, VideoFrameRenderer};
 use servo_media::player::{PlaybackState, Player, PlayerError, PlayerEvent, SeekLock, StreamType};
 use servo_media::{ClientContextId, ServoMedia, SupportsMediaType};
-use net_traits::servo_url::ServoUrl;
 use stylo_atoms::Atom;
 use uuid::Uuid;
 use webrender_api::{

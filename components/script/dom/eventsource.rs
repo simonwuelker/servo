@@ -15,9 +15,9 @@ use js::jsval::UndefinedValue;
 use js::rust::HandleObject;
 use mime::{self, Mime};
 use net_traits::request::{CacheMode, CorsSettings, Destination, RequestBuilder, RequestId};
+use net_traits::servo_url::ServoUrl;
 use net_traits::{FetchMetadata, FilteredMetadata, NetworkError, ResourceFetchTiming};
 use script_bindings::conversions::SafeToJSValConvertible;
-use net_traits::servo_url::ServoUrl;
 use stylo_atoms::Atom;
 
 use crate::dom::bindings::cell::DomRefCell;

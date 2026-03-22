@@ -10,8 +10,8 @@ use std::sync::Arc;
 
 use net_traits::image_cache::{ImageCache, PendingImageId};
 use net_traits::request::{Destination, RequestBuilder, RequestId};
-use net_traits::{FetchMetadata, FetchResponseMsg, NetworkError, ResourceFetchTiming};
 use net_traits::servo_url::ServoUrl;
+use net_traits::{FetchMetadata, FetchResponseMsg, NetworkError, ResourceFetchTiming};
 
 use crate::dom::bindings::refcounted::Trusted;
 use crate::dom::bindings::reflector::DomGlobal;

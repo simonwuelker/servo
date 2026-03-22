@@ -7,8 +7,8 @@
 use std::cell::Cell;
 
 use markup5ever::TokenizerResult;
-use script_bindings::trace::CustomTraceable;
 use net_traits::servo_url::ServoUrl;
+use script_bindings::trace::CustomTraceable;
 use xml5ever::buffer_queue::BufferQueue;
 use xml5ever::tokenizer::XmlTokenizer;
 use xml5ever::tree_builder::XmlTreeBuilder;

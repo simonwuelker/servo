@@ -17,12 +17,12 @@ use net_traits::request::{
     RequestBuilder, RequestClient, RequestId,
 };
 use net_traits::response::{Response, ResponseBody};
+use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
 use net_traits::{
     CoreResourceMsg, FetchMetadata, NetworkError, ReferrerPolicy, ResourceFetchTiming,
 };
 pub use nom_rfc8288::complete::LinkDataOwned as LinkHeader;
 use nom_rfc8288::complete::link_lenient as parse_link_header;
-use net_traits::servo_url::{ImmutableOrigin, ServoUrl};
 use strum::IntoStaticStr;
 
 use crate::dom::bindings::refcounted::Trusted;

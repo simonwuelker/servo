@@ -26,6 +26,7 @@ use mime::{self, Mime};
 use net_traits::mime_classifier::{ApacheBugFlag, MediaType, MimeClassifier, NoSniffFlag};
 use net_traits::policy_container::PolicyContainer;
 use net_traits::request::RequestId;
+use net_traits::servo_url::ServoUrl;
 use net_traits::{
     FetchMetadata, LoadContext, Metadata, NetworkError, ReferrerPolicy, ResourceFetchTiming,
 };
@@ -36,7 +37,6 @@ use profile_traits::time_profile;
 use script_bindings::script_runtime::temp_cx;
 use script_traits::DocumentActivity;
 use servo_config::pref;
-use net_traits::servo_url::ServoUrl;
 use style::context::QuirksMode as ServoQuirksMode;
 use tendril::stream::LossyDecoder;
 use tendril::{ByteTendril, TendrilSink};

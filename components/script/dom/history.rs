@@ -17,7 +17,7 @@ use js::jsval::{JSVal, NullValue, UndefinedValue};
 use js::rust::{HandleValue, MutableHandleValue};
 use net_traits::CoreResourceMsg;
 use profile_traits::generic_channel;
-use servo_url::ServoUrl;
+use net_traits::servo_url::ServoUrl;
 
 use crate::dom::bindings::codegen::Bindings::HistoryBinding::HistoryMethods;
 use crate::dom::bindings::codegen::Bindings::LocationBinding::Location_Binding::LocationMethods;

@@ -4846,7 +4846,7 @@ where
                 .iter()
                 .rev()
                 .scan(current_url, &resolve_url_future)
-                .map(|url| url.unlock_blob())
+                .map(|url| url.unlock_blob()),
         );
         self.embedder_proxy.send(EmbedderMsg::HistoryChanged(
             webview_id,

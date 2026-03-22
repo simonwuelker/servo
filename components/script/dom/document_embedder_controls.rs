@@ -16,6 +16,7 @@ use euclid::{Point2D, Rect, Size2D};
 use js::context::JSContext;
 use net_traits::CoreResourceMsg;
 use net_traits::filemanager_thread::FileManagerThreadMsg;
+use net_traits::servo_url::ServoUrl;
 use rustc_hash::FxHashMap;
 use script_bindings::codegen::GenericBindings::HTMLAnchorElementBinding::HTMLAnchorElementMethods;
 use script_bindings::codegen::GenericBindings::HTMLImageElementBinding::HTMLImageElementMethods;
@@ -24,7 +25,6 @@ use script_bindings::codegen::GenericBindings::WindowBinding::WindowMethods;
 use script_bindings::inheritance::Castable;
 use script_bindings::root::{Dom, DomRoot};
 use script_bindings::script_runtime::CanGc;
-use net_traits::servo_url::ServoUrl;
 use webrender_api::units::{DeviceIntRect, DevicePoint};
 
 use crate::dom::activation::Activatable;

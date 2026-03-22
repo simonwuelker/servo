@@ -15,12 +15,12 @@ use net_traits::image_cache::{
     PendingImageId,
 };
 use net_traits::request::{CredentialsMode, Destination, RequestBuilder, RequestId};
+use net_traits::servo_url::ServoUrl;
 use net_traits::{
     CoreResourceThread, FetchMetadata, FetchResponseMsg, NetworkError, ResourceFetchTiming,
 };
 use pixels::{Snapshot, SnapshotAlphaMode, SnapshotPixelFormat};
 use servo_media::player::video::VideoFrame;
-use net_traits::servo_url::ServoUrl;
 use style::attr::{AttrValue, LengthOrPercentageOrAuto};
 
 use crate::document_loader::{LoadBlocker, LoadType};

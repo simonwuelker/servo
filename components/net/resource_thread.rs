@@ -13,8 +13,8 @@ use std::sync::{Arc, Weak};
 use std::thread;
 
 use base::generic_channel::{
-    self, CallbackSetter, GenericReceiver, GenericReceiverSet, GenericSelectionResult,
-    GenericSender,
+    self, CallbackSetter, GenericCallback, GenericReceiver, GenericReceiverSet,
+    GenericSelectionResult, GenericSender,
 };
 use base::id::CookieStoreId;
 use cookie::Cookie;

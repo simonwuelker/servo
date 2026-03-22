@@ -20,8 +20,8 @@ use html5ever::tree_builder::{
 };
 use html5ever::{Attribute as HtmlAttribute, ExpandedName, QualName, local_name, ns};
 use markup5ever::TokenizerResult;
-use rustc_hash::FxHashMap;
 use net_traits::servo_url::ServoUrl;
+use rustc_hash::FxHashMap;
 use style::context::QuirksMode as ServoQuirksMode;
 
 use crate::dom::bindings::codegen::Bindings::HTMLTemplateElementBinding::HTMLTemplateElementMethods;
