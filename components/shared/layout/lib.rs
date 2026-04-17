@@ -60,7 +60,7 @@ use servo_url::{ImmutableOrigin, ServoUrl};
 use style::Atom;
 use style::animation::DocumentAnimationSet;
 use style::attr::{AttrValue, parse_integer, parse_unsigned_integer};
-use style::context::QuirksMode;
+use style::context::{QuirksMode, SharedStyleContext};
 use style::data::ElementDataWrapper;
 use style::device::Device;
 use style::dom::OpaqueNode;
@@ -427,6 +427,12 @@ pub trait Layout {
     fn set_needs_accessibility_update(&self);
 
     fn font_context(&self) -> &Arc<FontContext>;
+    fn start_animation_from_script(
+        &self,
+        document: TrustedNodeAddress,
+        node: TrustedNodeAddress,
+        reflow_request: ReflowRequest,
+    );
 }
 
 /// This trait is part of `layout_api` because it depends on both `script_traits`

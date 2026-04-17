@@ -739,6 +739,59 @@ impl Layout for LayoutThread {
     fn font_context(&self) -> &Arc<FontContext> {
         &self.font_context
     }
+
+    fn start_animation_from_script(
+        &self,
+        document: TrustedNodeAddress,
+        node: TrustedNodeAddress,
+        reflow_request: ReflowRequest,
+    ) {
+        let image_resolver = Arc::new(ImageResolver {
+            origin: reflow_request.origin.clone(),
+            image_cache: self.image_cache.clone(),
+            resolved_images_cache: self.resolved_images_cache.clone(),
+            pending_images: Mutex::default(),
+            pending_rasterization_images: Mutex::default(),
+            pending_svg_elements_for_serialization: Mutex::default(),
+            animating_images: reflow_request.animating_images.clone(),
+            animation_timeline_value: reflow_request.animation_timeline_value,
+        });
+
+        let document = unsafe { ServoLayoutNode::new(&document) };
+        let document = unsafe { document.dangerous_style_node() }
+            .as_document()
+            .unwrap();
+
+        let mut snapshot_map = SnapshotMap::new();
+        let shared_locks = document.shared_style_locks();
+        let user_agent_stylesheets = get_ua_stylesheets(&shared_locks.ua_or_user);
+        let guards = StylesheetGuards {
+            author: &shared_locks.author.read(),
+            ua_or_user: &shared_locks.ua_or_user.read(),
+        };
+
+        let rayon_pool = STYLE_THREAD_POOL.lock();
+        let rayon_pool = rayon_pool.pool();
+        let rayon_pool = rayon_pool.as_ref();
+
+        let layout_context = LayoutContext {
+            style_context: self.build_shared_style_context(
+                guards,
+                &snapshot_map,
+                reflow_request.animation_timeline_value,
+                &reflow_request.animations,
+                TraversalFlags::empty(),
+            ),
+            font_context: self.font_context.clone(),
+            iframe_sizes: Mutex::default(),
+            allow_parallel_layout: rayon_pool.is_some(),
+            image_resolver: image_resolver.clone(),
+            painter_id: self.webview_id.into(),
+            parallelism_job_count_minimum: pref!(layout_parallelism_job_count_minimum) as usize,
+            parallelism_job_size_minimum: pref!(layout_parallelism_job_size_minimum) as usize,
+            device_size: reflow_request.viewport_details.device_size.cast_unit(),
+        };
+    }
 }
 
 impl LayoutThread {

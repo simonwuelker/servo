@@ -4,6 +4,8 @@
 
 use cssparser::{Parser, ParserInput};
 use dom_struct::dom_struct;
+use js::context::JSContext;
+use js::rust::HandleObject;
 use script_bindings::cell::DomRefCell;
 use script_bindings::codegen::GenericBindings::AnimationEffectBinding::{
     AnimationEffectMethods, ComputedEffectTiming, EffectTiming, FillMode, OptionalEffectTiming,

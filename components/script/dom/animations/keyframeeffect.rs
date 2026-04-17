@@ -51,6 +51,7 @@ use crate::dom::bindings::codegen::Bindings::KeyframeEffectBinding::{
 };
 use crate::dom::bindings::root::MutNullableDom;
 use crate::dom::element::Element;
+use crate::dom::globalscope::GlobalScope;
 use crate::dom::window::Window;
 
 /// <https://drafts.csswg.org/web-animations-1/#keyframeeffect>
@@ -89,6 +90,11 @@ impl KeyframeEffect {
 
     pub(crate) fn new(cx: &mut JSContext, window: &Window) -> DomRoot<Self> {
         Self::new_with_proto_and_cx(cx, window, None)
+    }
+
+    /// <https://drafts.csswg.org/web-animations-1/#effect-target-target-element>
+    pub(crate) fn target_element(&self) -> Option<DomRoot<Element>> {
+        self.target_element.get()
     }
 }
 

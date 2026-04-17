@@ -4637,6 +4637,7 @@ impl ElementMethods<crate::DomTypeHolder> for Element {
         // to animation’s id attribute.
 
         // TODO: Step 6. Run the procedure to play an animation for animation with the auto-rewind flag set to true.
+        animation.play(&window.Document());
 
         // Step 7. Return animation.
         animation
