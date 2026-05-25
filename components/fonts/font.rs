@@ -75,6 +75,7 @@ pub(crate) const SBIX: Tag = Tag::new(b"sbix");
 pub(crate) const SMPL: Tag = Tag::new(b"smpl");
 pub(crate) const TNUM: Tag = Tag::new(b"tnum");
 pub(crate) const TRAD: Tag = Tag::new(b"trad");
+pub(crate) const VKRN: Tag = Tag::new(b"vkrn");
 pub(crate) const ZERO: Tag = Tag::new(b"zero");
 
 pub const LAST_RESORT_GLYPH_ADVANCE: FractionalPixel = 10.0;

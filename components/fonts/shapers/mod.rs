@@ -13,7 +13,7 @@ use style::values::computed::{FontVariantEastAsian, FontVariantLigatures, FontVa
 
 use crate::{
     AFRC, CALT, CLIG, DLIG, FRAC, FWID, GlyphId, HLIG, JP04, JP78, JP83, JP90, KERN, LIGA, LNUM,
-    ONUM, ORDN, PNUM, PWID, RUBY, SMPL, ShapingFlags, ShapingOptions, TNUM, TRAD, ZERO,
+    ONUM, ORDN, PNUM, PWID, RUBY, SMPL, ShapingFlags, ShapingOptions, TNUM, TRAD, VKRN, ZERO,
 };
 
 /// Utility function to convert a `unicode_script::Script` enum into the corresponding `c_uint` tag that
@@ -196,6 +196,7 @@ fn compute_used_font_features(options: &ShapingOptions) -> impl Iterator<Item = 
         .contains(ShapingFlags::DISABLE_KERNING_SHAPING_FLAG)
     {
         add_feature(KERN, 0);
+        add_feature(VKRN, 0);
     }
 
     for feature_setting in options.feature_settings.0.iter() {
