@@ -462,11 +462,12 @@ impl<'a, 'tcx> visit::Visitor<'tcx> for FnDefVisitor<'a, 'tcx> {
             // hir::ExprAssign(_, ref rhs) => require_rooted(cx, self.in_new_function, &*rhs),
             // This catches calls; basically, this enforces the constraint that only constructors
             // can call other constructors.
-            // FIXME: Enable this? Currently triggers with constructs involving DomRefCell, and
-            // constructs like Vec<JS<T>> and RootedVec<JS<T>>.
-            // hir::ExprCall(..) if !self.in_new_function => {
-            //     require_rooted(cx, self.in_new_function, expr);
-            // }
+            ExprKind::AddrOf(_, _, referenced_expression) => {
+                require_rooted(cx, self.in_new_function, referenced_expression);
+            },
+            ExprKind::MethodCall(_, self_expression, ..) if !self.in_new_function => {
+                require_rooted(cx, self.in_new_function, self_expression);
+            },
             _ => {
                 // TODO(pcwalton): Check generics with a whitelist of allowed generics.
             },
