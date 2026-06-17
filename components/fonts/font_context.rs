@@ -35,9 +35,7 @@ use servo_url::ServoUrl;
 use style::Atom;
 use style::computed_values::font_variant_caps::T as FontVariantCaps;
 use style::device::Device;
-use style::font_face::{
-    FontFaceSourceFormat, FontFaceSourceFormatKeyword, Source, SourceList, UrlSource,
-};
+use style::font_face::{FontFaceSourceFormat, FontFaceSourceFormatKeyword, Source, SourceList};
 use style::properties::generated::font_face::Descriptors as FontFaceRuleDescriptors;
 use style::properties::style_structs::Font as FontStyleStruct;
 use style::shared_lock::SharedRwLockReadGuard;
@@ -597,6 +595,45 @@ impl WebFontDownloadState {
             WebFontLoadInitiator::Script(_) => false,
         }
     }
+
+    /// Computes the new template for a loaded web font and inserts it into the font store.
+    ///
+    /// On success, this consumes `self`. On failure, `self` is handed back to the caller so it can
+    /// try loading the next source.
+    #[allow(clippy::result_large_err)]
+    fn handle_data_available_for_web_font(
+        self,
+        font_identifier: FontIdentifier,
+        font_data: FontData,
+        should_store_font_data: ShouldStoreFontData,
+    ) -> Result<(), Self> {
+        let Ok(handle) =
+            PlatformFont::new_from_data(font_identifier.clone(), &font_data, None, &[], false)
+        else {
+            return Err(self);
+        };
+
+        let mut descriptor = handle.descriptor();
+        descriptor
+            .override_values_with_css_font_template_descriptors(&self.css_font_face_descriptors);
+        let new_template = FontTemplate::new(
+            font_identifier,
+            descriptor,
+            self.initiator.stylesheet().cloned(),
+            self.initiator.font_face_rule().cloned(),
+        );
+
+        if should_store_font_data == ShouldStoreFontData::Yes {
+            self.font_context
+                .font_data
+                .write()
+                .insert(new_template.identifier.clone(), font_data);
+        }
+
+        self.handle_web_font_load_success(new_template);
+
+        Ok(())
+    }
 }
 
 pub trait FontContextWebFontMethods {
@@ -891,7 +928,31 @@ impl FontContext {
         let web_font_family_name = state.css_font_face_descriptors.family_name.clone();
         match source {
             Source::Url(url_source) => {
-                RemoteWebFontDownloader::download(url_source, this, web_font_family_name, state)
+                // https://drafts.csswg.org/css-fonts/#font-fetching-requirements
+                let Some(url) = url_source.url.url() else {
+                    return this.process_next_web_font_source(state);
+                };
+
+                let font_identifier = FontIdentifier::Web(ServoUrl::from(url.clone()));
+                if let Some(cached_font_data) = self.font_data.read().get(&font_identifier) {
+                    if let Err(state) = state.handle_data_available_for_web_font(
+                        font_identifier,
+                        cached_font_data.clone(),
+                        ShouldStoreFontData::No,
+                    ) {
+                        if cfg!(debug_assertions) {
+                            unreachable!("Should not have cached invalid font data");
+                        }
+                        this.process_next_web_font_source(state);
+                    }
+                } else {
+                    RemoteWebFontDownloader::download(
+                        url.clone(),
+                        this,
+                        web_font_family_name,
+                        state,
+                    )
+                }
             },
             Source::Local(ref local_family_name) => {
                 if let Some(new_template) = state
@@ -965,17 +1026,11 @@ enum DownloaderResponseResult {
 
 impl RemoteWebFontDownloader {
     fn download(
-        url_source: UrlSource,
+        url: ServoArc<Url>,
         font_context: Arc<FontContext>,
         web_font_family_name: LowercaseFontFamilyName,
         state: WebFontDownloadState,
     ) {
-        // https://drafts.csswg.org/css-fonts/#font-fetching-requirements
-        let url = match url_source.url.url() {
-            Some(url) => url.clone(),
-            None => return,
-        };
-
         let document_context = &state.document_context;
 
         let request = RequestBuilder::new(
@@ -1060,32 +1115,19 @@ impl RemoteWebFontDownloader {
             },
         };
 
-        let url: ServoUrl = self.url.clone().into();
-        let identifier = FontIdentifier::Web(url.clone());
-        let Ok(handle) = PlatformFont::new_from_data(identifier, &font_data, None, &[], false)
-        else {
-            return false;
-        };
         let state = self.take_state();
+        let url: ServoUrl = self.url.clone().into();
 
-        let mut descriptor = handle.descriptor();
-        descriptor
-            .override_values_with_css_font_template_descriptors(&state.css_font_face_descriptors);
-
-        let new_template = FontTemplate::new(
-            FontIdentifier::Web(url),
-            descriptor,
-            state.initiator.stylesheet().cloned(),
-            state.initiator.font_face_rule().cloned(),
-        );
-
-        state
-            .font_context
-            .font_data
-            .write()
-            .insert(new_template.identifier.clone(), font_data);
-
-        state.handle_web_font_load_success(new_template);
+        if state
+            .handle_data_available_for_web_font(
+                FontIdentifier::Web(url),
+                font_data,
+                ShouldStoreFontData::Yes,
+            )
+            .is_err()
+        {
+            return false;
+        }
 
         // If the load was canceled above, then we still want to return true from this function in
         // order to halt any attempt to load sources that come later on the source list.
@@ -1174,4 +1216,10 @@ impl Hash for FontGroupCacheKey {
     {
         self.style.hash.hash(hasher)
     }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum ShouldStoreFontData {
+    Yes,
+    No,
 }
