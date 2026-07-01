@@ -79,8 +79,8 @@ where
         panic!("this should never be called")
     }
 
-    fn text_node_needs_traversal(node: E::ConcreteNode, parent_data: &ElementData) -> bool {
-        node.layout_node().layout_data().is_none() || !parent_data.damage.is_empty()
+    fn text_node_needs_traversal(_: E::ConcreteNode, _: &ElementData) -> bool {
+        false
     }
 
     fn shared_context(&self) -> &SharedStyleContext<'_> {
