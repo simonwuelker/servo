@@ -28,6 +28,7 @@ use crate::dom::execcommand::commands::fontsize::{
     execute_fontsize_command, font_size_loosely_equivalent, value_for_fontsize_command,
 };
 use crate::dom::execcommand::commands::forecolor::execute_forecolor_command;
+use crate::dom::execcommand::commands::formatblock::execute_formatblock_command;
 use crate::dom::execcommand::commands::hilitecolor::execute_hilitecolor_command;
 use crate::dom::execcommand::commands::insertparagraph::execute_insert_paragraph_command;
 use crate::dom::execcommand::commands::italic::execute_italic_command;
@@ -739,7 +740,8 @@ impl CommandName {
             CommandName::Delete => execute_delete_command(cx, document, selection),
             CommandName::FontName => execute_fontname_command(cx, document, selection, value),
             CommandName::FontSize => execute_fontsize_command(cx, document, selection, value),
-            CommandName::ForeColor => execute_forecolor_command(cx, document, selection, value),
+            CommandName::ForeColor => execute_formatblock_command(cx, document, selection, value),
+            CommandName::FormatBlock => execute_formatblock_command(cx, document, selection, value),
             CommandName::HiliteColor => execute_hilitecolor_command(cx, document, selection, value),
             CommandName::InsertParagraph => {
                 execute_insert_paragraph_command(cx, document, selection)

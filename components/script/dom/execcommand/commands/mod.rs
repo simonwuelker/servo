@@ -10,6 +10,7 @@ pub(crate) mod delete;
 pub(crate) mod fontname;
 pub(crate) mod fontsize;
 pub(crate) mod forecolor;
+pub(crate) mod formatblock;
 pub(crate) mod hilitecolor;
 pub(crate) mod insertparagraph;
 pub(crate) mod italic;

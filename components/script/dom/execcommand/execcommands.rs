@@ -128,6 +128,7 @@ impl Document {
             "fontname" => CommandName::FontName,
             "fontsize" => CommandName::FontSize,
             "forecolor" => CommandName::ForeColor,
+            "formatblock" => CommandName::FormatBlock,
             "hilitecolor" => CommandName::HiliteColor,
             "insertparagraph" => CommandName::InsertParagraph,
             "italic" => CommandName::Italic,
