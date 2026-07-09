@@ -740,7 +740,7 @@ impl CommandName {
             CommandName::Delete => execute_delete_command(cx, document, selection),
             CommandName::FontName => execute_fontname_command(cx, document, selection, value),
             CommandName::FontSize => execute_fontsize_command(cx, document, selection, value),
-            CommandName::ForeColor => execute_formatblock_command(cx, document, selection, value),
+            CommandName::ForeColor => execute_forecolor_command(cx, document, selection, value),
             CommandName::FormatBlock => execute_formatblock_command(cx, document, selection, value),
             CommandName::HiliteColor => execute_hilitecolor_command(cx, document, selection, value),
             CommandName::InsertParagraph => {

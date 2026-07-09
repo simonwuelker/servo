@@ -162,7 +162,7 @@ pub(crate) fn execute_delete_command(
         // Step 7.2. Normalize sublists of each item in items.
         // TODO
         // Step 7.3. Record the values of the one-node list consisting of node, and let values be the result.
-        let values = record_the_values(vec![node.clone()]);
+        let values = record_the_values(&[node.clone()]);
         // Step 7.4. Split the parent of the one-node list consisting of node.
         split_the_parent(cx, &[&node]);
         // Step 7.5. Restore the values from values.

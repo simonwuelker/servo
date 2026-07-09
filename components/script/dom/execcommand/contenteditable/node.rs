@@ -816,9 +816,7 @@ pub(crate) struct RecordedValueAndCommandOfNode {
 }
 
 /// <https://w3c.github.io/editing/docs/execCommand/#record-the-values>
-pub(crate) fn record_the_values(
-    node_list: Vec<DomRoot<Node>>,
-) -> Vec<RecordedValueAndCommandOfNode> {
+pub(crate) fn record_the_values(node_list: &[DomRoot<Node>]) -> Vec<RecordedValueAndCommandOfNode> {
     // Step 1. Let values be a list of (node, command, specified command value) triples, initially empty.
     let mut values = vec![];
     // Step 2. For each node in node list,
@@ -1715,7 +1713,7 @@ impl Node {
                 if child.is_prohibited_paragraph_child() {
                     // Step 2.7.1. Record the values of the one-node list consisting of child,
                     // and let values be the result.
-                    let values = record_the_values(vec![child.clone()]);
+                    let values = record_the_values(&[child.clone()]);
                     // Step 2.7.2. Split the parent of the one-node list consisting of child.
                     split_the_parent(cx, &[&child]);
                     // Step 2.7.3. Restore the values from values.
@@ -1726,7 +1724,7 @@ impl Node {
             return;
         }
         // Step 3. Record the values of the one-node list consisting of node, and let values be the result.
-        let values = record_the_values(vec![DomRoot::from_ref(self)]);
+        let values = record_the_values(&[DomRoot::from_ref(self)]);
         // Step 4. While node is not an allowed child of its parent,
         // split the parent of the one-node list consisting of node.
         loop {

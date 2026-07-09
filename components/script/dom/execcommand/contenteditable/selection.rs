@@ -602,7 +602,12 @@ impl Selection {
                 break;
             }
             // Step 32.9. Record the values of children, and let values be the result.
-            let values = record_the_values(children.iter().map(|dom| dom.as_rooted()).collect());
+            let values = record_the_values(
+                &children
+                    .iter()
+                    .map(|dom| dom.as_rooted())
+                    .collect::<Vec<_>>(),
+            );
 
             // Step 32.10. While children's first member's parent is not start block,
             // split the parent of children.
@@ -681,7 +686,7 @@ impl Selection {
                 break;
             }
             // Step 33.8. Record the values of nodes to move, and let values be the result.
-            let values = record_the_values(nodes_to_move.iter().cloned().collect());
+            let values = record_the_values(&nodes_to_move.iter().cloned().collect::<Vec<_>>());
 
             // Step 33.9. For each node in nodes to move,
             // append node as the last child of start block, preserving ranges.
@@ -708,7 +713,7 @@ impl Selection {
                 last.remove_self(cx);
             }
             // Step 34.3. Record the values of end block's children, and let values be the result.
-            let values = record_the_values(end_block.children().collect());
+            let values = record_the_values(&end_block.children().collect::<Vec<_>>());
 
             // Step 34.4. While end block has children,
             // append the first child of end block to start block, preserving ranges.
