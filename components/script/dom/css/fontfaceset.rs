@@ -16,6 +16,7 @@ use script_bindings::cell::DomRefCell;
 use script_bindings::codegen::GenericBindings::FontFaceBinding::{
     FontFaceLoadStatus, FontFaceMethods,
 };
+use script_bindings::script_runtime::temp_cx;
 use script_bindings::like::Setlike;
 use script_bindings::reflector::reflect_dom_object_with_proto_and_cx;
 
@@ -138,11 +139,8 @@ impl FontFaceSet {
         // Step 4. Queue a task to fire a font load event named loading at font face set.
         // TODO: Implement support for font loading events.
     }
-}
 
-impl FontFaceSetMethods<crate::DomTypeHolder> for FontFaceSet {
-    /// <https://drafts.csswg.org/css-font-loading/#dom-fontfaceset-ready>
-    fn Ready(&self, cx: &mut JSContext) -> Rc<Promise> {
+    fn flush_user_font_set(&self, cx: &mut JSContext) {
         if self.promise.borrow().is_fulfilled() {
             // There may be pending style changes that cause new web fonts to start loading,
             // re-initializing document.fonts.ready.
@@ -157,7 +155,13 @@ impl FontFaceSetMethods<crate::DomTypeHolder> for FontFaceSet {
                 }
             }
         }
+    }
+}
 
+impl FontFaceSetMethods<crate::DomTypeHolder> for FontFaceSet {
+    /// <https://drafts.csswg.org/css-font-loading/#dom-fontfaceset-ready>
+    fn Ready(&self, cx: &mut JSContext) -> Rc<Promise> {
+        self.flush_user_font_set(cx);
         self.promise.borrow().clone()
     }
 
@@ -283,6 +287,11 @@ impl Setlike for FontFaceSet {
 
     #[inline(always)]
     fn get_index(&self, index: u32) -> Option<Self::Key> {
+        // TODO: https://github.com/servo/servo/issues/46442
+        let mut cx = unsafe { temp_cx() };
+        let cx = &mut cx;
+        self.flush_user_font_set(cx);
+
         self.set_entries
             .borrow()
             .get(index as usize)
@@ -291,6 +300,11 @@ impl Setlike for FontFaceSet {
 
     #[inline(always)]
     fn size(&self) -> u32 {
+        // TODO: https://github.com/servo/servo/issues/46442
+        let mut cx = unsafe { temp_cx() };
+        let cx = &mut cx;
+        self.flush_user_font_set(cx);
+
         self.set_entries.borrow().len() as u32
     }
 
@@ -301,16 +315,31 @@ impl Setlike for FontFaceSet {
 
     #[inline(always)]
     fn has(&self, target: Self::Key) -> bool {
+        // TODO: https://github.com/servo/servo/issues/46442
+        let mut cx = unsafe { temp_cx() };
+        let cx = &mut cx;
+        self.flush_user_font_set(cx);
+
         self.contains_face(&target)
     }
 
     #[inline(always)]
     fn clear(&self) {
+        // TODO: https://github.com/servo/servo/issues/46442
+        let mut cx = unsafe { temp_cx() };
+        let cx = &mut cx;
+        self.flush_user_font_set(cx);
+
         self.set_entries.borrow_mut().clear();
     }
 
     #[inline(always)]
     fn delete(&self, to_delete: Self::Key) -> bool {
+        // TODO: https://github.com/servo/servo/issues/46442
+        let mut cx = unsafe { temp_cx() };
+        let cx = &mut cx;
+        self.flush_user_font_set(cx);
+
         self.delete_face(&to_delete)
     }
 }
