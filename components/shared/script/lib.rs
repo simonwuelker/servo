@@ -247,9 +247,21 @@ pub enum ScriptThreadMessage {
     WebDriverScriptCommand(PipelineId, WebDriverScriptCommand),
     /// Notifies script thread that all animations are done
     TickAllAnimations(Vec<WebViewId>),
-    /// Notifies the script thread that a new Web font has been loaded, and thus the page should be
-    /// reflowed.
-    WebFontLoaded(PipelineId),
+    /// Notifies the script thread that the `FontContext` finished loading a web font.
+    WebFontLoaded {
+        /// The pipeline of the document that loaded the font.
+        pipeline_id: PipelineId,
+        /// Whether the font was loaded successfully or not.
+        succeeded: bool,
+        /// If there are no more web fonts loading after this one then the document
+        /// may resolve the `document.fonts.ready` promise.
+        ///
+        /// The promise might not be resolved even when this is true if the document's
+        /// font face set is [pending on the environment].
+        ///
+        /// [pending on the environment]: https://drafts.csswg.org/css-font-loading/#fontfaceset-pending-on-the-environment
+        may_resolve_ready_promise: bool,
+    },
     /// Cause a `load` event to be dispatched at the appropriate iframe element.
     DispatchIFrameLoadEvent {
         /// The frame that has been marked as loaded.

@@ -1377,19 +1377,6 @@ impl ScriptThread {
         );
     }
 
-    /// Fulfill the possibly-pending pending `document.fonts.ready` promise if
-    /// all web fonts have loaded.
-    fn maybe_fulfill_font_ready_promises(&self, cx: &mut js::context::JSContext) {
-        let mut sent_message = false;
-        for (_, document) in self.documents.borrow().iter() {
-            sent_message = document.maybe_fulfill_font_ready_promise(cx) || sent_message;
-        }
-
-        if sent_message {
-            self.perform_a_microtask_checkpoint(cx);
-        }
-    }
-
     /// If any `Pipeline`s are waiting to become ready for the purpose of taking a
     /// screenshot, check to see if the `Pipeline` is now ready and send a message to the
     /// Constellation, if so.
@@ -1570,7 +1557,6 @@ impl ScriptThread {
         let built_any_display_lists =
             self.needs_rendering_update.load(Ordering::Relaxed) && self.update_the_rendering(cx);
 
-        self.maybe_fulfill_font_ready_promises(cx);
         self.maybe_resolve_pending_screenshot_readiness_requests(cx);
 
         // This must happen last to detect if any change above makes a rendering update necessary.
@@ -1896,9 +1882,11 @@ impl ScriptThread {
             ScriptThreadMessage::WebDriverScriptCommand(pipeline_id, msg) => {
                 self.handle_webdriver_msg(pipeline_id, msg, cx)
             },
-            ScriptThreadMessage::WebFontLoaded(pipeline_id) => {
-                self.handle_web_font_loaded(cx.no_gc(), pipeline_id)
-            },
+            ScriptThreadMessage::WebFontLoaded {
+                pipeline_id,
+                succeeded,
+                may_resolve_ready_promise,
+            } => self.handle_web_font_loaded(cx, pipeline_id, succeeded, may_resolve_ready_promise),
             ScriptThreadMessage::DispatchIFrameLoadEvent {
                 target: browsing_context_id,
                 parent: parent_id,
@@ -3335,14 +3323,26 @@ impl ScriptThread {
     }
 
     /// Handles a Web font being loaded. Does nothing if the page no longer exists.
-    fn handle_web_font_loaded(&self, no_gc: &NoGC, pipeline_id: PipelineId) {
+    fn handle_web_font_loaded(
+        &self,
+        cx: &mut JSContext,
+        pipeline_id: PipelineId,
+        succeeded: bool,
+        may_resolve_ready_promise: bool,
+    ) {
         let Some(document) = self.documents.borrow().find_document(pipeline_id) else {
             warn!("Web font loaded in closed pipeline {}.", pipeline_id);
             return;
         };
 
-        // TODO: This should only dirty nodes that are waiting for a web font to finish loading!
-        document.dirty_all_nodes(no_gc);
+        if succeeded {
+            // TODO: This should only dirty nodes that are waiting for a web font to finish loading!
+            document.dirty_all_nodes(cx.no_gc());
+        }
+
+        if may_resolve_ready_promise {
+            document.maybe_fulfill_font_ready_promise(cx);
+        }
     }
 
     /// Handles a worklet being loaded by triggering a relayout of the page. Does nothing if the

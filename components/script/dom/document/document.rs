@@ -3144,9 +3144,6 @@ impl Document {
         if !fonts.waiting_to_fullfill_promise() {
             return false;
         }
-        if self.window().font_context().web_fonts_still_loading() != 0 {
-            return false;
-        }
         if self.ReadyState() != DocumentReadyState::Complete {
             return false;
         }

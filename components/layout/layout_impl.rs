@@ -786,13 +786,16 @@ impl LayoutThread {
 
         let locked_script_channel = Mutex::new(config.script_chan.clone());
         let pipeline_id = config.id;
-        let web_font_finished_loading_callback = move |succeeded: bool| {
-            if succeeded {
+        let web_font_finished_loading_callback =
+            move |succeeded: bool, may_resolve_ready_promise: bool| {
                 let _ = locked_script_channel
                     .lock()
-                    .send(ScriptThreadMessage::WebFontLoaded(pipeline_id));
-            }
-        };
+                    .send(ScriptThreadMessage::WebFontLoaded {
+                        pipeline_id,
+                        succeeded,
+                        may_resolve_ready_promise,
+                    });
+            };
 
         LayoutThread {
             id: config.id,

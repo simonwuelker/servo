@@ -8,7 +8,7 @@ use std::default::Default;
 use std::hash::{Hash, Hasher};
 use std::iter;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use app_units::Au;
 use content_security_policy::Violation;
@@ -116,6 +116,9 @@ pub struct FontContext {
     /// equivalent to the rules that actually apply to the page, because rules that are invalid or not
     /// yet downloaded are also included.
     known_font_face_rules: Mutex<KnownFontFaceRules>,
+
+    /// The number of `@font-face` rules that are currently being loaded.
+    number_of_loading_fonts_blocking_ready_promise: AtomicUsize,
 }
 
 /// A callback that will be invoked on the Fetch thread if a web font download
@@ -174,11 +177,8 @@ impl FontContext {
             font_data: RwLock::default(),
             currently_downloading_fonts: Default::default(),
             known_font_face_rules: Default::default(),
+            number_of_loading_fonts_blocking_ready_promise: AtomicUsize::new(0),
         }
-    }
-
-    pub fn web_fonts_still_loading(&self) -> usize {
-        self.currently_downloading_fonts.lock().len()
     }
 
     fn get_font_data(&self, identifier: &FontIdentifier) -> Option<FontData> {
@@ -618,7 +618,12 @@ impl WebFontDownloadState {
                     .add_new_template(family_name, new_template);
                 self.font_context
                     .invalidate_font_groups_after_web_font_load();
-                (initiator.callback)(true);
+                let may_resolve_ready_promise = self
+                    .font_context
+                    .number_of_loading_fonts_blocking_ready_promise
+                    .fetch_sub(1, Ordering::SeqCst) ==
+                    1;
+                (initiator.callback)(true, may_resolve_ready_promise);
             },
             WebFontLoadInitiator::Script(callback) => {
                 callback(family_name, Some(new_template));
@@ -631,7 +636,12 @@ impl WebFontDownloadState {
         let family_name = self.css_font_face_descriptors.family_name.clone();
         match self.initiator {
             WebFontLoadInitiator::Stylesheet(initiator) => {
-                (initiator.callback)(false);
+                let may_resolve_ready_promise = self
+                    .font_context
+                    .number_of_loading_fonts_blocking_ready_promise
+                    .fetch_sub(1, Ordering::SeqCst) ==
+                    1;
+                (initiator.callback)(false, may_resolve_ready_promise);
             },
             WebFontLoadInitiator::Script(callback) => {
                 callback(family_name, None);
@@ -923,6 +933,11 @@ impl FontContext {
         completion_handler: WebFontLoadInitiator,
         document_context: &WebFontDocumentContext,
     ) {
+        if completion_handler.is_stylesheet() {
+            self.number_of_loading_fonts_blocking_ready_promise
+                .fetch_add(1, Ordering::SeqCst);
+        }
+
         let sources: Vec<Source> = source_list
             .0
             .iter()
@@ -1037,6 +1052,10 @@ impl WebFontLoadInitiator {
             Self::Stylesheet(initiator) => Some(&initiator.font_face_rule),
             Self::Script(_) => None,
         }
+    }
+
+    fn is_stylesheet(&self) -> bool {
+        matches!(self, Self::Stylesheet(_))
     }
 }
 

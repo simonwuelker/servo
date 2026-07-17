@@ -2748,10 +2748,6 @@ impl Window {
             return;
         }
 
-        if self.font_context().web_fonts_still_loading() != 0 {
-            return;
-        }
-
         if self.Document().Fonts(cx).waiting_to_fullfill_promise() {
             return;
         }
