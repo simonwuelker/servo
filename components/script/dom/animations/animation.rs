@@ -89,6 +89,10 @@ impl Animation {
         };
 
         let layout = target_element.owner_window().layout();
+        let x = KeyframesAnimation {
+            steps: todo!(),
+            steps_with_range_name: Vec::default(),
+        };
 
         // SAFETY: These are unrooted, but kept alive by the roots that we create them from
         let traced_node = Dom::from_ref(self);

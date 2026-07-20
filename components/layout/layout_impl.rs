@@ -67,6 +67,7 @@ use style::queries::values::PrefersColorScheme;
 use style::selector_parser::{PseudoElement, SnapshotMap};
 use style::servo::media_features::PointerCapabilities;
 use style::shared_lock::{SharedRwLock, StylesheetGuards};
+use style::stylesheets::keyframes_rule::KeyframesAnimation;
 use style::stylesheets::{DocumentStyleSheet, Origin, Stylesheet};
 use style::stylist::Stylist;
 use style::traversal::DomTraversal;
@@ -886,6 +887,20 @@ impl LayoutThread {
             traversal_flags,
             snapshot_map,
         }
+    }
+
+    fn start_animation_from_script(&self, target_node: TrustedNodeAddress, animation_timeline_value: f64, animations: DocumentAnimationSet, animation: KeyframesAnimation) {
+        with_layout_state(|| {
+            let target_node = unsafe { ServoLayoutNode::new(&target_node) };
+            let document = unsafe { target_node.dangerous_style_node() }.owner_doc();
+            let shared_locks = document.shared_style_locks();
+            let guards = StylesheetGuards {
+                author: &shared_locks.author.read(),
+                ua_or_user: &shared_locks.ua_or_user.read(),
+            };
+            let snapshot_map = SnapshotMap::new();
+            let shared_style_context = self.build_shared_style_context(guards, &snapshot_map, animation_timeline_value, &animations, TraversalFlags::empty());
+        })
     }
 
     /// In some cases, if a restyle isn't necessary we can skip doing any work for layout

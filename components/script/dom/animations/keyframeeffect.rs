@@ -106,7 +106,7 @@ impl KeyframeEffectMethods<crate::DomTypeHolder> for KeyframeEffect {
         _: Option<HandleObject>,
         target: Option<&Element>,
         keyframes: *mut JSObject,
-        _options: UnrestrictedDoubleOrKeyframeEffectOptions,
+        options: UnrestrictedDoubleOrKeyframeEffectOptions,
     ) -> DomRoot<KeyframeEffect> {
         // Step 1. Create a new KeyframeEffect object, effect.
         let effect = KeyframeEffect::new(cx, window);
@@ -117,8 +117,22 @@ impl KeyframeEffectMethods<crate::DomTypeHolder> for KeyframeEffect {
         // TODO: Step 3. Set the target pseudo-selector to the result corresponding to
         // the first matching condition below:
 
-        // TODO: Step 4. Let timing input be the result corresponding to the first matching
+        // Step 4. Let timing input be the result corresponding to the first matching
         // condition below:
+        let timing_input = match options {
+            // If options is a KeyframeEffectOptions object,
+            UnrestrictedDoubleOrKeyframeEffectOptions::KeyframeEffectOptions(options) => {
+                // Let timing input be options.
+                options
+            },
+            UnrestrictedDoubleOrKeyframeEffectOptions::UnrestrictedDouble(double) => {
+                // Let timing input be a new EffectTiming object with all members set to their
+                // default values and duration set to options.
+                let mut options = KeyframeEffectOptions::default();
+                options
+            }
+
+        };
 
         // Step 5. Call the procedure to update the timing properties of an animation effect of
         // effect from timing input.
