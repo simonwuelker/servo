@@ -2,13 +2,16 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use app_units::{AU_PER_PX, Au};
 use dom_struct::dom_struct;
+use euclid::Rect;
 use js::context::{JSContext, NoGC};
 use js::rust::HandleObject;
 use rustc_hash::FxHashMap;
 use script_bindings::reflector::{reflect_dom_object_with_cx, reflect_dom_object_with_proto};
 use servo_base::id::{DomRectId, DomRectIndex};
 use servo_constellation_traits::DomRect;
+use style_traits::CSSPixel;
 
 use crate::dom::bindings::codegen::Bindings::DOMRectBinding::DOMRectMethods;
 use crate::dom::bindings::codegen::Bindings::DOMRectReadOnlyBinding::{
@@ -58,6 +61,41 @@ impl DOMRect {
             Box::new(DOMRect::new_inherited(x, y, width, height)),
             global,
             proto,
+        )
+    }
+
+    /// Constructs a [DOMRect] and ensures that the edges of the rectangle can be
+    /// added and subtracted without loss of precision.
+    pub(crate) fn from_layout_rect(
+        cx: &mut JSContext,
+        global: &GlobalScope,
+        layout_rect: Rect<Au, CSSPixel>,
+    ) -> DomRoot<Self> {
+        // We follow gecko's lead here:
+        // https://searchfox.org/firefox-main/rev/d573d849c063353bda3a67541ab219c8a548773a/dom/base/DOMRect.cpp#148
+        const SCALE: f64 = 65536.0; // 2^16
+        const AU_TO_SCALED_PX: f64 = SCALE / (AU_PER_PX as f64);
+
+        // We snap the Au values to a fine dyadic grid. This is important because it means
+        // we can add, subtract and multiply the values on that grid without any floating point
+        // imprecision. The error introduced by the snapping is at most half the size of a grid
+        // cell, which is SCALE^-1. That is far smaller than one Au, so the loss of precision
+        // is acceptable.
+        let round_au_to_dyadic_grid =
+            |value: Au| -> f64 { (value.0 as f64 * AU_TO_SCALED_PX).round() / SCALE };
+
+        let snapped_left_edge = round_au_to_dyadic_grid(layout_rect.min_x());
+        let snapped_top_edge = round_au_to_dyadic_grid(layout_rect.min_y());
+        let snapped_right_edge = round_au_to_dyadic_grid(layout_rect.max_x());
+        let snapped_bottom_edge = round_au_to_dyadic_grid(layout_rect.max_y());
+
+        Self::new(
+            cx,
+            global,
+            snapped_left_edge,
+            snapped_top_edge,
+            snapped_right_edge - snapped_left_edge,
+            snapped_bottom_edge - snapped_top_edge,
         )
     }
 }

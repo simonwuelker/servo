@@ -1249,17 +1249,8 @@ impl RangeMethods<crate::DomTypeHolder> for Range {
 
         let client_rects: Vec<_> = self.client_rects(cx.no_gc()).collect();
         let client_rects = client_rects
-            .iter()
-            .map(|rect| {
-                DOMRect::new(
-                    cx,
-                    window.upcast(),
-                    rect.origin.x.to_f64_px(),
-                    rect.origin.y.to_f64_px(),
-                    rect.size.width.to_f64_px(),
-                    rect.size.height.to_f64_px(),
-                )
-            })
+            .into_iter()
+            .map(|rect| DOMRect::from_layout_rect(cx, window.upcast(), rect))
             .collect();
 
         DOMRectList::new(cx, &window, client_rects)
@@ -1278,14 +1269,7 @@ impl RangeMethods<crate::DomTypeHolder> for Range {
         // of the rectangles in list of which the height or width is not zero.
         let bounding_rect = list.fold(euclid::Rect::zero(), |acc, rect| acc.union(&rect));
 
-        DOMRect::new(
-            cx,
-            window.upcast(),
-            bounding_rect.origin.x.to_f64_px(),
-            bounding_rect.origin.y.to_f64_px(),
-            bounding_rect.size.width.to_f64_px(),
-            bounding_rect.size.height.to_f64_px(),
-        )
+        DOMRect::from_layout_rect(cx, window.upcast(), bounding_rect)
     }
 }
 

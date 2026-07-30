@@ -3210,16 +3210,7 @@ impl ElementMethods<crate::DomTypeHolder> for Element {
         let raw_rects = self.upcast::<Node>().border_boxes();
         let rects: Vec<DomRoot<DOMRect>> = raw_rects
             .into_iter()
-            .map(|rect| {
-                DOMRect::new(
-                    cx,
-                    win.upcast(),
-                    rect.origin.x.to_f64_px(),
-                    rect.origin.y.to_f64_px(),
-                    rect.size.width.to_f64_px(),
-                    rect.size.height.to_f64_px(),
-                )
-            })
+            .map(|rect| DOMRect::from_layout_rect(cx, win.upcast(), rect))
             .collect();
         DOMRectList::new(cx, &win, rects)
     }
@@ -3228,15 +3219,9 @@ impl ElementMethods<crate::DomTypeHolder> for Element {
     fn GetBoundingClientRect(&self, cx: &mut JSContext) -> DomRoot<DOMRect> {
         let win = self.owner_window();
         let rect = self.upcast::<Node>().border_box().unwrap_or_default();
+
         debug_assert!(rect.size.width.to_f64_px() >= 0.0 && rect.size.height.to_f64_px() >= 0.0);
-        DOMRect::new(
-            cx,
-            win.upcast(),
-            rect.origin.x.to_f64_px(),
-            rect.origin.y.to_f64_px(),
-            rect.size.width.to_f64_px(),
-            rect.size.height.to_f64_px(),
-        )
+        DOMRect::from_layout_rect(cx, win.upcast(), rect)
     }
 
     /// <https://drafts.csswg.org/cssom-view/#dom-element-scroll>
