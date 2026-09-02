@@ -40,7 +40,7 @@ use crate::dom::document::Document;
 use crate::dom::eventtarget::EventTarget;
 use crate::dom::fontface::FontFace;
 use crate::dom::globalscope::GlobalScope;
-use crate::dom::promise::Promise;
+use crate::dom::promise::{Promise, wait_for_all_promise};
 use crate::dom::promisenativehandler::Callback;
 use crate::dom::types::PromiseNativeHandler;
 use crate::dom::window::Window;
@@ -352,18 +352,12 @@ impl FontFaceSetMethods<crate::DomTypeHolder> for FontFaceSet {
         // Step 2. Return promise. Complete the rest of these steps asynchronously.
         #[derive(MallocSizeOf, JSTraceable)]
         struct LoadPromiseFulfillmentHandler {
-            /// The font faces that this should wait on.
-            ///
-            /// (Our current implementation waits for `document.fonts.ready` instead)
-            font_face_objects: Vec<DomRoot<FontFace>>,
-
             #[conditional_malloc_size_of]
             load_promise: Rc<Promise>,
         }
         impl Callback for LoadPromiseFulfillmentHandler {
-            fn callback(&self, cx: &mut CurrentRealm, _: Handle<Value>) {
-                self.load_promise
-                    .resolve_native(cx, &self.font_face_objects);
+            fn callback(&self, cx: &mut CurrentRealm, value: Handle<Value>) {
+                self.load_promise.resolve_native(cx, &value);
             }
         }
 
@@ -394,32 +388,25 @@ impl FontFaceSetMethods<crate::DomTypeHolder> for FontFaceSet {
                     load_promise.reject_error(cx, Error::Syntax(Some("Failed to parse font query".into())));
                     return;
                 };
+                let load_promises = font_face_objects.into_iter().map(|font_face| font_face.Loaded()).collect();
 
                 // Step 4.1. For all of the font faces in the font face list, call their load()
                 // method.
                 // Step 4.2. Resolve promise with the result of waiting for all of the
                 // [[FontStatusPromise]]s of each font face in the font face list, in order.
-                //
-                // TODO: These steps are not implemented. Instead we wait until all fonts
-                // are loaded by resolving the returned promise when
-                // `document.fonts.ready` is resolved. The return list of fonts will not
-                // be correct, but any code that waits on the promise will have
-                // conservatively consistent behavior. This is important for preventing
-                // intermittent results in WPT tests.
                 let global = this.global();
                 let handler = PromiseNativeHandler::new(
                     cx,
                     &global,
                     Some(Box::new(LoadPromiseFulfillmentHandler {
-                        font_face_objects,
                         load_promise,
                     })),
                     None,
                 );
 
-                let ready_promise = this.Ready(cx);
                 let mut realm = enter_auto_realm(cx, &*global);
-                ready_promise.append_native_handler(&mut realm.current_realm(), &handler);
+                let collective_promise = wait_for_all_promise(&mut realm.current_realm(), &global, load_promises);
+                collective_promise.append_native_handler(&mut realm.current_realm(), &handler);
             }));
 
         // Step 2. Return promise. Complete the rest of these steps asynchronously.
