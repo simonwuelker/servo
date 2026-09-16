@@ -6,6 +6,7 @@
 
 use std::cell::Cell;
 use std::io;
+use std::cell::RefCell;
 
 use html5ever::buffer_queue::BufferQueue;
 use html5ever::serialize::TraversalScope::IncludeNode;
@@ -43,6 +44,7 @@ use crate::dom::shadowroot::ShadowRoot;
 pub(crate) struct Tokenizer {
     #[ignore_malloc_size_of = "Defined in html5ever"]
     inner: HtmlTokenizer<TreeBuilder<Dom<Node>, Sink>>,
+    x: RefCell<()>,
 }
 
 impl Tokenizer {
@@ -95,10 +97,11 @@ impl Tokenizer {
             HtmlTokenizer::new(TreeBuilder::new(sink, options), Default::default())
         };
 
-        Tokenizer { inner }
+        Tokenizer { inner, x: RefCell::new(()) }
     }
 
     pub(crate) fn feed(&self, input: &BufferQueue) -> TokenizerResult<DomRoot<HTMLScriptElement>> {
+        let _c =self.x.borrow_mut();
         match self.inner.feed(input) {
             TokenizerResult::Done => TokenizerResult::Done,
             TokenizerResult::Script(script) => {
